@@ -1,9 +1,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/DataAsset.h"
 #include "Engine/DataTable.h"
+#include "Styling/SlateBrush.h"
 
 #include "AgentMcpTestbedTypes.generated.h"
+
+class UTexture2D;
 
 /** Rarity of a smoke test row. Replaces the free-form Group name. */
 UENUM(BlueprintType)
@@ -41,4 +45,24 @@ struct AGENTMCPTESTBED_API FAgentMcpTestbedRow : public FTableRowBase
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke")
 	TArray<FName> Keywords;
+};
+
+/** Data asset class of the smoke test checks for asset_create and for object_set_properties on assets. */
+UCLASS(BlueprintType)
+class AGENTMCPTESTBED_API UAgentMcpTestbedDataAsset : public UDataAsset
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke")
+	FLinearColor Color = FLinearColor::White;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke")
+	int32 Count = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke")
+	TSoftObjectPtr<UTexture2D> Icon;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke")
+	FSlateBrush Brush;
 };

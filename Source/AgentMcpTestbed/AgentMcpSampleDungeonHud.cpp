@@ -1,7 +1,7 @@
 #include "AgentMcpSampleDungeonHud.h"
 
 #include "AgentMcpSampleObjectiveRow.h"
-#include "AgentMcpSampleStyle.h"
+#include "AgentMcpSampleUiTheme.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 
@@ -83,9 +83,10 @@ void UAgentMcpSampleDungeonHud::RefreshProgress()
 		TimerText->SetText(FormatClock(TimeLeftSeconds));
 		if (TimeLeftSeconds < 60.0f)
 		{
-			// In the last minute the timer pulses between white and red.
+			// In the last minute the timer pulses between the text and danger colors of the theme.
 			const float Pulse = 0.5f + 0.5f * FMath::Sin(RunningTime * 6.0f);
-			TimerText->SetColorAndOpacity(FSlateColor(FMath::Lerp(AgentMcpSampleStyle::Text, AgentMcpSampleStyle::Danger, Pulse)));
+			const UAgentMcpSampleUiTheme& Theme = UAgentMcpSampleUiTheme::Get();
+			TimerText->SetColorAndOpacity(FSlateColor(FMath::Lerp(Theme.Text, Theme.Danger, Pulse)));
 		}
 	}
 	if (ProgressBar)

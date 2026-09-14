@@ -1,5 +1,6 @@
 #include "AgentMcpSampleObjectiveRow.h"
 
+#include "AgentMcpSampleUiTheme.h"
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
 
@@ -18,24 +19,26 @@ void UAgentMcpSampleObjectiveRow::NativePreConstruct()
 
 void UAgentMcpSampleObjectiveRow::ApplyProgress()
 {
+	const UAgentMcpSampleUiTheme& Theme = UAgentMcpSampleUiTheme::Get();
+	const FLinearColor OpenColor = AccentColor.A > 0.0f ? AccentColor : Theme.Accent;
 	const bool bComplete = Done >= Total;
 	if (Check)
 	{
-		// Open objectives show an outline in the accent color, completed ones a filled green mark.
+		// Open objectives show an outline in the accent color, completed ones a filled mark in the success color.
 		FSlateBrush CheckBrush = Check->Background;
-		CheckBrush.TintColor = FSlateColor(bComplete ? AgentMcpSampleStyle::Success : FLinearColor::Transparent);
-		CheckBrush.OutlineSettings.Color = FSlateColor(bComplete ? AgentMcpSampleStyle::Success : AccentColor);
+		CheckBrush.TintColor = FSlateColor(bComplete ? Theme.Success : FLinearColor::Transparent);
+		CheckBrush.OutlineSettings.Color = FSlateColor(bComplete ? Theme.Success : OpenColor);
 		CheckBrush.OutlineSettings.Width = bComplete ? 0.0f : 2.0f;
 		Check->SetBrush(CheckBrush);
 	}
 	if (LabelText)
 	{
 		LabelText->SetText(Label);
-		LabelText->SetColorAndOpacity(FSlateColor(bComplete ? AgentMcpSampleStyle::MutedText : AgentMcpSampleStyle::Text));
+		LabelText->SetColorAndOpacity(FSlateColor(bComplete ? Theme.MutedText : Theme.Text));
 	}
 	if (CountText)
 	{
 		CountText->SetText(FText::FromString(FString::Printf(TEXT("%d/%d"), Done, Total)));
-		CountText->SetColorAndOpacity(FSlateColor(bComplete ? AgentMcpSampleStyle::Success : AccentColor));
+		CountText->SetColorAndOpacity(FSlateColor(bComplete ? Theme.Success : OpenColor));
 	}
 }

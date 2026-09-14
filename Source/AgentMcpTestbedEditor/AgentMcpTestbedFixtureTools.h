@@ -30,7 +30,7 @@ struct FAgentMcpTestbedFixtures
 	UPROPERTY()
 	TArray<FString> Created;
 
-	/** Assets deleted by this call: the Widget Blueprint that the smoke test creates with the umg tools. */
+	/** Assets deleted by this call: the assets that the smoke test creates. */
 	UPROPERTY()
 	TArray<FString> Deleted;
 

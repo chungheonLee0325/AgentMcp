@@ -58,6 +58,19 @@ namespace UE::AgentMcp::Tools
 	/** Assets under /Game or in project plugins. Engine and engine plugin content is read-only for tools. Raises NOT_SUPPORTED. */
 	bool RequireProjectContent(const UObject* Asset);
 
+	/** A play session is starting or running. */
+	bool IsPlaySessionActive();
+
+	/**
+	 * Checks the path of an asset to create: an object path (/Game/UI/T_Icon.T_Icon) or a package path (/Game/UI/T_Icon) of project
+	 * content with a valid asset name. Returns an empty string and sets OutPackageName and OutAssetName, or returns the problem without a
+	 * final period and sets OutCode to INVALID_ARGUMENT or NOT_SUPPORTED. Does not check whether an asset exists.
+	 */
+	FString GetNewAssetPathProblem(const FString& AssetPath, FString& OutPackageName, FString& OutAssetName, FString& OutCode);
+
+	/** An asset exists at the package path: loaded, on disk or in the asset registry. */
+	bool DoesAssetExist(const FString& PackageName, const FString& AssetName);
+
 	/** Source control warnings for saving a package, from the cached state (no source control request). */
 	TArray<FString> GetSourceControlWarnings(const UPackage* Package);
 

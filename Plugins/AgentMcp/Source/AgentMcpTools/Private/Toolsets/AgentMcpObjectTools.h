@@ -140,9 +140,11 @@ public:
 	static FAgentMcpPropertyValuesResult GetProperties(UObject* Object, const TArray<FString>& PropertyNames);
 
 	/**
-	 * Changes property values of an actor or component in the editor level, with editor change notifications (PreEditChange and PostEditChangeProperty).
-	 * Every value is checked before anything changes. A struct value may list only the fields to change; an array value replaces the whole array.
-	 * @param Object The actor or component to change.
+	 * Changes property values of an actor or component in the editor level, or of a project asset such as a data asset or a texture, with
+	 * editor change notifications (PreEditChange and PostEditChangeProperty). Blueprints, DataTables (use the datatable tools) and engine
+	 * content are refused. Every value is checked before anything changes. A struct value may list only the fields to change; an array
+	 * value replaces the whole array.
+	 * @param Object The actor, component or asset to change.
 	 * @param Values Property name to new value, for example {"Tags": ["Door"], "bHidden": true}.
 	 * @return Values before and after the call, and which properties changed.
 	 */

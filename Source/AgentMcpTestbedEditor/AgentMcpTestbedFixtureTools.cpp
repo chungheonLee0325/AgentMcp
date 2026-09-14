@@ -179,6 +179,10 @@ FAgentMcpTestbedFixtures UAgentMcpTestbedFixtureTools::ResetFixtures()
 	// the authoring Widget Blueprint, so it goes second.
 	DeleteFixtureAsset(AuthoringWidgetName, Result.Deleted);
 	DeleteFixtureAsset(TEXT("WBP_AgentMcpAuthoringPart"), Result.Deleted);
+	// Created with asset_create and asset_import_textures. The data asset refers to the texture, so it goes first.
+	DeleteFixtureAsset(TEXT("DA_AgentMcpSmoke"), Result.Deleted);
+	DeleteFixtureAsset(TEXT("DT_AgentMcpCreated"), Result.Deleted);
+	DeleteFixtureAsset(TEXT("T_AgentMcpSmokeIcon"), Result.Deleted);
 
 	UDataTable* DataTable = ResetDataTable(Result.Created);
 	UWidgetBlueprint* BoundWidget = ResetWidgetBlueprint(BoundWidgetName, /*bWithTitle=*/true, Result.Created);

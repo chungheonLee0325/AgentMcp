@@ -3,8 +3,8 @@
 [English](DungeonUi.md)
 
 몬스터 수집형 서바이벌 게임 느낌의 던전 진행 HUD와 던전 결과 팝업입니다. Claude Code(데스크톱 앱, 버전 2.1.270)가 Agent MCP
-테스트베드에서 `umg` 도구로 만들었고, UMG 디자이너는 열지 않았습니다. 스크린샷만이 아니라 작업 방식도 판단할 수 있도록, 리뷰에서
-반려된 첫 버전을 포함해 만든 과정을 기록합니다.
+테스트베드에서 도구로 만들었고, UMG 디자이너는 열지 않았습니다. 스크린샷만이 아니라 작업 방식도 판단할 수 있도록, 리뷰에서
+반려된 버전을 포함해 만든 과정을 기록합니다.
 
 ![HUD 위에 뜬 결과 팝업](../Images/dungeon_result.jpg)
 
@@ -12,17 +12,19 @@
 
 ## 구성
 
-| `/Game/Samples/DungeonUi` 아래 에셋 | C++ 부모 클래스 | 역할 |
+| `/Game/Samples/DungeonUi` 아래 에셋 | C++ 클래스 | 역할 |
 |---|---|---|
-| `Components/WBP_RewardSlot` | `AgentMcpSampleRewardSlot` | 아이콘, 이름, 개수가 있는 보상 슬롯. 입력 `Reward`(아이템 이름, 개수, 등급, 아이콘 모양)가 등급 색과 아이콘 모양을 정함 |
+| `Components/WBP_RewardSlot` | `AgentMcpSampleRewardSlot` | 아이콘, 이름, 개수가 있는 보상 슬롯. 입력 `Reward`는 아이템 테이블의 행과 개수이고, 등급 색과 프레임은 테마에서 옴 |
 | `Components/WBP_StatTile` | `AgentMcpSampleStatTile` | 큰 값 위에 라벨: `Label`, `Value`, `SetValue` |
-| `Components/WBP_ObjectiveRow` | `AgentMcpSampleObjectiveRow` | 체크 표시, 라벨, 완료/전체. 진행 중인 목표는 `AccentColor`, 완료한 목표는 초록색 |
+| `Components/WBP_ObjectiveRow` | `AgentMcpSampleObjectiveRow` | 체크 표시, 라벨, 완료/전체. 진행 중인 목표는 인스턴스가 `AccentColor`를 정하지 않으면 테마 강조색, 완료한 목표는 성공 색 |
 | `WBP_DungeonHud` | `AgentMcpSampleDungeonHud` | 타이머와 진행도가 있는 던전 카드, 목표 행 인스턴스 3개, 보스 체력 바 |
-| `WBP_DungeonResult` | `AgentMcpSampleDungeonResult` | 통계 타일 인스턴스 3개와, `Rewards` 항목마다 보상 슬롯을 하나씩 만드는 `DynamicEntryBox`가 있는 결과 카드. 배경, 카드 등장, 랭크 도장, 보상 순차 등장, 레벨업하는 경험치 바 연출을 재생 |
-| `WBP_DungeonDemo` | `UserWidget` | 데모 화면: HUD 인스턴스와, 인스턴스 속성 `Rewards`에 데모 보상 5개를 넣은 결과 인스턴스 |
+| `WBP_DungeonResult` | `AgentMcpSampleDungeonResult` | 통계 타일 인스턴스 3개와, `Rewards` 항목마다 보상 슬롯을 하나씩 만드는 `DynamicEntryBox`가 있는 결과 카드. 등장 연출의 시간·거리·크기는 `Motion` 속성 |
+| `WBP_DungeonDemo` | `UserWidget` | 데모 화면: HUD 인스턴스와, `Rewards`가 아이템 테이블의 행 5개를 가리키는 결과 인스턴스 |
+| `Data/DA_DungeonUiTheme` | `AgentMcpSampleUiTheme` | 테마 데이터 에셋: 텍스트·상태 색, 등급마다 색과 선택적인 프레임 브러시. `Config/DefaultGame.ini`가 이 에셋을 지정 |
+| `Data/DT_DungeonItems` | `AgentMcpSampleItemRow` | 아이템 테이블: 이름, 등급, 아이콘 텍스처, 아이콘이 없을 때 그리는 모양 |
 
-C++ 부모 클래스와 색 토큰(`AgentMcpSampleStyle.h`)은 `Source/AgentMcpTestbed`에 있습니다. 텍스트는 한국어입니다. Roboto에는 한글
-글리프가 없어서 엔진의 대체 폰트로 표시됩니다.
+C++ 클래스는 `Source/AgentMcpTestbed`에 있습니다. 텍스트는 한국어입니다. Roboto에는 한글 글리프가 없어서 엔진의 대체 폰트로
+표시됩니다.
 
 ## 실행
 
@@ -65,7 +67,7 @@ Claude Code 스킬이었고, 지금은 플러그인이 `skills_get`으로 제공
 스킬을 따라 진행했습니다.
 
 1. **계획.** 부품: 보상 슬롯, 통계 타일, 목표 행. 데이터: `Reward` 구조체, 라벨과 값, 완료/전체. 동적 목록: 보상. 스타일 토큰:
-   `AgentMcpSampleStyle.h`.
+   `AgentMcpSampleStyle.h`. 세 번째 버전에서 테마로 바뀐 색 상수 헤더입니다.
 2. **부품의 C++ 부모 클래스.** `BindWidget` 규칙, `NativePreConstruct`에서 적용하는 인스턴스 편집 가능 입력, setter를 두었습니다.
    화면 부모 클래스는 부품을 클래스로 바인딩하고 데이터를 넘깁니다. 새 클래스라서 에디터를 닫고 빌드해야 했습니다.
 3. **부품.** 루트 위젯을 규칙에 맞는 이름으로 추가할 수 있도록 루트 없이 `umg_create_widget_blueprint`를 호출하고, 부품마다
@@ -80,8 +82,26 @@ Claude Code 스킬이었고, 지금은 플러그인이 `skills_get`으로 제공
 smoke 테스트에도 같은 경로의 검사를 추가했습니다. 인스턴스 속성을 설정한 위젯 블루프린트 인스턴스, `DynamicEntryBox` 엔트리 클래스,
 위젯 블루프린트를 자기 자신 안에 넣는 요청의 거부입니다.
 
+### 세 번째 버전: 표현을 데이터로
+
+다음 리뷰는 코드 없이 바꿀 수 있는 꾸밈 요소를 요구했습니다. 데이터로, 간단한 것은 블루프린트로 바꾸고, 아이콘과 장식은 이미지
+모델이나 다른 에이전트, 아티스트가 만든다는 방향입니다. 이를 위해 도구 세 가지를 추가했습니다. 데이터 에셋과 DataTable을 만드는
+`asset_create`, `asset_import_textures`, 그리고 프로젝트 에셋도 고칠 수 있게 된 `object_set_properties`입니다.
+
+1. **C++ 계약.** 색 상수를 테마 데이터 에셋 클래스로 바꾸고, 프로젝트 설정에서 지정하며, 지정이 없으면 클래스 기본값을 쓰게 했습니다.
+   보상은 아이템 테이블의 행과 개수가 됐습니다. 보상 슬롯에는 선택적인 `IconImage`를 두고, 아이콘 텍스처가 없으면 아이템의 대체
+   모양을 그립니다. 결과 팝업 등장 연출의 시간 값은 `Motion` 속성이 됐습니다. 리플렉션 선언이 바뀌어 에디터를 닫고 빌드했습니다.
+2. **데이터.** `asset_create`로 `DA_DungeonUiTheme`과 `DT_DungeonItems`를 만들고, `datatable_add_rows`로 아이템 5개를 넣었습니다.
+3. **위젯.** `umg_add_widgets`로 보상 슬롯에 `IconImage`를 넣고, `umg_set_widget_properties`로 데모 보상이 테이블 행을 가리키게
+   했습니다. 바뀐 위젯 블루프린트는 오류 없이 컴파일됐고, 플레이 세션 캡처는 두 번째 버전과 같았습니다.
+4. **확인.** `object_set_properties`로 테마의 색 두 개(강조색, 전설 등급 색)를 바꿨습니다. 다음 캡처에서 빌드 없이 진행 중인 목표와
+   전설 보상 슬롯이 새 색으로 나왔습니다.
+
+   ![강조색과 전설 등급 색을 바꾼 테마](../Images/dungeon_theme_change.jpg)
+
 ## 다루지 않은 것
 
-- 연출은 C++ 부모 클래스의 코드입니다. 도구로 UMG 위젯 애니메이션을 만들 수는 없습니다.
-- 아이콘은 텍스처가 아니라 브러시 모양입니다.
+- 등장 연출은 C++ 부모 클래스의 코드이고, 그 값만 데이터입니다. 도구로 UMG 위젯 애니메이션을 만들 수는 없습니다. 이를 위한 실험은
+  [Docs/Experiments/WidgetAnimationAuthoring.md](../Experiments/WidgetAnimationAuthoring.md)에 계획해 두었습니다.
+- 샘플에 아직 텍스처가 없어서 아이콘, 프레임, 카드 패널은 여전히 모양입니다.
 - 도구로 위젯을 다른 부모로 옮길 수 없어서, 재구성할 때 복사본을 지우고 인스턴스를 새로 넣었습니다.

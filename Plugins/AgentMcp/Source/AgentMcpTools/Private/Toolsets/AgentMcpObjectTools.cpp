@@ -5,8 +5,12 @@
 
 #include "Dom/JsonObject.h"
 #include "Editor.h"
+#include "Engine/Blueprint.h"
+#include "Engine/BlueprintGeneratedClass.h"
+#include "Engine/DataTable.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
+#include "UObject/Package.h"
 #include "UObject/PropertyAccessUtil.h"
 #include "UObject/UnrealType.h"
 
@@ -21,9 +25,13 @@ namespace UE::AgentMcp::ObjectToolsPrivate
 		return PropertyAccessUtil::CanGetPropertyValue(Property) == EPropertyAccessResultFlags::Success;
 	}
 
-	/** This version changes objects of the editor level only: actors, their components and other level sub-objects. */
-	bool RequireEditableLevelObject(const UObject* Object)
+	/**
+	 * Tools change objects of the editor level (actors, their components and other level sub-objects) and project assets such as data
+	 * assets and textures. Blueprints and DataTables have their own tools. Sets bOutLevelObject for objects of the editor level.
+	 */
+	bool RequireEditableObject(const UObject* Object, bool& bOutLevelObject)
 	{
+		bOutLevelObject = false;
 		if (Object->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject))
 		{
 			RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("%s is a class default or archetype object."), *Object->GetPathName()),
@@ -32,22 +40,55 @@ namespace UE::AgentMcp::ObjectToolsPrivate
 		}
 
 		const ULevel* Level = Object->IsA<ULevel>() ? CastChecked<ULevel>(Object) : Object->GetTypedOuter<ULevel>();
-		const UWorld* World = Level ? Level->GetTypedOuter<UWorld>() : nullptr;
-		if (!World)
+		if (const UWorld* World = Level ? Level->GetTypedOuter<UWorld>() : nullptr)
 		{
-			RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("%s is not part of a level."), *Object->GetPathName()),
-				TEXT("object_set_properties changes actors and components in the editor level; asset writes are not enabled yet."));
+			if (World->IsGameWorld())
+			{
+				RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("%s belongs to a play session."), *Object->GetPathName()),
+					TEXT("Play session objects are discarded when the session ends; change the object in the editor level instead."));
+				return false;
+			}
+			if (!Object->CanModify())
+			{
+				RaiseToolError(TEXT("NOT_EDITABLE"), FString::Printf(TEXT("%s cannot be modified, for example because its level is locked."), *Object->GetPathName()));
+				return false;
+			}
+			bOutLevelObject = true;
+			return true;
+		}
+
+		const UPackage* Package = Object->GetPackage();
+		if (Object->HasAnyFlags(RF_Transient) || !Package || Package == GetTransientPackage())
+		{
+			RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("%s is neither part of a level nor of an asset."), *Object->GetPathName()),
+				TEXT("object_set_properties changes actors and components in the editor level, and project assets such as data assets and textures."));
 			return false;
 		}
-		if (World->IsGameWorld())
+		if (!Tools::RequireProjectContent(Object))
 		{
-			RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("%s belongs to a play session."), *Object->GetPathName()),
-				TEXT("Play session objects are discarded when the session ends; change the object in the editor level instead."));
+			return false;
+		}
+		if (Object->IsA<UBlueprint>() || Object->GetTypedOuter<UBlueprint>() || Object->IsA<UBlueprintGeneratedClass>() || Object->GetTypedOuter<UBlueprintGeneratedClass>())
+		{
+			RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("%s belongs to a Blueprint."), *Object->GetPathName()),
+				TEXT("Change widget trees with the umg tools; Blueprint graphs and class defaults cannot be changed with the tools."));
+			return false;
+		}
+		if (Package->ContainsMap())
+		{
+			RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("%s belongs to a level that is not open in the editor."), *Object->GetPathName()),
+				TEXT("Open the level in the editor and change its actors there."));
+			return false;
+		}
+		if (Object->IsA<UDataTable>())
+		{
+			RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("%s is a DataTable."), *Object->GetPathName()),
+				TEXT("Change its rows with datatable_set_rows, datatable_add_rows, datatable_rename_rows and datatable_remove_rows."));
 			return false;
 		}
 		if (!Object->CanModify())
 		{
-			RaiseToolError(TEXT("NOT_EDITABLE"), FString::Printf(TEXT("%s cannot be modified, for example because its level is locked."), *Object->GetPathName()));
+			RaiseToolError(TEXT("NOT_EDITABLE"), FString::Printf(TEXT("%s cannot be modified."), *Object->GetPathName()));
 			return false;
 		}
 		return true;
@@ -167,7 +208,8 @@ FAgentMcpSetPropertiesResult UAgentMcpObjectTools::SetProperties(UObject* Object
 	using UE::AgentMcp::Tools::FPreparedPropertyValues;
 
 	FAgentMcpSetPropertiesResult Result;
-	if (!UE::AgentMcp::Tools::RequireObject(Object, TEXT("object")) || !RequireEditableLevelObject(Object))
+	bool bLevelObject = false;
+	if (!UE::AgentMcp::Tools::RequireObject(Object, TEXT("object")) || !RequireEditableObject(Object, bLevelObject))
 	{
 		return Result;
 	}
@@ -240,7 +282,7 @@ FAgentMcpSetPropertiesResult UAgentMcpObjectTools::SetProperties(UObject* Object
 		After->SetField(Entry.Property->GetName(), UE::AgentMcp::Tools::ReadPropertyValue(Target, Entry.Property));
 	}
 
-	if (Result.Changed.Num() > 0 && GEditor)
+	if (Result.Changed.Num() > 0 && GEditor && bLevelObject)
 	{
 		GEditor->RedrawLevelEditingViewports();
 	}

@@ -11,6 +11,8 @@ public class AgentMcpTestbed : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
+			// The UI sample theme is chosen in the project settings.
+			"DeveloperSettings",
 			"UMG",
 			"Slate",
 			"SlateCore",

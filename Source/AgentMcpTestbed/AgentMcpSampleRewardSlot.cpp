@@ -1,8 +1,10 @@
 #include "AgentMcpSampleRewardSlot.h"
 
-#include "AgentMcpSampleStyle.h"
+#include "AgentMcpSampleUiTheme.h"
 #include "Components/Border.h"
+#include "Components/Image.h"
 #include "Components/TextBlock.h"
+#include "Engine/Texture2D.h"
 
 void UAgentMcpSampleRewardSlot::SetReward(const FAgentMcpSampleReward& InReward)
 {
@@ -18,21 +20,30 @@ void UAgentMcpSampleRewardSlot::NativePreConstruct()
 
 void UAgentMcpSampleRewardSlot::ApplyReward()
 {
-	const FLinearColor RarityColor = AgentMcpSampleStyle::GetRarityColor(Reward.Rarity);
+	const UAgentMcpSampleUiTheme& Theme = UAgentMcpSampleUiTheme::Get();
+	const FAgentMcpSampleItemRow* Item = Reward.Item.GetRow<FAgentMcpSampleItemRow>(TEXT("AgentMcpSampleRewardSlot"));
+	const FAgentMcpSampleRarityStyle& Style = Theme.GetRarityStyle(Item ? Item->Rarity : EAgentMcpSampleRarity::Common);
 
-	// Only colors and the icon corners come from the data; the rest of each brush stays as designed in the Widget Blueprint.
 	if (Frame)
 	{
-		FSlateBrush FrameBrush = Frame->Background;
-		FrameBrush.OutlineSettings.Color = FSlateColor(RarityColor);
-		Frame->SetBrush(FrameBrush);
+		if (Style.Frame.GetResourceObject())
+		{
+			Frame->SetBrush(Style.Frame);
+		}
+		else
+		{
+			// Without a frame image only the outline color comes from the theme; the rest of the brush stays as designed.
+			FSlateBrush FrameBrush = Frame->Background;
+			FrameBrush.OutlineSettings.Color = FSlateColor(Style.Color);
+			Frame->SetBrush(FrameBrush);
+		}
 	}
 	if (Icon)
 	{
 		FSlateBrush IconBrush = Icon->Background;
-		IconBrush.TintColor = FSlateColor(RarityColor.CopyWithNewOpacity(0.3f));
-		IconBrush.OutlineSettings.Color = FSlateColor(RarityColor);
-		switch (Reward.IconShape)
+		IconBrush.TintColor = FSlateColor(Style.Color.CopyWithNewOpacity(0.3f));
+		IconBrush.OutlineSettings.Color = FSlateColor(Style.Color);
+		switch (Item ? Item->FallbackShape : EAgentMcpSampleIconShape::Square)
 		{
 		case EAgentMcpSampleIconShape::Circle:
 			IconBrush.OutlineSettings.RoundingType = ESlateBrushRoundingType::HalfHeightRadius;
@@ -49,9 +60,22 @@ void UAgentMcpSampleRewardSlot::ApplyReward()
 		}
 		Icon->SetBrush(IconBrush);
 	}
+	if (IconImage)
+	{
+		// The item table refers to icons softly; load the icon here so that the designer preview shows it as well.
+		if (UTexture2D* IconTexture = Item ? Item->Icon.LoadSynchronous() : nullptr)
+		{
+			IconImage->SetBrushFromTexture(IconTexture);
+			IconImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			IconImage->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
 	if (NameText)
 	{
-		NameText->SetText(Reward.ItemName);
+		NameText->SetText(Item ? Item->Name : FText::GetEmpty());
 	}
 	if (CountText)
 	{

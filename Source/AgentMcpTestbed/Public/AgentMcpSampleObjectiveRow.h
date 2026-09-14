@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "AgentMcpSampleStyle.h"
 #include "Blueprint/UserWidget.h"
 
 #include "AgentMcpSampleObjectiveRow.generated.h"
@@ -11,7 +10,8 @@ class UTextBlock;
 
 /**
  * Reusable objective row of the UI sample: a round check mark, the label and done/total. Open objectives use the accent color,
- * completed ones turn green. The Widget Blueprint provides the layout; this class applies the state, also in the designer preview.
+ * completed ones the success color of the UI theme. The Widget Blueprint provides the layout; this class applies the state, also in
+ * the designer preview.
  */
 UCLASS(Abstract)
 class AGENTMCPTESTBED_API UAgentMcpSampleObjectiveRow : public UUserWidget
@@ -39,9 +39,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Objective", meta = (ClampMin = "1"))
 	int32 Total = 1;
 
-	/** Color of the check outline and the count while the objective is open. */
+	/** Color of the check outline and the count while the objective is open. Fully transparent uses the accent color of the UI theme. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Objective")
-	FLinearColor AccentColor = AgentMcpSampleStyle::Accent;
+	FLinearColor AccentColor = FLinearColor::Transparent;
 
 	UFUNCTION(BlueprintCallable, Category = "Objective")
 	void SetProgress(int32 InDone, int32 InTotal);

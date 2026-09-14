@@ -9,13 +9,16 @@ Checks the MCP transport contract and the tools against a running editor:
   P3       blueprint_compile, BindWidget checks, PIE refusal, viewport_capture with the game UI, rollback, cancellation, livecoding_compile
   P4       umg_create_widget_blueprint, umg_add_widgets, umg_set_widget_properties, umg_remove_widgets: checks, undo, redo, PIE refusal
   P5       skills_list, skills_get: the plugin skill, project skill folders, replacing a skill, skill files, refusals
+  P6       asset_create, asset_import_textures, object_set_properties on assets: checks, undo, replacing, saving, PIE refusal
 
-Level writes are undone again. P2, P3 and P4 need the AgentMcpTestbed "testbed" toolset, which resets and saves its fixture assets.
-P5 writes temporary skills to Saved/MCP/SmokeSkills, which the testbed configuration adds to SkillDirectories.
+Level writes are undone again. P2, P3, P4 and P6 need the AgentMcpTestbed "testbed" toolset, which resets and saves its fixture assets.
+P5 writes temporary skills to Saved/MCP/SmokeSkills, which the testbed configuration adds to SkillDirectories. P6 writes images to
+Saved/MCP/SmokeImport of the project.
 
 Usage:
   python mcp_smoke.py [--url http://127.0.0.1:18766/mcp] [--expect-project AgentMcpTestbed] [--token TOKEN] [--out evidence.json]
                       [--skip-slice1] [--skip-pie] [--pie-cycles 3] [--skip-p1] [--skip-p2] [--skip-p3] [--skip-p4] [--skip-p5]
+                      [--skip-p6]
 
 Before any check, the script asks the editor at --url for its project and stops unless it is --expect-project: the checks
 start and stop Play In Editor, change the level and save assets.
@@ -27,6 +30,7 @@ import datetime
 import json
 import os
 import shutil
+import struct
 import sys
 import threading
 import time
@@ -1112,6 +1116,180 @@ def run_p5(client, report, evidence):
                  json.dumps(sorted(skills))[:200])
 
 
+P6_TOOLS = {"asset_create", "asset_import_textures"}
+FIXTURE_FOLDER = "/Game/AgentMcpFixtures"
+SMOKE_DATA_ASSET = FIXTURE_FOLDER + "/DA_AgentMcpSmoke"
+SMOKE_CREATED_TABLE = FIXTURE_FOLDER + "/DT_AgentMcpCreated"
+SMOKE_TEXTURE = FIXTURE_FOLDER + "/T_AgentMcpSmokeIcon"
+
+
+def object_path(package_name):
+    return f"{package_name}.{package_name.rsplit('/', 1)[-1]}"
+
+
+def write_png(path, width, height, rgba):
+    """Writes a PNG filled with one RGBA color, with the standard library only."""
+    def chunk(kind, payload):
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+    row = b"\x00" + bytes(rgba) * width
+    data = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(row * height)) + chunk(b"IEND", b""))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as handle:
+        handle.write(data)
+
+
+def project_folder(client):
+    """The project folder of the editor: skills_list searches <project>/AgentMcp/Skills."""
+    listing, _ = list_skills(client)
+    for path in listing.get("searchedDirectories") or []:
+        folder = normalized_path(path)
+        if folder.endswith("/AgentMcp/Skills") and not folder.endswith("/Plugins/AgentMcp/Skills"):
+            return folder[:-len("/AgentMcp/Skills")]
+    return None
+
+
+def run_p6(client, report, evidence):
+    p6 = evidence.setdefault("p6", {})
+    _, _, is_error, data, _ = client.call_tool("testbed_reset_fixtures")
+    fixtures = {} if is_error else (data or {})
+    report.check("testbed_reset_fixtures prepares the asset checks", not is_error, json.dumps(fixtures.get("deleted")))
+    missing_binding = next((path for path in fixtures.get("widgetBlueprints") or [] if "WBP_AgentMcpMissingBinding" in path), None)
+    bound_widget = next((path for path in fixtures.get("widgetBlueprints") or [] if "WBP_AgentMcpBound" in path), None)
+
+    # --- asset_create ---------------------------------------------------------------------------------
+    _, _, is_error, data, _ = client.call_tool("asset_create", {"assetPath": SMOKE_DATA_ASSET, "assetClass": "AgentMcpTestbedDataAsset"})
+    report.check("asset_create creates a data asset",
+                 not is_error and (data or {}).get("asset") == object_path(SMOKE_DATA_ASSET) and (data or {}).get("className") == "AgentMcpTestbedDataAsset",
+                 json.dumps(data)[:200])
+    p6["createDataAsset"] = data
+
+    _, _, is_error, data, _ = client.call_tool("asset_create", {"assetPath": SMOKE_DATA_ASSET, "assetClass": "AgentMcpTestbedDataAsset"})
+    report.check("asset_create refuses a path that already has an asset", is_error and error_code(data) == "ASSET_EXISTS", error_message(data)[:200])
+
+    _, _, is_error, data, _ = client.call_tool("asset_create", {"assetPath": FIXTURE_FOLDER + "/DA_AgentMcpActor", "assetClass": "Actor"})
+    report.check("asset_create refuses classes that are not data assets", is_error and error_code(data) == "NOT_SUPPORTED", error_message(data)[:200])
+
+    _, _, is_error, data, _ = client.call_tool("asset_create", {"assetPath": "/Engine/AgentMcpSmoke/DA_NotAllowed", "assetClass": "AgentMcpTestbedDataAsset"})
+    report.check("asset_create refuses engine content", is_error and error_code(data) == "NOT_SUPPORTED", error_message(data)[:200])
+
+    _, _, is_error, data, _ = client.call_tool("asset_create", {"assetPath": SMOKE_CREATED_TABLE, "assetClass": "DataTable"})
+    report.check("asset_create needs a row struct for a DataTable", is_error and error_code(data) == "INVALID_ARGUMENT", error_message(data)[:200])
+
+    _, _, is_error, data, _ = client.call_tool("asset_create", {"assetPath": SMOKE_CREATED_TABLE, "assetClass": "DataTable", "rowStruct": "Vector"})
+    report.check("asset_create refuses a struct that is not a row struct", is_error and error_code(data) == "INVALID_ARGUMENT", error_message(data)[:200])
+
+    _, _, is_error, data, _ = client.call_tool("asset_create", {"assetPath": SMOKE_CREATED_TABLE, "assetClass": "DataTable", "rowStruct": "AgentMcpTestbedRow"})
+    _, _, rows_error, rows, _ = client.call_tool("datatable_list_rows", {"dataTable": object_path(SMOKE_CREATED_TABLE)})
+    report.check("asset_create creates an empty DataTable with the row struct",
+                 not is_error and ((data or {}).get("rowStruct") or "").endswith(".AgentMcpTestbedRow") and not rows_error and (rows or {}).get("rowCount") == 0,
+                 json.dumps(data)[:200])
+
+    # --- object_set_properties on assets --------------------------------------------------------------
+    data_asset = object_path(SMOKE_DATA_ASSET)
+    _, _, is_error, data, _ = client.call_tool("object_set_properties", {"object": data_asset, "values": {"Count": 7, "Color": {"R": 1, "G": 0.5, "B": 0, "A": 1}}})
+    after = (data or {}).get("after") or {}
+    color = after.get("Color") or {}
+    report.check("object_set_properties changes a data asset in one undoable call",
+                 not is_error and after.get("Count") == 7 and abs((color.get("g", color.get("G")) or 0) - 0.5) < 0.01
+                 and ((data or {}).get("undo") or {}).get("recorded") is True, json.dumps(data)[:300])
+
+    client.call_tool("editor_undo")
+    count_after_undo = read_property(client, data_asset, "Count")
+    client.call_tool("editor_redo")
+    count_after_redo = read_property(client, data_asset, "Count")
+    report.check("editor_undo and editor_redo restore data asset values", count_after_undo == 0 and count_after_redo == 7,
+                 f"after undo {count_after_undo}, after redo {count_after_redo}")
+
+    _, _, is_error, data, _ = client.call_tool("object_set_properties", {"object": bound_widget, "values": {"BlueprintDescription": "x"}})
+    report.check("object_set_properties refuses Blueprints", is_error and error_code(data) == "NOT_SUPPORTED", error_message(data)[:200])
+
+    _, _, is_error, data, _ = client.call_tool("object_set_properties", {"object": fixtures.get("dataTable"), "values": {"bStripFromClientBuilds": True}})
+    hint = ((data or {}).get("error") or {}).get("hint") or ""
+    report.check("object_set_properties refuses DataTables and names the datatable tools",
+                 is_error and error_code(data) == "NOT_SUPPORTED" and "datatable_set_rows" in hint, error_message(data)[:200])
+
+    _, _, is_error, data, _ = client.call_tool("object_set_properties", {"object": "/Engine/EngineResources/DefaultTexture.DefaultTexture", "values": {"SRGB": False}})
+    report.check("object_set_properties refuses engine assets", is_error and error_code(data) == "NOT_SUPPORTED", error_message(data)[:200])
+
+    # --- asset_import_textures ------------------------------------------------------------------------
+    project = project_folder(client)
+    if not report.check("the project folder is known from skills_list", bool(project), str(project)):
+        return
+    import_folder = os.path.join(project, "Saved", "MCP", "SmokeImport")
+    shutil.rmtree(import_folder, ignore_errors=True)
+    write_png(os.path.join(import_folder, "smoke_icon.png"), 64, 32, (255, 128, 0, 255))
+    large_icon = os.path.join(import_folder, "smoke_icon_large.png")
+    write_png(large_icon, 128, 64, (0, 128, 255, 255))
+    write_text(os.path.join(import_folder, "notes.txt"), "not an image\n")
+    relative_icon = "Saved/MCP/SmokeImport/smoke_icon.png"
+
+    try:
+        _, _, is_error, data, _ = client.call_tool("asset_import_textures", {"textures": [
+            {"file": relative_icon, "asset": SMOKE_TEXTURE},
+            {"file": "Saved/MCP/SmokeImport/missing.png", "asset": FIXTURE_FOLDER + "/T_AgentMcpMissing"}]})
+        _, _, inspect_error, _, _ = client.call_tool("asset_inspect", {"asset": SMOKE_TEXTURE})
+        report.check("asset_import_textures checks every entry first and imports nothing when one is invalid",
+                     is_error and error_code(data) == "NOT_FOUND" and inspect_error, error_message(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("asset_import_textures", {"textures": [{"file": "Saved/MCP/SmokeImport/notes.txt", "asset": SMOKE_TEXTURE}]})
+        report.check("asset_import_textures refuses files that are not images", is_error and error_code(data) == "INVALID_ARGUMENT", error_message(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("asset_import_textures", {"textures": [{"file": relative_icon, "asset": "/Engine/AgentMcpSmoke/T_NotAllowed"}]})
+        report.check("asset_import_textures refuses engine content", is_error and error_code(data) == "NOT_SUPPORTED", error_message(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("asset_import_textures", {"textures": [
+            {"file": relative_icon, "asset": SMOKE_TEXTURE}, {"file": large_icon, "asset": SMOKE_TEXTURE}]})
+        report.check("asset_import_textures refuses two entries for the same asset", is_error and error_code(data) == "INVALID_ARGUMENT", error_message(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("asset_import_textures", {"textures": [{"file": relative_icon, "asset": SMOKE_TEXTURE}]})
+        imported = ((data or {}).get("textures") or [{}])[0]
+        report.check("asset_import_textures imports a PNG from a path relative to the project",
+                     not is_error and imported.get("asset") == object_path(SMOKE_TEXTURE) and imported.get("width") == 64 and imported.get("height") == 32,
+                     json.dumps(data)[:300])
+        p6["import"] = data
+
+        texture = object_path(SMOKE_TEXTURE)
+        _, _, is_error, data, _ = client.call_tool("object_get_properties", {"object": texture, "propertyNames": ["LODGroup", "MipGenSettings", "CompressionSettings", "SRGB"]})
+        values = (data or {}).get("values") or {}
+        report.check("imported textures get the settings for UMG",
+                     not is_error and "UI" in str(values.get("LODGroup")) and "NoMipmaps" in str(values.get("MipGenSettings"))
+                     and "EditorIcon" in str(values.get("CompressionSettings")) and values.get("SRGB") is True, json.dumps(values))
+
+        _, _, is_error, data, _ = client.call_tool("asset_import_textures", {"textures": [{"file": relative_icon, "asset": SMOKE_TEXTURE}]})
+        report.check("asset_import_textures refuses an existing asset without bReplaceExisting", is_error and error_code(data) == "ASSET_EXISTS", error_message(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("asset_import_textures", {"textures": [{"file": large_icon, "asset": SMOKE_TEXTURE}], "bReplaceExisting": True})
+        replaced = ((data or {}).get("textures") or [{}])[0]
+        report.check("asset_import_textures replaces a texture from an absolute path",
+                     not is_error and replaced.get("bReplaced") is True and replaced.get("width") == 128 and replaced.get("height") == 64, json.dumps(data)[:300])
+
+        _, _, is_error, data, _ = client.call_tool("asset_import_textures", {"textures": [{"file": large_icon, "asset": SMOKE_DATA_ASSET}], "bReplaceExisting": True})
+        report.check("asset_import_textures does not replace assets that are not textures", is_error and error_code(data) == "ASSET_EXISTS", error_message(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("object_set_properties", {"object": data_asset, "values": {
+            "Icon": texture, "Brush": {"ResourceObject": texture, "ImageSize": {"X": 128, "Y": 64}}}})
+        report.check("object_set_properties points a data asset at the imported texture",
+                     not is_error and json.dumps((data or {}).get("after")).count(texture) >= 2, json.dumps((data or {}).get("after"))[:300])
+
+        _, _, is_error, data, _ = client.call_tool("asset_save", {"assets": [SMOKE_DATA_ASSET, SMOKE_CREATED_TABLE, SMOKE_TEXTURE]})
+        report.check("asset_save saves the created and imported assets", not is_error and (data or {}).get("savedCount") == 3, json.dumps(data)[:300])
+
+        # --- play session refusal -------------------------------------------------------------------------
+        if missing_binding:
+            client.call_tool("testbed_set_pie_warning", {"blueprint": missing_binding, "bEnabled": False})
+        _, _, is_error, data, _ = client.call_tool("pie_start", {"warmupSeconds": 0.5})
+        if report.check("pie_start runs for the asset tool refusal checks", not is_error, error_message(data)[:200]):
+            _, _, create_error, create_data, _ = client.call_tool("asset_create", {"assetPath": FIXTURE_FOLDER + "/DA_AgentMcpDuringPlay", "assetClass": "AgentMcpTestbedDataAsset"})
+            _, _, import_error, import_data, _ = client.call_tool("asset_import_textures", {"textures": [{"file": relative_icon, "asset": FIXTURE_FOLDER + "/T_AgentMcpDuringPlay"}]})
+            client.call_tool("pie_stop")
+            report.check("asset_create and asset_import_textures are refused during a play session",
+                         create_error and error_code(create_data) == "PIE_ACTIVE" and import_error and error_code(import_data) == "PIE_ACTIVE",
+                         f"{error_code(create_data)}, {error_code(import_data)}")
+    finally:
+        shutil.rmtree(import_folder, ignore_errors=True)
+
+
 def run_protocol_errors(client, report):
     status, _, payload, _ = client.request("tools/call", {"name": "no_such_tool", "arguments": {}})
     report.check("unknown tool returns JSON-RPC -32602", ((payload or {}).get("error") or {}).get("code") == -32602, str((payload or {}).get("error")))
@@ -1176,6 +1354,7 @@ def main():
     parser.add_argument("--skip-p3", action="store_true", help="skip compile, capture, Live Coding, rollback and cancellation (needs the testbed toolset)")
     parser.add_argument("--skip-p4", action="store_true", help="skip Widget Blueprint authoring (needs the testbed toolset)")
     parser.add_argument("--skip-p5", action="store_true", help="skip skills (the project skill checks need the testbed configuration)")
+    parser.add_argument("--skip-p6", action="store_true", help="skip creating data assets and importing textures (needs the testbed toolset)")
     args = parser.parse_args()
 
     # Every editor with the plugin serves the same default port, so make sure the smoke test talks to the intended project.
@@ -1206,6 +1385,8 @@ def main():
         expected_tools |= P4_TOOLS
     if not args.skip_p5:
         expected_tools |= P5_TOOLS
+    if not args.skip_p6:
+        expected_tools |= P6_TOOLS
     try:
         run_p0(client, report, evidence, expected_tools)
         if not args.skip_slice1:
@@ -1220,6 +1401,8 @@ def main():
             run_p4(client, report, evidence)
         if not args.skip_p5:
             run_p5(client, report, evidence)
+        if not args.skip_p6:
+            run_p6(client, report, evidence)
         run_protocol_errors(client, report)
     except Exception as error:  # Keep the evidence of the checks that did run.
         report.check("smoke test ran to completion", False, f"{type(error).__name__}: {error}")

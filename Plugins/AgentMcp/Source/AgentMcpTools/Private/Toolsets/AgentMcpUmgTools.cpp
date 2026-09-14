@@ -265,11 +265,6 @@ namespace UE::AgentMcp::UmgToolsPrivate
 		}
 	};
 
-	bool IsPlaySessionActive()
-	{
-		return GEditor && (GEditor->PlayWorld != nullptr || GEditor->IsPlaySessionInProgress());
-	}
-
 	/** The widget tree of a project Widget Blueprint; raises a tool error and returns null when tools cannot change it. */
 	UWidgetTree* RequireEditableWidgetTree(UWidgetBlueprint* WidgetBlueprint, FString& OutWidgetBlueprintPath)
 	{
@@ -826,25 +821,6 @@ namespace UE::AgentMcp::UmgToolsPrivate
 		}
 		return Widget;
 	}
-
-	/** An asset already exists at the package path, in memory, on disk or in the asset registry. */
-	bool DoesAssetExist(const FString& PackageName, const FString& AssetName)
-	{
-		if (UPackage* Package = FindPackage(nullptr, *PackageName))
-		{
-			if (IsValid(StaticFindObjectFast(UObject::StaticClass(), Package, FName(*AssetName))))
-			{
-				return true;
-			}
-		}
-		if (FPackageName::DoesPackageExist(PackageName))
-		{
-			return true;
-		}
-		TArray<FAssetData> Assets;
-		FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get().GetAssetsByPackageName(FName(*PackageName), Assets);
-		return !Assets.IsEmpty();
-	}
 }
 
 FAgentMcpWidgetBlueprintDetails UAgentMcpUmgTools::Inspect(UWidgetBlueprint* WidgetBlueprint, const FString& RootWidget, int32 MaxDepth, bool bIncludeSlots, bool bIncludeProperties, int32 MaxWidgets)
@@ -920,7 +896,7 @@ FAgentMcpWidgetBlueprintCreateResult UAgentMcpUmgTools::CreateWidgetBlueprint(co
 
 	FAgentMcpWidgetBlueprintCreateResult Result;
 	// Control tools are not blocked during PIE by the dispatcher, but new assets belong to the editor session.
-	if (IsPlaySessionActive())
+	if (UE::AgentMcp::Tools::IsPlaySessionActive())
 	{
 		UE::AgentMcp::RaiseToolError(TEXT("PIE_ACTIVE"), TEXT("umg_create_widget_blueprint creates an asset and is blocked while a play session is running."),
 			TEXT("Stop the play session first (pie_stop)."));
@@ -928,41 +904,17 @@ FAgentMcpWidgetBlueprintCreateResult UAgentMcpUmgTools::CreateWidgetBlueprint(co
 	}
 
 	// The object path (/Game/UI/WBP_Hud.WBP_Hud) is accepted as well as the package path.
-	const FString Path = AssetPath.TrimStartAndEnd();
-	FString PackageName = Path;
-	int32 DotIndex = INDEX_NONE;
-	if (Path.FindLastChar(TEXT('.'), DotIndex))
+	FString PackageName;
+	FString AssetName;
+	FString PathCode;
+	const FString PathProblem = UE::AgentMcp::Tools::GetNewAssetPathProblem(AssetPath, PackageName, AssetName, PathCode);
+	if (!PathProblem.IsEmpty())
 	{
-		PackageName = Path.Left(DotIndex);
-		if (Path.Mid(DotIndex + 1) != FPackageName::GetShortName(PackageName))
-		{
-			UE::AgentMcp::RaiseToolError(TEXT("INVALID_ARGUMENT"), FString::Printf(TEXT("'%s': the asset name after the '.' must match the last part of the path."), *Path.Left(256)),
-				TEXT("Pass the package path, for example /Game/UI/WBP_Hud."));
-			return Result;
-		}
-	}
-
-	FText InvalidReason;
-	if (!FPackageName::IsValidLongPackageName(PackageName, /*bIncludeReadOnlyRoots=*/false, &InvalidReason))
-	{
-		UE::AgentMcp::RaiseToolError(TEXT("INVALID_ARGUMENT"), FString::Printf(TEXT("'%s' is not a valid package path: %s"), *PackageName.Left(256), *InvalidReason.ToString()),
-			TEXT("Use a path such as /Game/UI/WBP_Hud."));
-		return Result;
-	}
-	const FString AssetName = FPackageName::GetShortName(PackageName);
-	if (!FName::IsValidXName(AssetName, INVALID_OBJECTNAME_CHARACTERS))
-	{
-		UE::AgentMcp::RaiseToolError(TEXT("INVALID_ARGUMENT"), FString::Printf(TEXT("'%s' is not a valid asset name."), *AssetName), TEXT("Use letters, digits and underscores."));
-		return Result;
-	}
-	if (!UE::AgentMcp::Tools::IsProjectContentPackage(PackageName))
-	{
-		UE::AgentMcp::RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("%s is not project content."), *PackageName),
-			TEXT("Tools create assets under /Game or in project plugins only."));
+		UE::AgentMcp::RaiseToolError(PathCode, PathProblem + TEXT("."), TEXT("Pass a package path under /Game or a project plugin, for example /Game/UI/WBP_Hud."));
 		return Result;
 	}
 	// UAssetToolsImpl::CreateAsset would open an overwrite dialog for an existing asset, so check first.
-	if (DoesAssetExist(PackageName, AssetName))
+	if (UE::AgentMcp::Tools::DoesAssetExist(PackageName, AssetName))
 	{
 		UE::AgentMcp::RaiseToolError(TEXT("ASSET_EXISTS"), FString::Printf(TEXT("An asset already exists at %s."), *PackageName),
 			TEXT("Choose another path, or change the existing Widget Blueprint with umg_add_widgets."));

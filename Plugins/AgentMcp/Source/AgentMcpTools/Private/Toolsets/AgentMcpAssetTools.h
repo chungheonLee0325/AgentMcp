@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "AgentMcpToolset.h"
+#include "JsonObjectWrapper.h"
 
 #include "AgentMcpAssetTools.generated.h"
 
@@ -189,7 +190,58 @@ struct FAgentMcpSaveResult
 	TArray<FString> Warnings;
 };
 
-/** Asset registry queries and saving. The query tools do not load assets. */
+USTRUCT(BlueprintType)
+struct FAgentMcpAssetCreateResult
+{
+	GENERATED_BODY()
+
+	/** Object path of the new asset. */
+	UPROPERTY()
+	FString Asset;
+
+	UPROPERTY()
+	FString ClassName;
+
+	/** Row struct of a new DataTable. */
+	UPROPERTY()
+	FString RowStruct;
+};
+
+USTRUCT(BlueprintType)
+struct FAgentMcpImportedTexture
+{
+	GENERATED_BODY()
+
+	/** Object path of the texture. */
+	UPROPERTY()
+	FString Asset;
+
+	/** Absolute path of the imported file. */
+	UPROPERTY()
+	FString File;
+
+	UPROPERTY()
+	int32 Width = 0;
+
+	UPROPERTY()
+	int32 Height = 0;
+
+	/** An existing texture was replaced. */
+	UPROPERTY()
+	bool bReplaced = false;
+};
+
+USTRUCT(BlueprintType)
+struct FAgentMcpTextureImportResult
+{
+	GENERATED_BODY()
+
+	/** Imported textures in the order of the entries. */
+	UPROPERTY()
+	TArray<FAgentMcpImportedTexture> Textures;
+};
+
+/** Asset registry queries, saving, creating data assets and importing textures. The query tools do not load assets. */
 UCLASS(meta = (McpToolset = "asset"))
 class UAgentMcpAssetTools : public UAgentMcpToolset
 {
@@ -250,4 +302,29 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Asset", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))
 	static FAgentMcpSaveResult Save(const TArray<FString>& Assets, bool bOnlyIfDirty = true, bool bAllowCheckout = false);
+
+	/**
+	 * Creates a data asset (an instance of a DataAsset subclass, for example a UI theme or an item definition) or a DataTable under /Game
+	 * or in a project plugin. Set its values afterwards with object_set_properties or the datatable tools. The asset is not saved (use
+	 * asset_save), its creation cannot be undone with editor_undo, and the tool is blocked during a play session.
+	 * @param AssetPath Package path of the new asset, for example /Game/UI/DA_Theme. No asset may exist there yet.
+	 * @param AssetClass DataAsset subclass to create, or DataTable.
+	 * @param RowStruct Row struct of a DataTable: a path such as /Script/MyGame.ItemRow, or the struct name. Leave it empty for data assets.
+	 * @return The new asset.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Asset", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))
+	static FAgentMcpAssetCreateResult Create(const FString& AssetPath, UClass* AssetClass, const FString& RowStruct = TEXT(""));
+
+	/**
+	 * Imports image files (PNG, JPEG, TGA, BMP) as textures under /Game or in a project plugin, without dialogs. Every entry is checked
+	 * before anything is imported. With bUserInterface the textures get the settings for UMG: texture group UI, no mipmaps and
+	 * UserInterface2D compression. The textures are not saved (use asset_save), importing cannot be undone with editor_undo, and the tool
+	 * is blocked during a play session.
+	 * @param Textures Entries {"file": image file, "asset": package path of the texture}; a relative file starts at the project folder. For example [{"file": "Art/Incoming/icon_core.png", "asset": "/Game/UI/Textures/T_Icon_Core"}].
+	 * @param bReplaceExisting Replace textures that exist at the asset paths; without it an existing asset is an error.
+	 * @param bUserInterface Apply the texture settings for UMG.
+	 * @return The imported textures with their size.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Asset", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))
+	static FAgentMcpTextureImportResult ImportTextures(const TArray<FJsonObjectWrapper>& Textures, bool bReplaceExisting = false, bool bUserInterface = true);
 };

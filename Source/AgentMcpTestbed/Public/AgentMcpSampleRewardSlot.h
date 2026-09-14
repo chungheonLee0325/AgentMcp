@@ -7,11 +7,13 @@
 #include "AgentMcpSampleRewardSlot.generated.h"
 
 class UBorder;
+class UImage;
 class UTextBlock;
 
 /**
- * Reusable reward slot of the UI sample: an icon in the rarity color, the item name and the count. The Widget Blueprint provides the
- * layout and the brush shapes; this class applies the reward, also in the designer preview.
+ * Reusable reward slot of the UI sample: the item icon on a background in the rarity color, the item name and the count. The item
+ * comes from the item table and the colors and frames from the UI theme; the Widget Blueprint provides the layout and the brush shapes.
+ * This class applies the reward, also in the designer preview.
  */
 UCLASS(Abstract)
 class AGENTMCPTESTBED_API UAgentMcpSampleRewardSlot : public UUserWidget
@@ -19,13 +21,17 @@ class AGENTMCPTESTBED_API UAgentMcpSampleRewardSlot : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	/** Slot frame; its outline takes the rarity color. */
+	/** Slot frame; it takes the frame brush of the rarity from the theme, or the rarity color as its outline. */
 	UPROPERTY(BlueprintReadOnly, Category = "Reward", meta = (BindWidget))
 	TObjectPtr<UBorder> Frame;
 
-	/** Icon; its fill and outline take the rarity color, its corners the icon shape. */
+	/** Icon background; its fill and outline take the rarity color and its corners the shape of the item. */
 	UPROPERTY(BlueprintReadOnly, Category = "Reward", meta = (BindWidget))
 	TObjectPtr<UBorder> Icon;
+
+	/** Icon texture of the item; collapsed while the item has none. */
+	UPROPERTY(BlueprintReadOnly, Category = "Reward", meta = (BindWidgetOptional))
+	TObjectPtr<UImage> IconImage;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Reward", meta = (BindWidget))
 	TObjectPtr<UTextBlock> NameText;

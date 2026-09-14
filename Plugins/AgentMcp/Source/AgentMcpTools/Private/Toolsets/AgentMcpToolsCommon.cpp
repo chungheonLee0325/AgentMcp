@@ -4,11 +4,15 @@
 #include "AgentMcpSettings.h"
 #include "AgentMcpToolset.h"
 
+#include "AssetRegistry/AssetData.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Editor.h"
 #include "Engine/World.h"
 #include "Interfaces/IPluginManager.h"
+#include "Misc/PackageName.h"
+#include "Modules/ModuleManager.h"
 #include "ISourceControlModule.h"
 #include "ISourceControlProvider.h"
 #include "ISourceControlState.h"
@@ -211,6 +215,68 @@ namespace UE::AgentMcp::Tools
 				TEXT("Tools change assets under /Game or in project plugins only; engine content is read-only for tools."));
 		}
 		return bProjectContent;
+	}
+
+	bool IsPlaySessionActive()
+	{
+		return GEditor && (GEditor->PlayWorld != nullptr || GEditor->IsPlaySessionInProgress());
+	}
+
+	FString GetNewAssetPathProblem(const FString& AssetPath, FString& OutPackageName, FString& OutAssetName, FString& OutCode)
+	{
+		OutCode = TEXT("INVALID_ARGUMENT");
+		const FString Path = AssetPath.TrimStartAndEnd();
+		FString PackageName = Path;
+		int32 DotIndex = INDEX_NONE;
+		if (Path.FindLastChar(TEXT('.'), DotIndex))
+		{
+			PackageName = Path.Left(DotIndex);
+			if (Path.Mid(DotIndex + 1) != FPackageName::GetShortName(PackageName))
+			{
+				return FString::Printf(TEXT("'%s': the asset name after the '.' must match the last part of the path"), *Path.Left(256));
+			}
+		}
+
+		FText InvalidReason;
+		if (!FPackageName::IsValidLongPackageName(PackageName, /*bIncludeReadOnlyRoots=*/false, &InvalidReason))
+		{
+			FString Reason = InvalidReason.ToString();
+			Reason.RemoveFromEnd(TEXT("."));
+			return FString::Printf(TEXT("'%s' is not a valid package path: %s"), *PackageName.Left(256), *Reason);
+		}
+		const FString AssetName = FPackageName::GetShortName(PackageName);
+		if (!FName::IsValidXName(AssetName, INVALID_OBJECTNAME_CHARACTERS))
+		{
+			return FString::Printf(TEXT("'%s' is not a valid asset name; use letters, digits and underscores"), *AssetName);
+		}
+		if (!IsProjectContentPackage(PackageName))
+		{
+			OutCode = TEXT("NOT_SUPPORTED");
+			return FString::Printf(TEXT("%s is not project content; tools create assets under /Game or in project plugins only"), *PackageName);
+		}
+
+		OutCode.Reset();
+		OutPackageName = PackageName;
+		OutAssetName = AssetName;
+		return FString();
+	}
+
+	bool DoesAssetExist(const FString& PackageName, const FString& AssetName)
+	{
+		if (UPackage* Package = FindPackage(nullptr, *PackageName))
+		{
+			if (IsValid(StaticFindObjectFast(UObject::StaticClass(), Package, FName(*AssetName))))
+			{
+				return true;
+			}
+		}
+		if (FPackageName::DoesPackageExist(PackageName))
+		{
+			return true;
+		}
+		TArray<FAssetData> Assets;
+		FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get().GetAssetsByPackageName(FName(*PackageName), Assets);
+		return !Assets.IsEmpty();
 	}
 
 	TArray<FString> GetSourceControlWarnings(const UPackage* Package)
