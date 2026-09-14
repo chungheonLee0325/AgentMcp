@@ -30,6 +30,10 @@ struct FAgentMcpTestbedFixtures
 	UPROPERTY()
 	TArray<FString> Created;
 
+	/** Assets deleted by this call: the Widget Blueprint that the smoke test creates with the umg tools. */
+	UPROPERTY()
+	TArray<FString> Deleted;
+
 	/** Every fixture package was saved. */
 	UPROPERTY()
 	bool bSaved = false;
@@ -53,7 +57,8 @@ class UAgentMcpTestbedFixtureTools : public UAgentMcpToolset
 public:
 	/**
 	 * Creates or resets the smoke test fixtures and clears the undo history: /Game/AgentMcpFixtures/DT_AgentMcpSmoke with the rows
-	 * Alpha, Beta and Gamma, and the Widget Blueprints WBP_AgentMcpBound and WBP_AgentMcpMissingBinding, compiled and saved.
+	 * Alpha, Beta and Gamma, and the Widget Blueprints WBP_AgentMcpBound and WBP_AgentMcpMissingBinding, compiled and saved. Deletes
+	 * /Game/AgentMcpFixtures/WBP_AgentMcpAuthoring and WBP_AgentMcpAuthoringPart, which the smoke test creates with the umg tools.
 	 * @return Fixture paths.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Testbed", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))

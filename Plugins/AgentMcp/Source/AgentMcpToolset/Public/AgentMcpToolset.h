@@ -42,6 +42,12 @@ namespace UE::AgentMcp
 	/** True when RaiseToolError was called during the current tool call. */
 	AGENTMCPTOOLSET_API bool HasToolError();
 
+	/**
+	 * Resolves a class the way tool arguments are resolved: a short name such as TextBlock, a path such as /Script/UMG.TextBlock, or
+	 * the object path of a Blueprint for its generated class. Returns null when nothing matches.
+	 */
+	AGENTMCPTOOLSET_API UClass* ResolveClassName(const FString& NameOrPath);
+
 	struct FAgentMcpRuntimeInfo
 	{
 		bool bServerRunning = false;

@@ -1,7 +1,11 @@
 #include "AgentMcpToolsCommon.h"
 
+#include "AgentMcpJson.h"
+#include "AgentMcpSettings.h"
 #include "AgentMcpToolset.h"
 
+#include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
 #include "Editor.h"
 #include "Engine/World.h"
 #include "Interfaces/IPluginManager.h"
@@ -9,6 +13,8 @@
 #include "ISourceControlProvider.h"
 #include "ISourceControlState.h"
 #include "UObject/Package.h"
+#include "UObject/PropertyAccessUtil.h"
+#include "UObject/UnrealType.h"
 
 namespace UE::AgentMcp::Tools
 {
@@ -242,5 +248,167 @@ namespace UE::AgentMcp::Tools
 			Description.LeftInline(LineBreak);
 		}
 		return Description.Left(MaxLength).TrimStartAndEnd();
+	}
+
+	namespace CommonPrivate
+	{
+		bool IsBlockedBySettings(const UObject* Object, const FProperty* Property)
+		{
+			const TArray<FString>& Patterns = GetDefault<UAgentMcpSettings>()->BlockedProperties;
+			if (Patterns.IsEmpty())
+			{
+				return false;
+			}
+
+			const FString PropertyName = Property->GetName();
+			for (const UClass* Class = Object->GetClass(); Class; Class = Class->GetSuperClass())
+			{
+				const FString QualifiedName = Class->GetName() + TEXT(".") + PropertyName;
+				for (const FString& Pattern : Patterns)
+				{
+					if (QualifiedName.MatchesWildcard(Pattern))
+					{
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+	}
+
+	bool IsPropertyStoredOnObject(const FProperty* Property, const UObject* Object)
+	{
+		const UClass* OwnerClass = Property->GetOwnerClass();
+		return OwnerClass && Object->IsA(OwnerClass);
+	}
+
+	FProperty* FindPropertyByName(const UObject* Object, const FString& PropertyName)
+	{
+		const FString Trimmed = PropertyName.TrimStartAndEnd();
+		if (!Object || Trimmed.IsEmpty() || Trimmed.Len() >= NAME_SIZE)
+		{
+			return nullptr;
+		}
+		// A name that was never created cannot name a property, so look it up without adding it to the name table.
+		const FName LookupName(*Trimmed, FNAME_Find);
+		return LookupName.IsNone() ? nullptr : PropertyAccessUtil::FindPropertyByName(LookupName, Object->GetClass());
+	}
+
+	FString GetPropertyNotEditableReason(const UObject* Object, const FProperty* Property, bool bCheckAsInstance)
+	{
+		if (Property->HasAnyPropertyFlags(CPF_Deprecated))
+		{
+			return TEXT("it is deprecated");
+		}
+		if (!IsJsonCompatibleProperty(Property))
+		{
+			return TEXT("its type cannot be exchanged as JSON");
+		}
+		if (!IsPropertyStoredOnObject(Property, Object))
+		{
+			return TEXT("it is sparse class data");
+		}
+		if (Property->HasAnyPropertyFlags(CPF_InstancedReference | CPF_PersistentInstance | CPF_ContainsInstancedReference))
+		{
+			return TEXT("it references instanced sub-objects");
+		}
+
+		const bool bIsTemplate = !bCheckAsInstance && PropertyAccessUtil::IsObjectTemplate(Object);
+		const EPropertyAccessResultFlags Access = PropertyAccessUtil::CanSetPropertyValue(Property, PropertyAccessUtil::EditorReadOnlyFlags, bIsTemplate);
+		if (EnumHasAnyFlags(Access, EPropertyAccessResultFlags::AccessProtected))
+		{
+			return TEXT("it is not exposed to the editor or Blueprint");
+		}
+		if (EnumHasAnyFlags(Access, EPropertyAccessResultFlags::CannotEditTemplate))
+		{
+			return TEXT("it can only be edited on placed instances (EditInstanceOnly)");
+		}
+		if (EnumHasAnyFlags(Access, EPropertyAccessResultFlags::CannotEditInstance))
+		{
+			return TEXT("it can only be edited on class defaults (EditDefaultsOnly)");
+		}
+		if (EnumHasAnyFlags(Access, EPropertyAccessResultFlags::ReadOnly))
+		{
+			return TEXT("it is read-only (VisibleAnywhere or EditConst)");
+		}
+		if (Access != EPropertyAccessResultFlags::Success)
+		{
+			return TEXT("it is not editable");
+		}
+		if (CommonPrivate::IsBlockedBySettings(Object, Property))
+		{
+			return TEXT("it matches the BlockedProperties setting");
+		}
+		if (!Object->CanEditChange(Property))
+		{
+			return TEXT("the object does not allow editing it in its current state (CanEditChange)");
+		}
+		return FString();
+	}
+
+	TSharedRef<FJsonValue> ReadPropertyValue(const UObject* Object, const FProperty* Property)
+	{
+		const TSharedPtr<FJsonValue> Value = PropertyValueToJson(Property, Property->ContainerPtrToValuePtr<void>(Object));
+		if (Value.IsValid())
+		{
+			return Value.ToSharedRef();
+		}
+		return MakeShared<FJsonValueNull>();
+	}
+
+	FPreparedPropertyValues::~FPreparedPropertyValues()
+	{
+		for (const FEntry& Entry : Entries)
+		{
+			Entry.Property->DestroyValue(Entry.Value);
+			FMemory::Free(Entry.Value);
+		}
+	}
+
+	bool FPreparedPropertyValues::Prepare(const UObject* Object, const FJsonObject& Values, TArray<FString>& OutProblems, TSet<FString>& OutProblemCodes, bool bCheckAsInstance)
+	{
+		const int32 ProblemsBefore = OutProblems.Num();
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : Values.Values)
+		{
+			FProperty* Property = FindPropertyByName(Object, Pair.Key);
+			if (!Property)
+			{
+				OutProblems.Add(FString::Printf(TEXT("'%s' is not a property of %s"), *Pair.Key.Left(128), *Object->GetClass()->GetName()));
+				OutProblemCodes.Add(TEXT("UNKNOWN_PROPERTY"));
+				continue;
+			}
+
+			const FString Reason = GetPropertyNotEditableReason(Object, Property, bCheckAsInstance);
+			if (!Reason.IsEmpty())
+			{
+				OutProblems.Add(FString::Printf(TEXT("'%s' cannot be changed: %s"), *Property->GetName(), *Reason));
+				OutProblemCodes.Add(TEXT("PROPERTY_NOT_EDITABLE"));
+				continue;
+			}
+
+			// Start from the current value so struct fields missing from the JSON keep their value.
+			FEntry& Entry = Entries.AddDefaulted_GetRef();
+			Entry.Property = Property;
+			Entry.Value = FMemory::Malloc(static_cast<SIZE_T>(FMath::Max(Property->GetSize(), 1)), static_cast<uint32>(Property->GetMinAlignment()));
+			Property->InitializeValue(Entry.Value);
+			Property->GetValue_InContainer(Object, Entry.Value);
+
+			FString ErrorCode;
+			FString Error;
+			if (!JsonToPropertyValue(Pair.Value, Property, Entry.Value, Property->GetName(), ErrorCode, Error))
+			{
+				// Problems are joined into one sentence, so drop their own final period.
+				Error.RemoveFromEnd(TEXT("."));
+				OutProblems.Add(Error);
+				OutProblemCodes.Add(ErrorCode);
+			}
+		}
+		return OutProblems.Num() == ProblemsBefore;
+	}
+
+	void RaiseProblems(const FString& Summary, const TArray<FString>& Problems, const TSet<FString>& ProblemCodes, const FString& Hint)
+	{
+		const FString Code = ProblemCodes.Num() == 1 ? *ProblemCodes.CreateConstIterator() : FString(TEXT("INVALID_ARGUMENT"));
+		RaiseToolError(Code, FString::Printf(TEXT("%s: %s."), *Summary, *FString::Join(Problems, TEXT("; "))), Hint);
 	}
 }

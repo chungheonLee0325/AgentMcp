@@ -20,7 +20,9 @@
 #include "IAssetTools.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
+#include "Misc/PackageName.h"
 #include "Modules/ModuleManager.h"
+#include "ObjectTools.h"
 #include "UObject/Package.h"
 #include "WidgetBlueprint.h"
 #include "WidgetBlueprintFactory.h"
@@ -31,6 +33,8 @@ namespace AgentMcpTestbedPrivate
 	const TCHAR* const DataTableName = TEXT("DT_AgentMcpSmoke");
 	const TCHAR* const BoundWidgetName = TEXT("WBP_AgentMcpBound");
 	const TCHAR* const MissingBindingWidgetName = TEXT("WBP_AgentMcpMissingBinding");
+	/** Created by the smoke test with umg_create_widget_blueprint; every reset deletes it again. */
+	const TCHAR* const AuthoringWidgetName = TEXT("WBP_AgentMcpAuthoring");
 
 	FString MakeObjectPath(const TCHAR* AssetName)
 	{
@@ -40,6 +44,21 @@ namespace AgentMcpTestbedPrivate
 	IAssetTools& GetAssetTools()
 	{
 		return FModuleManager::LoadModuleChecked<FAssetToolsModule>(TEXT("AssetTools")).Get();
+	}
+
+	/** Deletes a fixture asset in memory and on disk, without dialogs; adds its path to OutDeleted when it existed. */
+	void DeleteFixtureAsset(const TCHAR* AssetName, TArray<FString>& OutDeleted)
+	{
+		const FString ObjectPath = MakeObjectPath(AssetName);
+		UObject* Asset = StaticFindObject(UObject::StaticClass(), nullptr, *ObjectPath);
+		if (!IsValid(Asset) && FPackageName::DoesPackageExist(FString::Printf(TEXT("%s/%s"), FixtureFolder, AssetName)))
+		{
+			Asset = LoadObject<UObject>(nullptr, *ObjectPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+		}
+		if (IsValid(Asset) && ObjectTools::ForceDeleteObjects({ Asset }, /*ShowConfirmation=*/false) > 0)
+		{
+			OutDeleted.Add(ObjectPath);
+		}
 	}
 
 	void AddRow(UDataTable* DataTable, const TCHAR* RowName, const TCHAR* Label, int32 Count, float Weight, const TCHAR* Group, const FVector& Offset, const TArray<FName>& Keywords)
@@ -155,6 +174,11 @@ FAgentMcpTestbedFixtures UAgentMcpTestbedFixtureTools::ResetFixtures()
 	{
 		GEditor->ResetTransaction(FText::FromString(TEXT("AgentMcp testbed fixtures reset")));
 	}
+
+	// Without undo history nothing refers to the authored Widget Blueprints any more, so they can be deleted. The part is nested in
+	// the authoring Widget Blueprint, so it goes second.
+	DeleteFixtureAsset(AuthoringWidgetName, Result.Deleted);
+	DeleteFixtureAsset(TEXT("WBP_AgentMcpAuthoringPart"), Result.Deleted);
 
 	UDataTable* DataTable = ResetDataTable(Result.Created);
 	UWidgetBlueprint* BoundWidget = ResetWidgetBlueprint(BoundWidgetName, /*bWithTitle=*/true, Result.Created);

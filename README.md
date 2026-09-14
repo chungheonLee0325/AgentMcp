@@ -6,7 +6,8 @@ Agent MCP runs a [Model Context Protocol](https://modelcontextprotocol.io) serve
 agents such as Claude Code can investigate a project, change it, run it and check the result:
 
 - inspect levels, actors, properties, assets, Blueprints, Widget Blueprints and DataTables
-- change actor properties and DataTable rows in undoable editor transactions, and save assets explicitly
+- change actor properties, DataTable rows and widget trees in undoable editor transactions, create Widget Blueprints, and
+  save assets explicitly
 - compile Blueprints, compile C++ with Live Coding, start and stop Play In Editor
 - read the editor log and capture the viewport, including the game UI of a play session
 
@@ -14,7 +15,7 @@ Tools are plain `static UFUNCTION`s. Their names, descriptions and JSON schemas 
 function.
 
 > **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this
-> repository passes 114 checks against the testbed project. Other engine versions and platforms have not been tried.
+> repository passes 137 checks against the testbed project. Other engine versions and platforms have not been tried.
 
 - [Installation](#installation)
 - [Connecting a client](#connecting-a-client)
@@ -23,6 +24,7 @@ function.
 - [Settings](#settings)
 - [Writing tools](#writing-tools)
 - [Testbed and smoke test](#testbed-and-smoke-test)
+- [UI sample](#ui-sample)
 - [Limitations](#limitations)
 - [License](#license)
 
@@ -38,7 +40,7 @@ function.
 When the editor has loaded, the output log shows:
 
 ```
-LogAgentMcpProtocol: Agent MCP server listening on http://127.0.0.1:18765/mcp (31 tools).
+LogAgentMcpProtocol: Agent MCP server listening on http://127.0.0.1:18765/mcp (35 tools).
 ```
 
 ## Connecting a client
@@ -67,7 +69,7 @@ run at the same time different ports, and check the `project` field of `editor_g
 
 **Read** tools have no side effects. **Write** tools run in an undoable editor transaction and are refused during Play In
 Editor. **Destructive** tools are Write tools that only report what they would do unless `bConfirm` is true. **Control**
-tools change editor state that cannot be undone: play sessions, compiling and saving.
+tools change editor state that cannot be undone: play sessions, compiling, saving and creating assets.
 
 | Tool | Access | Description |
 |---|---|---|
@@ -94,11 +96,27 @@ tools change editor state that cannot be undone: play sessions, compiling and sa
 | `blueprint_inspect` | Read | Parent chain, interfaces, components, variables, functions and graphs |
 | `blueprint_compile` | Control | Compile a Blueprint or Widget Blueprint and return its errors and warnings |
 | `umg_inspect` | Read | Widget tree with slots, BindWidget properties, animations and property bindings |
+| `umg_create_widget_blueprint` | Control | Create a Widget Blueprint with a parent class and a root panel |
+| `umg_add_widgets` | Write | Add widgets, whole subtrees or Widget Blueprint instances, with widget and slot properties, in one call |
+| `umg_set_widget_properties` | Write | Change widget properties, slot values and the variable flag of several widgets |
+| `umg_remove_widgets` | Destructive | Remove widgets with their descendants, property bindings and graph references |
 | `viewport_capture` | Read | PNG of the level viewport or the play session, including the game UI |
 | `livecoding_compile` | Control | Compile changed C++ with Live Coding and wait for the result |
 
 A typical verification loop: `blueprint_compile` → `pie_start` → `log_get_recent` from the returned `startLogSequence` →
 `viewport_capture` → `pie_stop`.
+
+To build a user interface: `umg_create_widget_blueprint` (with a C++ parent class that declares `BindWidget` properties) →
+`umg_add_widgets` → `blueprint_compile` → look at it in a play session with `viewport_capture` → adjust it with
+`umg_set_widget_properties`. Values are JSON: property names are the C++ names (`Text`, `Font`, `Padding`, `LayoutData`),
+a struct value may list only the fields to set, and enum values are names (`HAlign_Center`, `RoundedBox`). An entry class can
+be a Widget Blueprint, whose instance properties are set the same way. The edit tools read back only the requested fields;
+`umg_inspect` with `bIncludeProperties` returns complete values.
+
+The tools build whatever tree they are given. For the way a UI team would build it (reusable component Widget Blueprints,
+style values in one place, data-driven lists and a capture review), this repository includes the Claude Code skill
+[`.claude/skills/umg-authoring`](.claude/skills/umg-authoring/SKILL.md); copy it into your project and adapt it to your
+conventions.
 
 ## Safety
 
@@ -106,12 +124,13 @@ A typical verification loop: `blueprint_compile` → `pie_start` → `log_get_re
   `[::1]` are refused, which blocks web pages from reaching the editor. `AuthToken` additionally requires a bearer token.
 - **Undoable, all-or-nothing writes.** Write tools validate every value before they change anything and run in an editor
   transaction. If a tool fails after it has changed something, the transaction is undone.
-- **No writes during play.** Write tools are refused while Play In Editor is starting or running.
+- **No writes during play.** Write tools and `umg_create_widget_blueprint` are refused while Play In Editor is starting or
+  running.
 - **Explicit saving.** No tool saves as a side effect. `asset_save` saves loaded assets of the project only; levels and
   content outside the project are refused.
 - **Dry runs.** Destructive tools need `bConfirm: true` to act.
 - **Allow and block lists.** `AllowedTools` and `BlockedTools` hide tools, and `BlockedProperties` protects properties from
-  `object_set_properties`.
+  `object_set_properties` and the `umg` tools.
 - There is no tool that runs console commands or scripts.
 
 ## Settings
@@ -133,7 +152,7 @@ Port=18765
 | `ExposureMode` | `Native` | `Native` registers every tool. `ToolSearch` registers only `toolsets_list`, `toolsets_describe` and `tools_call` |
 | `BlockedTools`, `AllowedTools` | empty | Tool name wildcards (for example `datatable_*`) |
 | `bAllowWritesDuringPIE` | `False` | Allow Write tools during Play In Editor |
-| `BlockedProperties` | empty | `ClassName.PropertyName` wildcards that `object_set_properties` refuses |
+| `BlockedProperties` | empty | `ClassName.PropertyName` wildcards that `object_set_properties` and the `umg` tools refuse |
 | `BusyWaitTimeoutSeconds` | `10` | How long a call waits while the editor saves, collects garbage or loads assets |
 | `MaxResultBytes` | `65536` | Result text above this size is truncated |
 | `LogBufferLines` | `20000` | Log lines kept for `log_get_recent` |
@@ -195,8 +214,11 @@ The repository root is a small Unreal Engine 5.5 project that builds and tests t
 | Path | Contents |
 |---|---|
 | `Plugins/AgentMcp` | The plugin |
-| `Source/AgentMcpTestbed` | Row struct, widget base class and game mode used by the tests |
-| `Source/AgentMcpTestbedEditor` | `testbed_*` tools that create test assets under `/Game/AgentMcpFixtures`, and hooks for rollback and cancellation checks |
+| `Source/AgentMcpTestbed` | Row struct, widget base class and game mode used by the tests, and the C++ classes of the UI sample |
+| `Source/AgentMcpTestbedEditor` | `testbed_*` tools that create test assets under `/Game/AgentMcpFixtures`, hooks for rollback and cancellation checks, and `sample_show_widget` |
+| `Content/Samples/DungeonUi` | Widget Blueprints of the UI sample, built with the `umg` tools |
+| `Docs` | How the samples were built |
+| `.claude/skills/umg-authoring` | Claude Code skill for production UMG work with the `umg` tools |
 | `Config` | The testbed serves port **18766**, so that it never answers in place of another project on the default port |
 | `Tools/mcp_smoke.py` | Smoke test (Python 3, standard library only) |
 | `Tools/mcp_call.py` | Calls one tool from the command line |
@@ -208,7 +230,8 @@ The repository root is a small Unreal Engine 5.5 project that builds and tests t
 
 The smoke test first checks that the editor behind the URL is the `AgentMcpTestbed` project and stops otherwise, because
 it starts Play In Editor, changes the level and saves the test assets. It covers the MCP transport and its errors, every
-tool, undo and rollback, request cancellation, Play In Editor, viewport capture with the game UI and Live Coding.
+tool, undo and rollback, request cancellation, Play In Editor, viewport capture with the game UI, Live Coding and Widget
+Blueprint editing, including nested Widget Blueprint instances.
 
 To call a single tool:
 
@@ -216,11 +239,23 @@ To call a single tool:
 python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --expect-project AgentMcpTestbed
 ```
 
+## UI sample
+
+`Content/Samples/DungeonUi` holds a dungeon progress HUD and a dungeon result popup that Claude Code built through the `umg`
+tools: component Widget Blueprints for reward slots, stat tiles and objective rows, C++ bases with `BindWidget` contracts and
+intro animations, and a `DynamicEntryBox` that creates one reward slot per reward.
+[Docs/Samples/DungeonUi.md](Docs/Samples/DungeonUi.md) describes how it was built, including a first version that was not
+modular, and how to run it.
+
+![Dungeon result popup](Docs/Images/dungeon_result.jpg)
+
 ## Limitations
 
 - Tested with Unreal Engine 5.5.4 on Windows 64-bit only. All tools have been tested with the Python client in `Tools`.
-  From Claude Code 2.1.270 (desktop app and CLI), `editor_get_state`, `actor_find` and `viewport_capture` (including its
-  image) have been called successfully; the other tools have not been called from Claude Code yet.
+  From Claude Code 2.1.270, `editor_get_state`, `actor_find` and `viewport_capture` were called from the desktop app and the
+  CLI. While building the UI sample, the desktop app also called `umg_create_widget_blueprint`, `umg_add_widgets`,
+  `umg_set_widget_properties`, `umg_remove_widgets`, `blueprint_compile`, `pie_start`, `pie_stop`, `asset_save` and
+  `livecoding_compile`. The other tools have not been called from Claude Code yet.
 - Responses are plain JSON. There is no streaming: no SSE and no progress notifications. `pie_start` and similar tools hold
   the request until they finish.
 - Requests run on the editor's game thread. An editor in the background with **Use Less CPU when in Background** enabled
@@ -228,8 +263,8 @@ python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --exp
   while an agent works.
 - `livecoding_compile` blocks the editor until the compile has finished, and Live Coding cannot apply changes to `UCLASS`,
   `USTRUCT`, `UPROPERTY` or `UFUNCTION` declarations. Close the editor and build instead.
-- Assets can be changed only through DataTable rows. Blueprint graphs and widget trees can be inspected and compiled but
-  not edited.
+- Assets can be changed through DataTable rows and the widget trees of Widget Blueprints. Blueprint graphs, widget animations
+  and designer property bindings can be inspected but not edited, and a widget cannot be moved to another parent yet.
 - The `ToolSearch` exposure mode and source control handling when saving have not been tested yet.
 
 ## Background

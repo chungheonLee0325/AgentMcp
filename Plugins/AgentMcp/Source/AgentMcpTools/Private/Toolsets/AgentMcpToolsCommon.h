@@ -3,6 +3,9 @@
 #include "CoreMinimal.h"
 #include "AgentMcpToolTypes.h"
 
+class FJsonObject;
+class FJsonValue;
+class FProperty;
 class UClass;
 class UObject;
 class UWorld;
@@ -57,4 +60,51 @@ namespace UE::AgentMcp::Tools
 
 	/** Source control warnings for saving a package, from the cached state (no source control request). */
 	TArray<FString> GetSourceControlWarnings(const UPackage* Package);
+
+	/** False for sparse class data, whose values are not stored in the object. */
+	bool IsPropertyStoredOnObject(const FProperty* Property, const UObject* Object);
+
+	/** A property of the object's class by name, or null. The name is looked up without adding it to the name table. */
+	FProperty* FindPropertyByName(const UObject* Object, const FString& PropertyName);
+
+	/**
+	 * Empty when tools may change the property on the object; otherwise the reason. bCheckAsInstance checks a class default object as if
+	 * it were an instance of its class, for values that are checked before the instance exists.
+	 */
+	FString GetPropertyNotEditableReason(const UObject* Object, const FProperty* Property, bool bCheckAsInstance = false);
+
+	/** The property value as JSON, or a JSON null when the value cannot be represented. */
+	TSharedRef<FJsonValue> ReadPropertyValue(const UObject* Object, const FProperty* Property);
+
+	/** Property values for one object, converted from JSON and checked, so that a bad value is found before anything changes. */
+	class FPreparedPropertyValues : public FNoncopyable
+	{
+	public:
+		struct FEntry
+		{
+			FProperty* Property = nullptr;
+
+			/** Initialized value of the property's type. */
+			void* Value = nullptr;
+		};
+
+		~FPreparedPropertyValues();
+
+		/**
+		 * Checks and converts each value for Object, starting from the object's current value so that struct fields missing from the JSON
+		 * keep their value. Appends each problem, without a final period, and its error code. Returns true when there were no problems.
+		 */
+		bool Prepare(const UObject* Object, const FJsonObject& Values, TArray<FString>& OutProblems, TSet<FString>& OutProblemCodes, bool bCheckAsInstance = false);
+
+		const TArray<FEntry>& GetEntries() const
+		{
+			return Entries;
+		}
+
+	private:
+		TArray<FEntry> Entries;
+	};
+
+	/** Raises one error for collected problems, "<Summary>: <problem>; <problem>.", with their error code, or INVALID_ARGUMENT when the codes differ. */
+	void RaiseProblems(const FString& Summary, const TArray<FString>& Problems, const TSet<FString>& ProblemCodes, const FString& Hint = FString());
 }

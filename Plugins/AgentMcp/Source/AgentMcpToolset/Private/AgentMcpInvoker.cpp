@@ -636,6 +636,11 @@ namespace UE::AgentMcp::InvokerPrivate
 
 namespace UE::AgentMcp
 {
+	UClass* ResolveClassName(const FString& NameOrPath)
+	{
+		return InvokerPrivate::ResolveClass(NameOrPath);
+	}
+
 	bool IsJsonCompatibleProperty(const FProperty* Property)
 	{
 		FString Reason;

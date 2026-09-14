@@ -7,12 +7,13 @@ Checks the MCP transport contract and the tools against a running editor:
   P1       asset registry, class hierarchy, blueprint_inspect, umg_inspect, datatable_* on engine content
   P2       DataTable edits, dry run, undo and asset_save on the testbed fixtures
   P3       blueprint_compile, BindWidget checks, PIE refusal, viewport_capture with the game UI, rollback, cancellation, livecoding_compile
+  P4       umg_create_widget_blueprint, umg_add_widgets, umg_set_widget_properties, umg_remove_widgets: checks, undo, redo, PIE refusal
 
-Level writes are undone again. P2 and P3 need the AgentMcpTestbed "testbed" toolset, which resets and saves its fixture assets.
+Level writes are undone again. P2, P3 and P4 need the AgentMcpTestbed "testbed" toolset, which resets and saves its fixture assets.
 
 Usage:
   python mcp_smoke.py [--url http://127.0.0.1:18766/mcp] [--expect-project AgentMcpTestbed] [--token TOKEN] [--out evidence.json]
-                      [--skip-slice1] [--skip-pie] [--pie-cycles 3] [--skip-p1] [--skip-p2] [--skip-p3]
+                      [--skip-slice1] [--skip-pie] [--pie-cycles 3] [--skip-p1] [--skip-p2] [--skip-p3] [--skip-p4]
 
 Before any check, the script asks the editor at --url for its project and stops unless it is --expect-project: the checks
 start and stop Play In Editor, change the level and save assets.
@@ -809,6 +810,205 @@ def run_p3(client, report, evidence):
         report.check("livecoding_compile finishes with a result", not is_error and (data or {}).get("result") in ("NoChanges", "Success"), json.dumps(data)[:200])
 
 
+P4_TOOLS = {"umg_create_widget_blueprint", "umg_add_widgets", "umg_set_widget_properties", "umg_remove_widgets"}
+AUTHORING_WIDGET = "/Game/AgentMcpFixtures/WBP_AgentMcpAuthoring"
+
+
+def widget_nodes(client, widget_blueprint, include_properties=False):
+    """umg_inspect widget nodes by name; empty when the call fails."""
+    _, _, is_error, data, _ = client.call_tool("umg_inspect", {"widgetBlueprint": widget_blueprint, "bIncludeProperties": include_properties})
+    return {} if is_error else {node.get("name"): node for node in (data or {}).get("widgets") or []}
+
+
+def run_p4(client, report, evidence):
+    p4 = evidence.setdefault("p4", {})
+    _, _, is_error, data, _ = client.call_tool("testbed_reset_fixtures")
+    fixtures = {} if is_error else (data or {})
+    report.check("testbed_reset_fixtures prepares the Widget Blueprint authoring checks", not is_error, json.dumps(fixtures.get("deleted")))
+    missing_binding = next((path for path in fixtures.get("widgetBlueprints") or [] if "WBP_AgentMcpMissingBinding" in path), None)
+
+    # --- umg_create_widget_blueprint ------------------------------------------------------------------
+    _, _, is_error, data, _ = client.call_tool("umg_create_widget_blueprint", {
+        "assetPath": AUTHORING_WIDGET, "parentClass": "AgentMcpTestbedWidget", "rootWidgetClass": "CanvasPanel"})
+    created = data or {}
+    wbp = created.get("widgetBlueprint")
+    root = created.get("rootWidget")
+    report.check("umg_create_widget_blueprint creates a Widget Blueprint with a root panel and lists its unbound BindWidget",
+                 not is_error and bool(wbp) and bool(root) and created.get("rootWidgetClass") == "CanvasPanel"
+                 and created.get("missingBindWidgets") == ["TitleText"], json.dumps(data)[:300])
+    p4["create"] = data
+    if is_error or not wbp or not root:
+        return
+
+    _, _, is_error, data, _ = client.call_tool("umg_create_widget_blueprint", {"assetPath": AUTHORING_WIDGET})
+    report.check("umg_create_widget_blueprint refuses a path that already has an asset", is_error and error_code(data) == "ASSET_EXISTS", error_message(data)[:200])
+
+    _, _, is_error, data, _ = client.call_tool("umg_create_widget_blueprint", {"assetPath": "/Engine/AgentMcpSmoke/WBP_NotAllowed"})
+    report.check("umg_create_widget_blueprint refuses engine content", is_error and error_code(data) == "NOT_SUPPORTED", error_message(data)[:200])
+
+    # --- umg_add_widgets ------------------------------------------------------------------------------
+    subtree = [{
+        "class": "Border", "name": "Panel",
+        "slot": {"LayoutData": {"Offsets": {"Left": 40, "Top": 40, "Right": 480, "Bottom": 200}}},
+        "properties": {"BrushColor": {"R": 0.05, "G": 0.1, "B": 0.2, "A": 0.9}},
+        "children": [{"class": "VerticalBox", "name": "Rows", "children": [
+            {"class": "TextBlock", "name": "TitleText", "properties": {"Text": "Dungeon"}, "slot": {"Padding": {"Bottom": 8}}},
+            {"class": "ProgressBar", "name": "Progress", "isVariable": True, "properties": {"Percent": 0.25}},
+        ]}],
+    }]
+    _, _, is_error, data, _ = client.call_tool("umg_add_widgets", {"widgetBlueprint": wbp, "parent": root, "widgets": subtree})
+    added = [node.get("name") for node in (data or {}).get("widgets") or []]
+    report.check("umg_add_widgets adds a nested subtree in one undoable call and satisfies the BindWidget",
+                 not is_error and added == ["Panel", "Rows", "TitleText", "Progress"] and (data or {}).get("bApplied") is True
+                 and not (data or {}).get("missingBindWidgets") and ((data or {}).get("undo") or {}).get("recorded") is True,
+                 json.dumps(data)[:400])
+    p4["add"] = data
+
+    nodes = widget_nodes(client, wbp, include_properties=True)
+    title = nodes.get("TitleText") or {}
+    # Property names keep their case in results; the fields of struct values come back in camelCase.
+    title_padding = ((title.get("slot") or {}).get("properties") or {}).get("Padding") or {}
+    report.check("umg_inspect shows the added widgets with their parents, slots and properties",
+                 (nodes.get("Panel") or {}).get("parent") == root and (nodes.get("Rows") or {}).get("parent") == "Panel"
+                 and title.get("parent") == "Rows" and (title.get("slot") or {}).get("className") == "VerticalBoxSlot"
+                 and title_padding.get("bottom") == 8 and (title.get("properties") or {}).get("Text") == "Dungeon"
+                 and (nodes.get("Progress") or {}).get("bIsVariable") is True,
+                 json.dumps({name: nodes.get(name) for name in ("Panel", "TitleText", "Progress")})[:500])
+
+    _, _, is_error, data, _ = client.call_tool("blueprint_compile", {"blueprint": wbp})
+    report.check("the authored Widget Blueprint compiles without errors",
+                 not is_error and (data or {}).get("errorCount") == 0 and (data or {}).get("status") in ("UpToDate", "UpToDateWithWarnings"),
+                 json.dumps(data)[:300])
+
+    count = len(widget_nodes(client, wbp))
+    bad_entries = [
+        {"class": "TextBlock", "name": "Extra", "properties": {"NoSuchProperty": 1}},
+        {"class": "NoSuchWidgetClass"},
+        {"class": "Image", "name": "TitleText"},
+        {"class": "TextBlock", "children": [{"class": "Spacer"}]},
+    ]
+    _, _, is_error, data, _ = client.call_tool("umg_add_widgets", {"widgetBlueprint": wbp, "parent": "Rows", "widgets": bad_entries})
+    message = error_message(data)
+    report.check("umg_add_widgets reports every bad entry at once and changes nothing",
+                 is_error and all(text in message for text in ("NoSuchProperty", "NoSuchWidgetClass", "TitleText", "cannot have children"))
+                 and len(widget_nodes(client, wbp)) == count, message[:400])
+
+    _, _, is_error, data, _ = client.call_tool("umg_add_widgets", {"widgetBlueprint": wbp, "parent": "Panel", "widgets": [{"class": "Spacer"}]})
+    report.check("umg_add_widgets refuses a second child for a panel that holds one",
+                 is_error and error_code(data) == "INVALID_ARGUMENT" and len(widget_nodes(client, wbp)) == count, error_message(data)[:200])
+
+    # --- umg_set_widget_properties --------------------------------------------------------------------
+    def title_text():
+        return ((widget_nodes(client, wbp, include_properties=True).get("TitleText") or {}).get("properties") or {}).get("Text")
+
+    _, _, is_error, data, _ = client.call_tool("umg_set_widget_properties", {"widgetBlueprint": wbp, "widgets": {
+        "TitleText": {"properties": {"Text": "Cleared"}, "slot": {"Padding": {"Top": 4}}},
+        "Progress": {"properties": {"Percent": 1.0}, "isVariable": False},
+    }})
+    changed = {node.get("name"): node for node in (data or {}).get("widgets") or []}
+    title = changed.get("TitleText") or {}
+    progress = changed.get("Progress") or {}
+    padding = ((title.get("slot") or {}).get("properties") or {}).get("Padding") or {}
+    # The result reads back only the requested fields; umg_inspect shows that the other Padding fields kept their values.
+    inspected_padding = (((widget_nodes(client, wbp).get("TitleText") or {}).get("slot") or {}).get("properties") or {}).get("Padding") or {}
+    report.check("umg_set_widget_properties changes widget values, single slot fields and isVariable of several widgets",
+                 not is_error and (title.get("properties") or {}).get("Text") == "Cleared" and padding == {"top": 4}
+                 and inspected_padding.get("top") == 4 and inspected_padding.get("bottom") == 8
+                 and (progress.get("properties") or {}).get("Percent") == 1.0 and not progress.get("bIsVariable"), json.dumps(data)[:400])
+    p4["set"] = data
+
+    _, _, is_error, data, _ = client.call_tool("umg_set_widget_properties", {"widgetBlueprint": wbp, "widgets": {
+        "TitleText": {"properties": {"Text": "Not applied"}}, "NoSuchWidget": {"properties": {"Text": "x"}}}})
+    current = title_text()
+    report.check("umg_set_widget_properties changes nothing when one widget does not exist",
+                 is_error and error_code(data) == "NOT_FOUND" and current == "Cleared", f"code={error_code(data)}, Text={current}")
+
+    _, _, undo_error, _, _ = client.call_tool("editor_undo")
+    after_undo = title_text()
+    _, _, redo_error, _, _ = client.call_tool("editor_redo")
+    after_redo = title_text()
+    report.check("editor_undo and editor_redo revert and reapply umg_set_widget_properties",
+                 not undo_error and not redo_error and after_undo == "Dungeon" and after_redo == "Cleared", f"after undo={after_undo}, after redo={after_redo}")
+
+    _, _, is_error, _, _ = client.call_tool("umg_add_widgets", {"widgetBlueprint": wbp, "parent": root, "widgets": [{"class": "Image", "name": "Badge"}]})
+    added_badge = not is_error and "Badge" in widget_nodes(client, wbp)
+    client.call_tool("editor_undo")
+    undone = "Badge" not in widget_nodes(client, wbp)
+    _, _, is_error, data, _ = client.call_tool("umg_add_widgets", {"widgetBlueprint": wbp, "parent": root, "widgets": [{"class": "SizeBox", "name": "Badge"}]})
+    badge = widget_nodes(client, wbp).get("Badge") or {}
+    report.check("after editor_undo of umg_add_widgets the widget name can be used again, also for another class",
+                 added_badge and undone and not is_error and badge.get("className") == "SizeBox",
+                 f"added={added_badge}, undone={undone}, class={badge.get('className')}, {error_message(data)[:160]}")
+
+    # --- nested Widget Blueprints and entry classes ----------------------------------------------------
+    part = AUTHORING_WIDGET + "Part"
+    part_class = part + "." + part.rsplit("/", 1)[1] + "_C"
+    _, _, is_error, data, _ = client.call_tool("umg_create_widget_blueprint", {"assetPath": part, "parentClass": "AgentMcpTestbedWidget", "rootWidgetClass": "Overlay"})
+    part_root = (data or {}).get("rootWidget")
+    _, _, add_error, added, _ = client.call_tool("umg_add_widgets", {"widgetBlueprint": part, "parent": part_root or "", "widgets": [{"class": "TextBlock", "name": "TitleText"}]})
+    _, _, compile_error, compiled, _ = client.call_tool("blueprint_compile", {"blueprint": part})
+    report.check("a component Widget Blueprint for nesting is created and compiles",
+                 not is_error and bool(part_root) and not add_error and not compile_error and (compiled or {}).get("errorCount") == 0,
+                 json.dumps(compiled)[:200] if not add_error else error_message(added)[:200])
+
+    _, _, is_error, data, _ = client.call_tool("umg_add_widgets", {"widgetBlueprint": wbp, "parent": root, "widgets": [
+        {"class": part_class, "name": "PartInstance", "properties": {"Caption": "Nested"}},
+        {"class": "DynamicEntryBox", "name": "Entries", "properties": {"EntryWidgetClass": part_class, "NumDesignerPreviewEntries": 2}},
+    ]})
+    nested = {node.get("name"): node for node in (data or {}).get("widgets") or []}
+    instance = nested.get("PartInstance") or {}
+    entries = nested.get("Entries") or {}
+    report.check("umg_add_widgets adds a Widget Blueprint instance with an instance property and sets a DynamicEntryBox entry class",
+                 not is_error and instance.get("className") == part_class.rsplit(".", 1)[1] and instance.get("widgetClass") == part_class
+                 and (instance.get("properties") or {}).get("Caption") == "Nested"
+                 and (entries.get("properties") or {}).get("EntryWidgetClass") == part_class, json.dumps(data)[:400])
+
+    _, _, is_error, data, _ = client.call_tool("blueprint_compile", {"blueprint": wbp})
+    report.check("the Widget Blueprint with a nested instance compiles", not is_error and (data or {}).get("errorCount") == 0, json.dumps(data)[:200])
+
+    _, _, is_error, data, _ = client.call_tool("umg_add_widgets", {"widgetBlueprint": wbp, "parent": root, "widgets": [{"class": wbp + "_C", "name": "Recursive"}]})
+    report.check("umg_add_widgets refuses to nest a Widget Blueprint in itself", is_error and "contain itself" in error_message(data), error_message(data)[:200])
+
+    # --- umg_remove_widgets ---------------------------------------------------------------------------
+    count = len(widget_nodes(client, wbp))
+    _, _, is_error, data, _ = client.call_tool("umg_remove_widgets", {"widgetBlueprint": wbp, "widgetNames": ["Rows", "Progress"]})
+    listed = [node.get("name") for node in (data or {}).get("widgets") or []]
+    warnings = " ".join((data or {}).get("warnings") or [])
+    report.check("umg_remove_widgets without bConfirm lists the subtree once, warns about the BindWidget and removes nothing",
+                 not is_error and not (data or {}).get("bApplied") and listed == ["Rows", "TitleText", "Progress"]
+                 and "TitleText" in warnings and "Dry run" in warnings and len(widget_nodes(client, wbp)) == count, json.dumps(data)[:400])
+
+    _, _, is_error, data, _ = client.call_tool("umg_remove_widgets", {"widgetBlueprint": wbp, "widgetNames": ["Rows"], "bConfirm": True})
+    nodes = widget_nodes(client, wbp)
+    report.check("umg_remove_widgets with bConfirm removes the subtree and lists the unbound BindWidget",
+                 not is_error and (data or {}).get("bApplied") is True and "TitleText" in ((data or {}).get("missingBindWidgets") or [])
+                 and not any(name in nodes for name in ("Rows", "TitleText", "Progress")), json.dumps(data)[:300])
+
+    client.call_tool("editor_undo")
+    nodes = widget_nodes(client, wbp)
+    _, _, is_error, data, _ = client.call_tool("blueprint_compile", {"blueprint": wbp})
+    parents = {name: (nodes.get(name) or {}).get("parent") for name in ("Rows", "TitleText")}
+    report.check("editor_undo restores the removed widgets in place and the Widget Blueprint compiles again",
+                 parents == {"Rows": "Panel", "TitleText": "Rows"} and not is_error and (data or {}).get("errorCount") == 0,
+                 f"parents={json.dumps(parents)}, compile={json.dumps(data)[:200]}")
+
+    # --- play session refusal -------------------------------------------------------------------------
+    if missing_binding:
+        client.call_tool("testbed_set_pie_warning", {"blueprint": missing_binding, "bEnabled": False})
+    _, _, is_error, data, _ = client.call_tool("pie_start", {"warmupSeconds": 0.5})
+    if report.check("pie_start runs for the play session refusal check", not is_error, error_message(data)[:200]):
+        _, _, add_error, add_data, _ = client.call_tool("umg_add_widgets", {"widgetBlueprint": wbp, "parent": root, "widgets": [{"class": "Spacer"}]})
+        _, _, create_error, create_data, _ = client.call_tool("umg_create_widget_blueprint", {"assetPath": AUTHORING_WIDGET + "_Pie"})
+        client.call_tool("pie_stop")
+        report.check("umg_add_widgets and umg_create_widget_blueprint are refused during a play session",
+                     add_error and error_code(add_data) == "PIE_ACTIVE" and create_error and error_code(create_data) == "PIE_ACTIVE",
+                     f"add={error_code(add_data)}, create={error_code(create_data)}")
+
+    _, _, is_error, data, _ = client.call_tool("testbed_reset_fixtures")
+    report.check("testbed_reset_fixtures deletes the authored Widget Blueprint",
+                 not is_error and any("WBP_AgentMcpAuthoring" in path for path in (data or {}).get("deleted") or []), json.dumps((data or {}).get("deleted")))
+
+
 def run_protocol_errors(client, report):
     status, _, payload, _ = client.request("tools/call", {"name": "no_such_tool", "arguments": {}})
     report.check("unknown tool returns JSON-RPC -32602", ((payload or {}).get("error") or {}).get("code") == -32602, str((payload or {}).get("error")))
@@ -871,6 +1071,7 @@ def main():
     parser.add_argument("--skip-p1", action="store_true")
     parser.add_argument("--skip-p2", action="store_true", help="skip DataTable editing and saving (needs the testbed fixture toolset)")
     parser.add_argument("--skip-p3", action="store_true", help="skip compile, capture, Live Coding, rollback and cancellation (needs the testbed toolset)")
+    parser.add_argument("--skip-p4", action="store_true", help="skip Widget Blueprint authoring (needs the testbed toolset)")
     args = parser.parse_args()
 
     # Every editor with the plugin serves the same default port, so make sure the smoke test talks to the intended project.
@@ -897,6 +1098,8 @@ def main():
         expected_tools |= P2_TOOLS
     if not args.skip_p3:
         expected_tools |= P3_TOOLS
+    if not args.skip_p4:
+        expected_tools |= P4_TOOLS
     try:
         run_p0(client, report, evidence, expected_tools)
         if not args.skip_slice1:
@@ -907,6 +1110,8 @@ def main():
             run_p2(client, report, evidence)
         if not args.skip_p3:
             run_p3(client, report, evidence)
+        if not args.skip_p4:
+            run_p4(client, report, evidence)
         run_protocol_errors(client, report)
     except Exception as error:  # Keep the evidence of the checks that did run.
         report.check("smoke test ran to completion", False, f"{type(error).__name__}: {error}")

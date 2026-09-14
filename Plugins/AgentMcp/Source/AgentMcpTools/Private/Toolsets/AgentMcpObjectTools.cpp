@@ -1,13 +1,12 @@
 #include "AgentMcpObjectTools.h"
 
 #include "AgentMcpJson.h"
-#include "AgentMcpSettings.h"
 #include "AgentMcpToolsCommon.h"
 
+#include "Dom/JsonObject.h"
 #include "Editor.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
-#include "Misc/ScopeExit.h"
 #include "UObject/PropertyAccessUtil.h"
 #include "UObject/UnrealType.h"
 
@@ -16,104 +15,10 @@ namespace UE::AgentMcp::ObjectToolsPrivate
 	constexpr int32 MaxListLimit = 500;
 	constexpr int32 MaxDescriptionLength = 200;
 
-	/** False for sparse class data, whose values are not stored in the object. */
-	bool IsStoredOnObject(const FProperty* Property, const UObject* Object)
-	{
-		const UClass* OwnerClass = Property->GetOwnerClass();
-		return OwnerClass && Object->IsA(OwnerClass);
-	}
-
 	/** A property is readable when it is exposed to the editor or to Blueprints, as for Python get_editor_property. */
 	bool IsUserVisible(const FProperty* Property)
 	{
 		return PropertyAccessUtil::CanGetPropertyValue(Property) == EPropertyAccessResultFlags::Success;
-	}
-
-	FProperty* FindProperty(const UObject* Object, const FString& PropertyName)
-	{
-		const FString Trimmed = PropertyName.TrimStartAndEnd();
-		if (Trimmed.IsEmpty() || Trimmed.Len() >= NAME_SIZE)
-		{
-			return nullptr;
-		}
-		// A name that was never created cannot name a property, so look it up without adding it to the name table.
-		const FName LookupName(*Trimmed, FNAME_Find);
-		return LookupName.IsNone() ? nullptr : PropertyAccessUtil::FindPropertyByName(LookupName, Object->GetClass());
-	}
-
-	bool IsBlockedBySettings(const UObject* Object, const FProperty* Property)
-	{
-		const TArray<FString>& Patterns = GetDefault<UAgentMcpSettings>()->BlockedProperties;
-		if (Patterns.IsEmpty())
-		{
-			return false;
-		}
-
-		const FString PropertyName = Property->GetName();
-		for (const UClass* Class = Object->GetClass(); Class; Class = Class->GetSuperClass())
-		{
-			const FString QualifiedName = Class->GetName() + TEXT(".") + PropertyName;
-			for (const FString& Pattern : Patterns)
-			{
-				if (QualifiedName.MatchesWildcard(Pattern))
-				{
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-
-	/** Empty when object_set_properties may change the property on this object; otherwise the reason. */
-	FString GetNotEditableReason(const UObject* Object, const FProperty* Property)
-	{
-		if (Property->HasAnyPropertyFlags(CPF_Deprecated))
-		{
-			return TEXT("it is deprecated");
-		}
-		if (!IsJsonCompatibleProperty(Property))
-		{
-			return TEXT("its type cannot be exchanged as JSON");
-		}
-		if (!IsStoredOnObject(Property, Object))
-		{
-			return TEXT("it is sparse class data");
-		}
-		if (Property->HasAnyPropertyFlags(CPF_InstancedReference | CPF_PersistentInstance | CPF_ContainsInstancedReference))
-		{
-			return TEXT("it references instanced sub-objects");
-		}
-
-		const EPropertyAccessResultFlags Access = PropertyAccessUtil::CanSetPropertyValue(Property, PropertyAccessUtil::EditorReadOnlyFlags, PropertyAccessUtil::IsObjectTemplate(Object));
-		if (EnumHasAnyFlags(Access, EPropertyAccessResultFlags::AccessProtected))
-		{
-			return TEXT("it is not exposed to the editor or Blueprint");
-		}
-		if (EnumHasAnyFlags(Access, EPropertyAccessResultFlags::CannotEditTemplate))
-		{
-			return TEXT("it can only be edited on placed instances (EditInstanceOnly)");
-		}
-		if (EnumHasAnyFlags(Access, EPropertyAccessResultFlags::CannotEditInstance))
-		{
-			return TEXT("it can only be edited on class defaults (EditDefaultsOnly)");
-		}
-		if (EnumHasAnyFlags(Access, EPropertyAccessResultFlags::ReadOnly))
-		{
-			return TEXT("it is read-only (VisibleAnywhere or EditConst)");
-		}
-		if (Access != EPropertyAccessResultFlags::Success)
-		{
-			return TEXT("it is not editable");
-		}
-		if (IsBlockedBySettings(Object, Property))
-		{
-			return TEXT("it matches the BlockedProperties setting");
-		}
-		if (!Object->CanEditChange(Property))
-		{
-			return TEXT("the object does not allow editing it in its current state (CanEditChange)");
-		}
-		return FString();
 	}
 
 	/** This version changes objects of the editor level only: actors, their components and other level sub-objects. */
@@ -146,16 +51,6 @@ namespace UE::AgentMcp::ObjectToolsPrivate
 			return false;
 		}
 		return true;
-	}
-
-	TSharedRef<FJsonValue> ReadValue(const UObject* Object, const FProperty* Property)
-	{
-		const TSharedPtr<FJsonValue> Value = PropertyValueToJson(Property, Property->ContainerPtrToValuePtr<void>(Object));
-		if (Value.IsValid())
-		{
-			return Value.ToSharedRef();
-		}
-		return MakeShared<FJsonValueNull>();
 	}
 }
 
@@ -206,7 +101,7 @@ FAgentMcpPropertyListResult UAgentMcpObjectTools::ListProperties(UObject* Object
 		Info.Type = Property->GetCPPType(&ExtendedType) + ExtendedType;
 		Info.Category = Property->GetMetaData(TEXT("Category"));
 		Info.DeclaredIn = GetNameSafe(Property->GetOwnerStruct());
-		Info.NotEditableReason = GetNotEditableReason(Object, Property);
+		Info.NotEditableReason = UE::AgentMcp::Tools::GetPropertyNotEditableReason(Object, Property);
 		Info.bEditable = Info.NotEditableReason.IsEmpty();
 
 		FString Tooltip = Property->GetMetaData(TEXT("ToolTip"));
@@ -238,7 +133,7 @@ FAgentMcpPropertyValuesResult UAgentMcpObjectTools::GetProperties(UObject* Objec
 		{
 			if (!It->HasAnyPropertyFlags(CPF_Deprecated) && IsUserVisible(*It) && UE::AgentMcp::IsJsonCompatibleProperty(*It))
 			{
-				Values->SetField(It->GetName(), ReadValue(Object, *It));
+				Values->SetField(It->GetName(), UE::AgentMcp::Tools::ReadPropertyValue(Object, *It));
 			}
 		}
 	}
@@ -246,18 +141,18 @@ FAgentMcpPropertyValuesResult UAgentMcpObjectTools::GetProperties(UObject* Objec
 	{
 		for (const FString& RequestedName : PropertyNames)
 		{
-			const FProperty* Property = FindProperty(Object, RequestedName);
+			const FProperty* Property = UE::AgentMcp::Tools::FindPropertyByName(Object, RequestedName);
 			if (!Property)
 			{
 				Result.Missing.Add(RequestedName);
 			}
-			else if (!IsStoredOnObject(Property, Object) || !IsUserVisible(Property) || !UE::AgentMcp::IsJsonCompatibleProperty(Property))
+			else if (!UE::AgentMcp::Tools::IsPropertyStoredOnObject(Property, Object) || !IsUserVisible(Property) || !UE::AgentMcp::IsJsonCompatibleProperty(Property))
 			{
 				Result.Inaccessible.Add(Property->GetName());
 			}
 			else
 			{
-				Values->SetField(Property->GetName(), ReadValue(Object, Property));
+				Values->SetField(Property->GetName(), UE::AgentMcp::Tools::ReadPropertyValue(Object, Property));
 			}
 		}
 	}
@@ -269,6 +164,7 @@ FAgentMcpPropertyValuesResult UAgentMcpObjectTools::GetProperties(UObject* Objec
 FAgentMcpSetPropertiesResult UAgentMcpObjectTools::SetProperties(UObject* Object, const FJsonObjectWrapper& Values)
 {
 	using namespace UE::AgentMcp::ObjectToolsPrivate;
+	using UE::AgentMcp::Tools::FPreparedPropertyValues;
 
 	FAgentMcpSetPropertiesResult Result;
 	if (!UE::AgentMcp::Tools::RequireObject(Object, TEXT("object")) || !RequireEditableLevelObject(Object))
@@ -285,77 +181,25 @@ FAgentMcpSetPropertiesResult UAgentMcpObjectTools::SetProperties(UObject* Object
 		return Result;
 	}
 
-	struct FPendingValue
-	{
-		FProperty* Property = nullptr;
-		void* Value = nullptr;
-	};
-	TArray<FPendingValue> Pending;
-	ON_SCOPE_EXIT
-	{
-		for (const FPendingValue& Entry : Pending)
-		{
-			Entry.Property->DestroyValue(Entry.Value);
-			FMemory::Free(Entry.Value);
-		}
-	};
-
 	// Check and convert every value before changing anything, so a bad value leaves the object untouched.
+	FPreparedPropertyValues Prepared;
 	TArray<FString> Problems;
 	TSet<FString> ProblemCodes;
-	for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : Requested->Values)
+	if (!Prepared.Prepare(Object, *Requested, Problems, ProblemCodes))
 	{
-		FProperty* Property = FindProperty(Object, Pair.Key);
-		if (!Property)
-		{
-			Problems.Add(FString::Printf(TEXT("'%s' is not a property of %s"), *Pair.Key, *Object->GetClass()->GetName()));
-			ProblemCodes.Add(TEXT("UNKNOWN_PROPERTY"));
-			continue;
-		}
-
-		const FString Reason = GetNotEditableReason(Object, Property);
-		if (!Reason.IsEmpty())
-		{
-			Problems.Add(FString::Printf(TEXT("'%s' cannot be changed: %s"), *Property->GetName(), *Reason));
-			ProblemCodes.Add(TEXT("PROPERTY_NOT_EDITABLE"));
-			continue;
-		}
-
-		// Start from the current value so struct fields missing from the JSON keep their value.
-		FPendingValue& Entry = Pending.AddDefaulted_GetRef();
-		Entry.Property = Property;
-		Entry.Value = FMemory::Malloc(static_cast<SIZE_T>(FMath::Max(Property->GetSize(), 1)), static_cast<uint32>(Property->GetMinAlignment()));
-		Property->InitializeValue(Entry.Value);
-		Property->GetValue_InContainer(Object, Entry.Value);
-
-		FString ErrorCode;
-		FString Error;
-		if (!UE::AgentMcp::JsonToPropertyValue(Pair.Value, Property, Entry.Value, Property->GetName(), ErrorCode, Error))
-		{
-			// Problems are joined into one sentence, so drop their own final period.
-			Error.RemoveFromEnd(TEXT("."));
-			Problems.Add(Error);
-			ProblemCodes.Add(ErrorCode);
-		}
-	}
-
-	if (Problems.Num() > 0)
-	{
-		const FString Code = ProblemCodes.Num() == 1 ? *ProblemCodes.CreateConstIterator() : FString(TEXT("INVALID_ARGUMENT"));
-		UE::AgentMcp::RaiseToolError(Code,
-			FString::Printf(TEXT("Nothing was changed on %s: %s."), *ObjectPath, *FString::Join(Problems, TEXT("; "))),
+		UE::AgentMcp::Tools::RaiseProblems(FString::Printf(TEXT("Nothing was changed on %s"), *ObjectPath), Problems, ProblemCodes,
 			TEXT("object_list_properties shows property names, types and whether each property is editable."));
 		return Result;
 	}
 
 	const TSharedRef<FJsonObject> Before = MakeShared<FJsonObject>();
-	for (const FPendingValue& Entry : Pending)
+	for (const FPreparedPropertyValues::FEntry& Entry : Prepared.GetEntries())
 	{
-		Before->SetField(Entry.Property->GetName(), ReadValue(Object, Entry.Property));
+		Before->SetField(Entry.Property->GetName(), UE::AgentMcp::Tools::ReadPropertyValue(Object, Entry.Property));
 	}
 
 	UObject* Target = Object;
-	for (const FPendingValue& Entry : Pending)
+	for (const FPreparedPropertyValues::FEntry& Entry : Prepared.GetEntries())
 	{
 		const FString PropertyName = Entry.Property->GetName();
 		if (PropertyAccessUtil::IsCompletePropertyIdentical(Entry.Property, Entry.Value, Entry.Property, Entry.Property->ContainerPtrToValuePtr<void>(Target)))
@@ -391,9 +235,9 @@ FAgentMcpSetPropertiesResult UAgentMcpObjectTools::SetProperties(UObject* Object
 	}
 
 	const TSharedRef<FJsonObject> After = MakeShared<FJsonObject>();
-	for (const FPendingValue& Entry : Pending)
+	for (const FPreparedPropertyValues::FEntry& Entry : Prepared.GetEntries())
 	{
-		After->SetField(Entry.Property->GetName(), ReadValue(Target, Entry.Property));
+		After->SetField(Entry.Property->GetName(), UE::AgentMcp::Tools::ReadPropertyValue(Target, Entry.Property));
 	}
 
 	if (Result.Changed.Num() > 0 && GEditor)

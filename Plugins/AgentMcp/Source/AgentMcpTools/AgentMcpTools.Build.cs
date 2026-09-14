@@ -22,10 +22,11 @@ public class AgentMcpTools : ModuleRules
 			"LevelEditor",
 			"Slate",
 			"SlateCore",
-			// blueprint_inspect (Blueprint type names) and umg_inspect (widget trees, BindWidget).
+			// blueprint_inspect (Blueprint type names) and the umg tools (widget trees, BindWidget, Widget Blueprint creation).
 			"BlueprintGraph",
 			"UMG",
 			"UMGEditor",
+			"AssetTools",
 			// Save warnings for packages under source control.
 			"SourceControl",
 			// viewport_capture encodes PNG images.

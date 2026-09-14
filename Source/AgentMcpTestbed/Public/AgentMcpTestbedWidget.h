@@ -22,4 +22,8 @@ public:
 	/** Optional binding. */
 	UPROPERTY(BlueprintReadOnly, Category = "Smoke", meta = (BindWidgetOptional))
 	TObjectPtr<UImage> Icon;
+
+	/** Instance-editable text, so that the smoke test can set a property on a nested user widget. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke")
+	FText Caption;
 };

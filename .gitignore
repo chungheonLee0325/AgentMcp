@@ -19,3 +19,6 @@ Content/AgentMcpFixtures/
 # Python
 __pycache__/
 *.pyc
+
+# Local Claude Code settings (the shared skills in .claude/skills are part of the repository)
+.claude/settings.local.json
