@@ -219,8 +219,8 @@ python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --exp
 ## Limitations
 
 - Tested with Unreal Engine 5.5.4 on Windows 64-bit only. All tools have been tested with the Python client in `Tools`.
-  Claude Code 2.1.19 connects and opens a session (protocol 2025-11-25); a Claude Code session that calls the tools has not
-  been tested yet.
+  From Claude Code 2.1.270 (desktop app and CLI), `editor_get_state`, `actor_find` and `viewport_capture` (including its
+  image) have been called successfully; the other tools have not been called from Claude Code yet.
 - Responses are plain JSON. There is no streaming: no SSE and no progress notifications. `pie_start` and similar tools hold
   the request until they finish.
 - Requests run on the editor's game thread. An editor in the background with **Use Less CPU when in Background** enabled

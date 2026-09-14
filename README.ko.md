@@ -45,7 +45,7 @@ LogAgentMcpProtocol: Agent MCP server listening on http://127.0.0.1:18765/mcp (3
 
 서버는 `http://127.0.0.1:18765/mcp`에서 MCP Streamable HTTP(JSON 응답)로 통신합니다.
 
-Claude Code는 프로젝트 루트에 `.mcp.json` 파일을 둡니다.
+Claude Code에서는 프로젝트 루트에 `.mcp.json` 파일을 추가합니다.
 
 ```json
 {
@@ -217,8 +217,8 @@ python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --exp
 ## 한계
 
 - Windows 64비트의 Unreal Engine 5.5.4에서만 테스트했습니다. 모든 도구는 `Tools`의 Python 클라이언트로 테스트했습니다.
-  Claude Code 2.1.19는 서버에 연결해 세션을 여는 것(프로토콜 2025-11-25)까지 확인했고, Claude Code에서 도구를 호출하는
-  세션은 아직 테스트하지 않았습니다.
+  Claude Code 2.1.270(데스크톱 앱과 CLI)에서는 `editor_get_state`, `actor_find`, `viewport_capture`(이미지 포함) 호출이
+  성공하는 것을 확인했고, 나머지 도구는 아직 Claude Code에서 호출해 보지 않았습니다.
 - 응답은 일반 JSON입니다. 스트리밍(SSE, 진행 알림)은 없습니다. `pie_start` 같은 도구는 끝날 때까지 요청을 붙잡고 있습니다.
 - 요청은 에디터의 게임 스레드에서 처리됩니다. **Use Less CPU when in Background**가 켜진 채 에디터가 백그라운드에 있으면
   초당 약 3번만 틱하므로 호출마다 약 0.3초가 걸립니다. 에이전트가 작업하는 동안에는 이 에디터 설정을 끄세요.
