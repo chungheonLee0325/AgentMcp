@@ -1,0 +1,40 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "Agent MCP",
+	"Description": "Model Context Protocol server inside the Unreal Editor for coding agents such as Claude Code and Codex: reflection-based tools to inspect and edit levels, assets, Blueprints, UMG and DataTables, run Play In Editor, read the log, capture the viewport and compile with Live Coding.",
+	"Category": "Editor",
+	"CreatedBy": "",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": false,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"EnabledByDefault": false,
+	"Modules": [
+		{
+			"Name": "AgentMcpCompat",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "AgentMcpProtocol",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "AgentMcpToolset",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "AgentMcpTools",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	]
+}

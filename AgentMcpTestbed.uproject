@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.5",
+	"Category": "",
+	"Description": "Minimal UE 5.5 host project that builds the AgentMcp plugin and runs its smoke test.",
+	"Modules": [
+		{
+			"Name": "AgentMcpTestbed",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "AgentMcpTestbedEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "AgentMcp",
+			"Enabled": true
+		}
+	]
+}

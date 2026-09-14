@@ -1,0 +1,21 @@
+# Unreal Engine build output and local data (project and plugin)
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+
+# IDE and generated project files
+.vs/
+.vscode/
+.idea/
+*.sln
+*.suo
+*.VC.db
+*.VC.opendb
+
+# Fixture assets created by the smoke test (testbed_reset_fixtures)
+Content/AgentMcpFixtures/
+
+# Python
+__pycache__/
+*.pyc
