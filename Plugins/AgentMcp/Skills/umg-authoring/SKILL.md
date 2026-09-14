@@ -24,8 +24,8 @@ Write a short plan first and keep it in the conversation:
   rarity colors) and keep them in one theme data asset that the widgets read, so that a style change needs no build.
 - **Content data.** Values that differ per item (names, icons, rarity) live in a DataTable; components reference a row instead of
   copying its values.
-- **Art.** Images the screen needs but the project does not have yet (item icons, frames, panels) stay optional: components draw a
-  fallback such as a brush shape until a texture is set.
+- **Art.** Images the screen needs but the project does not have yet (item icons, frames, panels) go into an art request; see the
+  `ui-art-requests` skill. Until they arrive, components draw a fallback such as a brush shape.
 - **Motion.** Decide for each animated element whether it is simple motion in code or a timeline animation (section 4).
 - **What already exists.** Look before creating: `asset_find` for Widget Blueprints and style assets, `class_find_derived` on
   `UserWidget` for C++ bases, `umg_inspect` on similar screens. Follow the project's conventions (folders, prefixes, CommonUI)

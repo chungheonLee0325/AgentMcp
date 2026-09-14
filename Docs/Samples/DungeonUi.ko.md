@@ -99,9 +99,15 @@ smoke 테스트에도 같은 경로의 검사를 추가했습니다. 인스턴�
 
    ![강조색과 전설 등급 색을 바꾼 테마](../Images/dungeon_theme_change.jpg)
 
+5. **아트 요청.** [`Art/Requests/dungeon_ui.json`](../../Art/Requests/dungeon_ui.json)에 샘플이 아직 모양으로 그리는 이미지를
+   적었습니다. 아이템 아이콘 5개, 희귀·영웅·전설 슬롯 프레임, 결과 카드 패널이고, 항목마다 크기, 9-slice 테두리, 텍스처 경로,
+   연결할 테이블 칸이나 속성이 있습니다. 요청을 채우고 가져와 연결하는 방법은
+   [`ui-art-requests`](../../Plugins/AgentMcp/Skills/ui-art-requests/SKILL.md) 스킬에 있고, 스킬의 `art_review.py`가 항목마다
+   이미지, 자동 검사 결과, 다음 차례를 보여 주는 리뷰 시트를 만듭니다.
+
 ## 다루지 않은 것
 
 - 등장 연출은 C++ 부모 클래스의 코드이고, 그 값만 데이터입니다. 도구로 UMG 위젯 애니메이션을 만들 수는 없습니다. 이를 위한 실험은
   [Docs/Experiments/WidgetAnimationAuthoring.md](../Experiments/WidgetAnimationAuthoring.md)에 계획해 두었습니다.
-- 샘플에 아직 텍스처가 없어서 아이콘, 프레임, 카드 패널은 여전히 모양입니다.
+- 아트 요청이 아직 채워지지 않아서 아이콘, 프레임, 카드 패널은 여전히 모양입니다.
 - 도구로 위젯을 다른 부모로 옮길 수 없어서, 재구성할 때 복사본을 지우고 인스턴스를 새로 넣었습니다.

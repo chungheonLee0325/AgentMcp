@@ -122,7 +122,8 @@ UI의 모양을 데이터로 두려면: `asset_create`로 테마 데이터 에�
 datatable 도구로 채우고, `asset_import_textures`로 아이콘과 프레임을 UMG용 텍스처 설정으로 가져옵니다.
 
 도구는 받은 트리를 그대로 만듭니다. UI 팀이 만드는 방식(재사용하는 부품 위젯 블루프린트, 한곳에 모은 스타일 값, 데이터로 채우는
-목록, 캡처 검토)은 플러그인 스킬 `umg-authoring`에 있습니다. [스킬](#스킬)을 참고하세요.
+목록, 캡처 검토)은 플러그인 스킬 `umg-authoring`에 있습니다. 이미지 모델이나 다른 에이전트, 아티스트에게 이미지를 요청하고 리뷰
+시트로 확인해 연결하는 방법은 `ui-art-requests`에 있습니다. [스킬](#스킬)을 참고하세요.
 
 ## 스킬
 
@@ -132,12 +133,13 @@ Claude Code와 Codex가 자기 스킬에 쓰는 형식과 같습니다. 스킬�
 
 - `initialize`가 돌려주는 서버 안내에 스킬마다 이름과 설명이 들어 있습니다.
 - `skills_list`는 스킬과 그 폴더, 그리고 건너뛴 스킬 파일과 이유를 돌려줍니다.
-- `skills_get`은 스킬의 지침을 돌려주고, 요청하면 참고 자료나 예제 같은 딸린 파일도 돌려줍니다.
+- `skills_get`은 스킬의 지침과 폴더를 돌려주고, 요청하면 참고 자료나 예제 같은 딸린 파일도 돌려줍니다. `ui-art-requests`의 리뷰
+  시트 같은 스킬 스크립트는 그 폴더에서 실행합니다.
 
 스킬은 다음 폴더에서 이 순서로 읽습니다. 뒤 폴더의 스킬이 앞 폴더의 같은 이름 스킬을 대신하므로, 프로젝트가 플러그인 스킬을 고쳐 쓸
 수 있습니다.
 
-1. `Plugins/AgentMcp/Skills`: 플러그인 스킬. 지금은 `umg-authoring`
+1. `Plugins/AgentMcp/Skills`: 플러그인 스킬. 지금은 `umg-authoring`과 `ui-art-requests`
 2. 프로젝트 폴더의 `AgentMcp/Skills`
 3. `SkillDirectories` 설정의 폴더
 
@@ -146,7 +148,7 @@ Claude Code와 Codex가 자기 스킬에 쓰는 형식과 같습니다. 스킬�
 
 Claude Code와 Codex는 설명을 보고 스킬을 고릅니다. 서버 스킬도 스스로 시작하게 하려면, 같은 이름과 설명에 `skills_get`을 호출하라는
 내용만 적은 짧은 `SKILL.md`를 Claude Code는 `.claude/skills/<이름>/`, Codex는 `.agents/skills/<이름>/`에 둡니다. 이 저장소에는
-`umg-authoring`이 양쪽에 있습니다.
+플러그인 스킬 두 개 모두 양쪽에 있습니다.
 
 Unreal Engine 5.8도 같은 방식으로 스킬을 제공합니다. 스킬은 C++, Python, 블루프린트로 정의한 `UAgentSkill` 클래스이고
 `ListSkills`, `GetSkills` 도구로 읽습니다. Agent MCP는 대신 Markdown 파일을 읽으므로 스킬을 텍스트로 고치고, Claude Code·Codex
@@ -253,6 +255,7 @@ public:
 | `Source/AgentMcpTestbed` | 테스트용 행 구조체, 데이터 에셋 클래스, 위젯 부모 클래스, 게임 모드, UI 샘플의 C++ 클래스 |
 | `Source/AgentMcpTestbedEditor` | `/Game/AgentMcpFixtures` 아래에 테스트 에셋을 만드는 `testbed_*` 도구, 롤백·취소 검사용 훅, `sample_show_widget` |
 | `Content/Samples/DungeonUi` | 도구로 만든 UI 샘플의 위젯 블루프린트, 테마 데이터 에셋, 아이템 테이블 |
+| `Art/Requests` | 샘플의 아트 요청 |
 | `Docs` | 샘플을 만든 과정과 계획한 실험 |
 | `.claude/skills`, `.agents/skills` | Claude Code와 Codex가 플러그인 스킬을 시작하게 하는 짧은 스킬 파일 |
 | `Config` | 테스트베드는 포트 **18766**을 써서, 기본 포트를 쓰는 다른 프로젝트 대신 응답하는 일이 없음. smoke 테스트용 스킬 폴더를 `SkillDirectories`에 추가. `DefaultGame.ini`가 UI 샘플의 테마를 지정 |
@@ -279,8 +282,8 @@ python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --exp
 
 `Content/Samples/DungeonUi`에는 Claude Code가 도구로 만든 던전 진행 HUD와 던전 결과 팝업이 있습니다. 보상 슬롯, 통계 타일, 목표
 행은 부품 위젯 블루프린트이고, C++ 부모 클래스가 `BindWidget` 규칙과 등장 연출을 맡으며, `DynamicEntryBox`가 보상마다 보상 슬롯을
-하나씩 만듭니다. 색과 프레임은 테마 데이터 에셋에, 아이템은 아이템 테이블에 있습니다.
-리뷰에서 반려된 버전을 포함한 제작 과정과 실행 방법은 [Docs/Samples/DungeonUi.ko.md](Docs/Samples/DungeonUi.ko.md)에
+하나씩 만듭니다. 색과 프레임은 테마 데이터 에셋에, 아이템은 아이템 테이블에 있고, 아직 모양으로 그리는 아이콘과 프레임은 아트 요청에
+적어 두었습니다. 리뷰에서 반려된 버전을 포함한 제작 과정과 실행 방법은 [Docs/Samples/DungeonUi.ko.md](Docs/Samples/DungeonUi.ko.md)에
 있습니다.
 
 ![던전 결과 팝업](Docs/Images/dungeon_result.jpg)

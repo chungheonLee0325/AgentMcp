@@ -1,0 +1,42 @@
+{
+  "feature": "inventory",
+  "description": "Item icons, rarity frames and the tooltip panel of the inventory grid.",
+  "style": "Painted fantasy game UI: clean silhouettes, a dark outline, soft two-tone shading, light from the top left, saturated but not neon colors. No text, logos or watermarks.",
+  "references": ["Docs/Captures/inventory_mockup.png"],
+  "items": [
+    {
+      "id": "icon_iron_sword",
+      "usage": "icon",
+      "subject": "Iron sword with a leather-wrapped grip, diagonal from bottom left to top right",
+      "size": [256, 256],
+      "transparent": true,
+      "padding": 16,
+      "target": "/Game/UI/Textures/Items/T_Icon_IronSword",
+      "usedBy": "/Game/UI/Data/DT_Items: row IronSword, column Icon",
+      "status": "requested"
+    },
+    {
+      "id": "frame_epic",
+      "usage": "frame",
+      "subject": "Slot frame for epic items: purple metal border with small engraved corners and a transparent middle",
+      "size": [128, 128],
+      "transparent": true,
+      "nineSlice": [24, 24, 24, 24],
+      "target": "/Game/UI/Textures/Frames/T_Frame_Epic",
+      "usedBy": "/Game/UI/Data/DA_UiTheme: property Epic.Frame (DrawAs Box, Margin 0.1875, ImageSize 128x128)",
+      "status": "delivered"
+    },
+    {
+      "id": "panel_tooltip",
+      "usage": "panel",
+      "subject": "Tooltip background: dark blue-grey panel with a thin light rim",
+      "size": [256, 256],
+      "transparent": true,
+      "nineSlice": [32, 32, 32, 32],
+      "target": "/Game/UI/Textures/Panels/T_Panel_Tooltip",
+      "usedBy": "/Game/UI/Components/WBP_Tooltip: widget Background, property Background (DrawAs Box, Margin 0.125)",
+      "status": "revise",
+      "feedback": "The rim is thicker on the left than on the right, so the panel looks shifted when it stretches. Keep the rim 4 px wide on every side."
+    }
+  ]
+}

@@ -124,7 +124,9 @@ To keep the look of a UI in data: `asset_create` makes a theme data asset or an 
 datatable tools fill them, and `asset_import_textures` brings in icons and frames with the texture settings for UMG.
 
 The tools build whatever tree they are given. How a UI team would build it (reusable component Widget Blueprints, style values in
-one place, data-driven lists and a capture review) is described by the plugin's skill `umg-authoring`; see [Skills](#skills).
+one place, data-driven lists and a capture review) is described by the plugin's skill `umg-authoring`. How images are requested from
+an image model, another agent or an artist, checked on a review sheet and connected is described by `ui-art-requests`; see
+[Skills](#skills).
 
 ## Skills
 
@@ -134,12 +136,13 @@ and the skills travel with the plugin.
 
 - The server instructions returned by `initialize` list each skill with its description.
 - `skills_list` returns the skills with their folders, and the skill files that were skipped with the reason.
-- `skills_get` returns the instructions of a skill and, on request, its other files, such as references or examples.
+- `skills_get` returns the instructions and the folder of a skill and, on request, its other files, such as references or examples.
+  Scripts of a skill, such as the review sheet of `ui-art-requests`, run from that folder.
 
 Skills are read from these folders in this order. A skill replaces one with the same name from an earlier folder, so a project can
 adapt a plugin skill.
 
-1. `Plugins/AgentMcp/Skills`: the skills of the plugin, currently `umg-authoring`
+1. `Plugins/AgentMcp/Skills`: the skills of the plugin, currently `umg-authoring` and `ui-art-requests`
 2. `AgentMcp/Skills` in the project folder
 3. the folders of the `SkillDirectories` setting
 
@@ -148,7 +151,7 @@ instructions is made when the server starts.
 
 Claude Code and Codex choose skills by their descriptions. To let them start a served skill on their own, add a short `SKILL.md`
 with the same name and description to `.claude/skills/<name>/` for Claude Code or `.agents/skills/<name>/` for Codex that tells the
-agent to call `skills_get`. This repository has both for `umg-authoring`.
+agent to call `skills_get`. This repository has both for the two plugin skills.
 
 Unreal Engine 5.8 serves skills the same way: skills are `UAgentSkill` classes defined in C++, Python or Blueprint, read through
 `ListSkills` and `GetSkills` tools. Agent MCP reads Markdown files instead, so a skill is edited as text and has the same format as
@@ -258,6 +261,7 @@ The repository root is a small Unreal Engine 5.5 project that builds and tests t
 | `Source/AgentMcpTestbed` | Row struct, data asset class, widget base class and game mode used by the tests, and the C++ classes of the UI sample |
 | `Source/AgentMcpTestbedEditor` | `testbed_*` tools that create test assets under `/Game/AgentMcpFixtures`, hooks for rollback and cancellation checks, and `sample_show_widget` |
 | `Content/Samples/DungeonUi` | Widget Blueprints, theme data asset and item table of the UI sample, built with the tools |
+| `Art/Requests` | Art requests of the samples |
 | `Docs` | How the samples were built, and a planned experiment |
 | `.claude/skills`, `.agents/skills` | Short skill files that let Claude Code and Codex start the plugin skills |
 | `Config` | The testbed serves port **18766**, so that it never answers in place of another project on the default port, and adds the smoke test's skill folder to `SkillDirectories`. `DefaultGame.ini` selects the theme of the UI sample |
@@ -285,7 +289,7 @@ python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --exp
 `Content/Samples/DungeonUi` holds a dungeon progress HUD and a dungeon result popup that Claude Code built through the tools:
 component Widget Blueprints for reward slots, stat tiles and objective rows, C++ bases with `BindWidget` contracts and intro
 animations, a `DynamicEntryBox` that creates one reward slot per reward, a theme data asset for colors and frames, and an item
-table. [Docs/Samples/DungeonUi.md](Docs/Samples/DungeonUi.md)
+table. The icons and frames it still draws as shapes are listed in an art request. [Docs/Samples/DungeonUi.md](Docs/Samples/DungeonUi.md)
 describes how it was built, including the versions that reviews sent back, and how to run it.
 
 ![Dungeon result popup](Docs/Images/dungeon_result.jpg)

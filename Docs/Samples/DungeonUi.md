@@ -105,9 +105,15 @@ by an image model, another agent or an artist. Three tools were added for this: 
 
    ![The theme with another accent and legendary color](../Images/dungeon_theme_change.jpg)
 
+5. **Art request.** [`Art/Requests/dungeon_ui.json`](../../Art/Requests/dungeon_ui.json) lists the images that the sample still
+   draws as shapes: five item icons, frames for rare, epic and legendary slots, and the result card panel, each with its size, 9-slice
+   border, texture path, and the table cell or property it belongs to. The
+   [`ui-art-requests`](../../Plugins/AgentMcp/Skills/ui-art-requests/SKILL.md) skill describes how a request is filled, imported and
+   connected, and its script `art_review.py` writes a review sheet with every item, its image, automatic checks and the next step.
+
 ## Not covered
 
 - The intro is code in the C++ base, with its values in data; the tools cannot author UMG widget animations.
   [Docs/Experiments/WidgetAnimationAuthoring.md](../Experiments/WidgetAnimationAuthoring.md) plans an experiment for that.
-- The icons, frames and card panel are still shapes, because the sample has no textures for them yet.
+- The icons, frames and card panel are still shapes, because the art request is open.
 - The tools cannot move a widget to another parent, so the rework removed the copies and added instances instead.

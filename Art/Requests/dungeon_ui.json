@@ -1,0 +1,107 @@
+{
+  "feature": "dungeon_ui",
+  "description": "Item icons, rarity frames and the popup panel of the dungeon result sample (Content/Samples/DungeonUi). Until the images arrive, reward slots draw the fallback shapes of the item table, and common and uncommon slots keep their drawn outline.",
+  "style": "Bright fantasy creature-collecting game UI that fits Docs/Images/dungeon_result.jpg: clean readable silhouettes, a dark outline, soft two-tone shading, light from the top left, saturated colors that stand out on a dark navy interface. No text, logos or watermarks.",
+  "references": ["Docs/Images/dungeon_result.jpg"],
+  "items": [
+    {
+      "id": "icon_golem_core",
+      "usage": "icon",
+      "subject": "Golem core: a glowing amber crystal heart set in a cracked stone shell",
+      "size": [128, 128],
+      "transparent": true,
+      "padding": 8,
+      "target": "/Game/Samples/DungeonUi/Textures/T_Icon_GolemCore",
+      "usedBy": "/Game/Samples/DungeonUi/Data/DT_DungeonItems: row GolemCore, column Icon",
+      "status": "requested"
+    },
+    {
+      "id": "icon_ancient_parts",
+      "usage": "icon",
+      "subject": "Ancient machine parts: two bronze gears and a riveted metal plate with faint blue runes",
+      "size": [128, 128],
+      "transparent": true,
+      "padding": 8,
+      "target": "/Game/Samples/DungeonUi/Textures/T_Icon_AncientParts",
+      "usedBy": "/Game/Samples/DungeonUi/Data/DT_DungeonItems: row AncientParts, column Icon",
+      "status": "requested"
+    },
+    {
+      "id": "icon_pure_quartz",
+      "usage": "icon",
+      "subject": "Pure quartz: a cluster of clear pale blue crystals",
+      "size": [128, 128],
+      "transparent": true,
+      "padding": 8,
+      "target": "/Game/Samples/DungeonUi/Textures/T_Icon_PureQuartz",
+      "usedBy": "/Game/Samples/DungeonUi/Data/DT_DungeonItems: row PureQuartz, column Icon",
+      "status": "requested"
+    },
+    {
+      "id": "icon_capture_sphere",
+      "usage": "icon",
+      "subject": "Capture sphere: a palm-sized crystal orb held in a silver cage with a glowing teal band",
+      "size": [128, 128],
+      "transparent": true,
+      "padding": 8,
+      "target": "/Game/Samples/DungeonUi/Textures/T_Icon_CaptureSphere",
+      "usedBy": "/Game/Samples/DungeonUi/Data/DT_DungeonItems: row CaptureSphere, column Icon",
+      "status": "requested"
+    },
+    {
+      "id": "icon_gold_coins",
+      "usage": "icon",
+      "subject": "Gold coins: a small stack and a pile of shiny gold coins",
+      "size": [128, 128],
+      "transparent": true,
+      "padding": 8,
+      "target": "/Game/Samples/DungeonUi/Textures/T_Icon_GoldCoins",
+      "usedBy": "/Game/Samples/DungeonUi/Data/DT_DungeonItems: row GoldCoins, column Icon",
+      "status": "requested"
+    },
+    {
+      "id": "frame_rare",
+      "usage": "frame",
+      "subject": "Reward slot frame for rare items: blue metal border with small studs in the corners and a transparent middle",
+      "size": [128, 128],
+      "transparent": true,
+      "nineSlice": [24, 24, 24, 24],
+      "target": "/Game/Samples/DungeonUi/Textures/T_Frame_Rare",
+      "usedBy": "/Game/Samples/DungeonUi/Data/DA_DungeonUiTheme: property Rare.Frame (DrawAs Box, Margin 0.1875, ImageSize 64x64)",
+      "status": "requested"
+    },
+    {
+      "id": "frame_epic",
+      "usage": "frame",
+      "subject": "Reward slot frame for epic items: violet metal border with engraved corners and a transparent middle",
+      "size": [128, 128],
+      "transparent": true,
+      "nineSlice": [24, 24, 24, 24],
+      "target": "/Game/Samples/DungeonUi/Textures/T_Frame_Epic",
+      "usedBy": "/Game/Samples/DungeonUi/Data/DA_DungeonUiTheme: property Epic.Frame (DrawAs Box, Margin 0.1875, ImageSize 64x64)",
+      "status": "requested"
+    },
+    {
+      "id": "frame_legendary",
+      "usage": "frame",
+      "subject": "Reward slot frame for legendary items: ornate gold border with a small gem in each corner and a transparent middle",
+      "size": [128, 128],
+      "transparent": true,
+      "nineSlice": [24, 24, 24, 24],
+      "target": "/Game/Samples/DungeonUi/Textures/T_Frame_Legendary",
+      "usedBy": "/Game/Samples/DungeonUi/Data/DA_DungeonUiTheme: property Legendary.Frame (DrawAs Box, Margin 0.1875, ImageSize 64x64)",
+      "status": "requested"
+    },
+    {
+      "id": "panel_result_card",
+      "usage": "panel",
+      "subject": "Background of the result popup card: dark navy panel with a soft inner gradient and a thin light blue rim",
+      "size": [512, 512],
+      "transparent": true,
+      "nineSlice": [64, 64, 64, 64],
+      "target": "/Game/Samples/DungeonUi/Textures/T_Panel_ResultCard",
+      "usedBy": "/Game/Samples/DungeonUi/WBP_DungeonResult: widget Card, property Background (DrawAs Box, Margin 0.125, ImageSize 256x256)",
+      "status": "requested"
+    }
+  ]
+}
