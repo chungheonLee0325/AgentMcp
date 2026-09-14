@@ -1,0 +1,5 @@
+# Agent MCP server of the testbed editor, like .mcp.json for Claude Code. Codex reads this file only in a trusted project.
+[mcp_servers.unreal]
+url = "http://127.0.0.1:18766/mcp"
+# Compiling, saving and play sessions can take longer than the default of 60 seconds.
+tool_timeout_sec = 600

@@ -61,6 +61,19 @@ Claude Code에서는 프로젝트 루트에 `.mcp.json` 파일을 추가합니�
 
 `AuthToken`을 설정했다면 서버 항목에 `"headers": { "Authorization": "Bearer <token>" }`를 추가합니다.
 
+Codex에서는 프로젝트 루트에 `.codex/config.toml` 파일을 추가합니다. Codex는 신뢰한 프로젝트에서만 이 파일을 읽습니다. 폴더를
+신뢰하면 `~/.codex/config.toml`에 그 폴더가 `trust_level = "trusted"`로 기록됩니다.
+
+```toml
+[mcp_servers.unreal]
+url = "http://127.0.0.1:18765/mcp"
+tool_timeout_sec = 600
+```
+
+`tool_timeout_sec`는 Codex의 기본 제한시간 60초를 늘립니다. 컴파일, 저장, 플레이 세션은 60초를 넘길 수 있습니다. `AuthToken`을
+설정했다면 `http_headers = { Authorization = "Bearer <token>" }`를 추가하거나, 토큰이 든 환경 변수 이름을 `bearer_token_env_var`에
+적습니다. 파일을 바꾼 뒤에는 Codex 세션을 새로 시작합니다.
+
 서버는 `initialize` 응답으로 짧은 사용 안내와 스킬 목록을 보냅니다. 에이전트는 `editor_get_state`로 작업을 시작하는 것이 좋습니다.
 
 **에디터마다 포트 하나.** plugin을 켠 에디터는 모두 설정된 포트를 씁니다. 에디터 두 개를 동시에 실행하면 두 번째
@@ -257,6 +270,7 @@ public:
 | `Content/Samples/DungeonUi` | 도구로 만든 UI 샘플의 위젯 블루프린트, 테마 데이터 에셋, 아이템 테이블 |
 | `Art/Requests` | 샘플의 아트 요청 |
 | `Docs` | 샘플을 만든 과정과 계획한 실험 |
+| `.mcp.json`, `.codex/config.toml` | Claude Code와 Codex를 포트 18766의 테스트베드 에디터에 연결 |
 | `.claude/skills`, `.agents/skills` | Claude Code와 Codex가 플러그인 스킬을 시작하게 하는 짧은 스킬 파일 |
 | `Config` | 테스트베드는 포트 **18766**을 써서, 기본 포트를 쓰는 다른 프로젝트 대신 응답하는 일이 없음. smoke 테스트용 스킬 폴더를 `SkillDirectories`에 추가. `DefaultGame.ini`가 UI 샘플의 테마를 지정 |
 | `Tools/mcp_smoke.py` | smoke 테스트(Python 3, 표준 라이브러리만 사용) |
@@ -296,6 +310,7 @@ python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --exp
   `umg_inspect`, `blueprint_compile`, `pie_start`, `pie_stop`, `asset_save`, `livecoding_compile`, `skills_list`, `skills_get`,
   `asset_create`, `datatable_add_rows`, `object_get_properties`, `object_set_properties`, `editor_undo`도 호출했습니다.
   나머지 도구는 아직 Claude Code에서 호출해 보지 않았습니다.
+- Codex 설정(`.codex/config.toml`, `.agents/skills`)은 Codex 문서를 따른 것이고, 아직 Codex로 테스트하지 않았습니다.
 - 응답은 일반 JSON입니다. 스트리밍(SSE, 진행 알림)은 없습니다. `pie_start` 같은 도구는 끝날 때까지 요청을 붙잡고 있습니다.
 - 요청은 에디터의 게임 스레드에서 처리됩니다. **Use Less CPU when in Background**가 켜진 채 에디터가 백그라운드에 있으면
   초당 약 3번만 틱하므로 호출마다 약 0.3초가 걸립니다. 에이전트가 작업하는 동안에는 이 에디터 설정을 끄세요.

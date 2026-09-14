@@ -61,6 +61,19 @@ For Claude Code, add a `.mcp.json` file to the project root:
 
 If `AuthToken` is set, add `"headers": { "Authorization": "Bearer <token>" }` to the server entry.
 
+For Codex, add a `.codex/config.toml` file to the project root. Codex reads it only in a trusted project, one that
+`~/.codex/config.toml` lists with `trust_level = "trusted"` after you trust the folder.
+
+```toml
+[mcp_servers.unreal]
+url = "http://127.0.0.1:18765/mcp"
+tool_timeout_sec = 600
+```
+
+`tool_timeout_sec` raises the Codex default of 60 seconds, which compiling, saving and play sessions can exceed. If `AuthToken` is
+set, add `http_headers = { Authorization = "Bearer <token>" }`, or name an environment variable that holds the token with
+`bearer_token_env_var`. Start a new Codex session after changing the file.
+
 The server returns short usage instructions from `initialize`, including the list of skills. Agents should start with
 `editor_get_state`.
 
@@ -263,6 +276,7 @@ The repository root is a small Unreal Engine 5.5 project that builds and tests t
 | `Content/Samples/DungeonUi` | Widget Blueprints, theme data asset and item table of the UI sample, built with the tools |
 | `Art/Requests` | Art requests of the samples |
 | `Docs` | How the samples were built, and a planned experiment |
+| `.mcp.json`, `.codex/config.toml` | Connect Claude Code and Codex to the testbed editor on port 18766 |
 | `.claude/skills`, `.agents/skills` | Short skill files that let Claude Code and Codex start the plugin skills |
 | `Config` | The testbed serves port **18766**, so that it never answers in place of another project on the default port, and adds the smoke test's skill folder to `SkillDirectories`. `DefaultGame.ini` selects the theme of the UI sample |
 | `Tools/mcp_smoke.py` | Smoke test (Python 3, standard library only) |
@@ -302,6 +316,7 @@ describes how it was built, including the versions that reviews sent back, and h
   `umg_set_widget_properties`, `umg_remove_widgets`, `umg_inspect`, `blueprint_compile`, `pie_start`, `pie_stop`, `asset_save`,
   `livecoding_compile`, `skills_list`, `skills_get`, `asset_create`, `datatable_add_rows`, `object_get_properties`,
   `object_set_properties` and `editor_undo`. The other tools have not been called from Claude Code yet.
+- The Codex setup (`.codex/config.toml`, `.agents/skills`) follows the Codex documentation and has not been tested with Codex yet.
 - Responses are plain JSON. There is no streaming: no SSE and no progress notifications. `pie_start` and similar tools hold
   the request until they finish.
 - Requests run on the editor's game thread. An editor in the background with **Use Less CPU when in Background** enabled
