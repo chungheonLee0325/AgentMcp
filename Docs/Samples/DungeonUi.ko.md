@@ -56,9 +56,9 @@ pie_stop
 ### 고칠 곳
 
 반복 요소를 부품으로 나누는 것은 도구의 성질이 아니라 작업 관례이고, 스튜디오마다 방식이 다릅니다. 그래서 모든 클라이언트가 요청마다
-불러오는 도구 설명이 아니라 Claude Code 스킬
-[`.claude/skills/umg-authoring`](../../.claude/skills/umg-authoring/SKILL.md)에 넣었습니다. 도구 설명에는 엔트리 클래스로 위젯
-블루프린트를 쓸 수 있다는 식의, 도구가 하는 일만 적습니다.
+불러오는 도구 설명이 아니라 스킬 [`umg-authoring`](../../Plugins/AgentMcp/Skills/umg-authoring/SKILL.md)에 넣었습니다. 도구 설명에는
+엔트리 클래스로 위젯 블루프린트를 쓸 수 있다는 식의, 도구가 하는 일과 스킬 이름만 적습니다. 이 스킬은 처음에 `.claude/skills`의
+Claude Code 스킬이었고, 지금은 플러그인이 `skills_get`으로 제공해서 Codex와 다른 MCP 클라이언트도 같은 내용을 읽습니다.
 
 ### 두 번째 버전: 부품, 데이터, 데모 화면
 

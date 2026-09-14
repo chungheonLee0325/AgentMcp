@@ -236,7 +236,8 @@ public:
 
 	/**
 	 * Creates a Widget Blueprint asset under /Game or in a project plugin, optionally with a root panel. The asset is not saved (use
-	 * asset_save), its creation cannot be undone with editor_undo, and the tool is blocked during a play session.
+	 * asset_save), its creation cannot be undone with editor_undo, and the tool is blocked during a play session. Before building a screen or
+	 * a component, read the umg-authoring skill with skills_get.
 	 * @param AssetPath Package path of the new asset, for example /Game/UI/WBP_Hud. No asset may exist there yet.
 	 * @param ParentClass UserWidget subclass to derive from, such as a C++ class with BindWidget properties. Empty uses UserWidget.
 	 * @param RootWidgetClass Panel class of the root widget, such as CanvasPanel or Overlay. Empty creates no root; umg_add_widgets can add one.
@@ -252,6 +253,7 @@ public:
 	 * "slot" (values of the slot in the parent, such as LayoutData of a CanvasPanelSlot or Padding of a VerticalBoxSlot) and "children".
 	 * A struct value may list only the fields to set. Compile the Blueprint afterwards with blueprint_compile. object_list_properties
 	 * on a class default object such as /Script/UMG.Default__TextBlock or /Script/UMG.Default__CanvasPanelSlot lists property names.
+	 * Before building a screen or a component, read the umg-authoring skill with skills_get.
 	 * @param WidgetBlueprint The Widget Blueprint asset.
 	 * @param Widgets Widget entries, for example [{"class": "TextBlock", "name": "Title", "properties": {"Text": "Hello"}, "slot": {"Padding": {"Left": 8}}}].
 	 * @param Parent Panel widget to add the entries to. Empty adds the root widget of a tree that has none.

@@ -57,9 +57,10 @@ three objective rows were numbered copies, 38 brushes were written out inline, a
 ### Where the fix belongs
 
 Splitting repeated elements into components is a working practice, not a property of the tools, and studios do it differently.
-So it went into a Claude Code skill, [`.claude/skills/umg-authoring`](../../.claude/skills/umg-authoring/SKILL.md), rather than into
-the tool descriptions that every client loads with every request. The tool descriptions keep to what the tools do, for example that
-an entry class can be a Widget Blueprint.
+So it went into a skill, [`umg-authoring`](../../Plugins/AgentMcp/Skills/umg-authoring/SKILL.md), rather than into the tool
+descriptions that every client loads with every request. The tool descriptions keep to what the tools do, for example that an entry
+class can be a Widget Blueprint, and name the skill. The skill started as a Claude Code skill in `.claude/skills`; the plugin now
+serves it with `skills_get`, so Codex and other MCP clients read the same version.
 
 ### Second version: components, data and a demo screen
 

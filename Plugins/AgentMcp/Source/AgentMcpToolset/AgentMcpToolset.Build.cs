@@ -23,6 +23,8 @@ public class AgentMcpToolset : ModuleRules
 		{
 			"JsonUtilities",
 			"UnrealEd",
+			// Skills are found in the plugin folder.
+			"Projects",
 			"AgentMcpCompat",
 			"AgentMcpProtocol",
 		});

@@ -8,12 +8,14 @@ Checks the MCP transport contract and the tools against a running editor:
   P2       DataTable edits, dry run, undo and asset_save on the testbed fixtures
   P3       blueprint_compile, BindWidget checks, PIE refusal, viewport_capture with the game UI, rollback, cancellation, livecoding_compile
   P4       umg_create_widget_blueprint, umg_add_widgets, umg_set_widget_properties, umg_remove_widgets: checks, undo, redo, PIE refusal
+  P5       skills_list, skills_get: the plugin skill, project skill folders, replacing a skill, skill files, refusals
 
 Level writes are undone again. P2, P3 and P4 need the AgentMcpTestbed "testbed" toolset, which resets and saves its fixture assets.
+P5 writes temporary skills to Saved/MCP/SmokeSkills, which the testbed configuration adds to SkillDirectories.
 
 Usage:
   python mcp_smoke.py [--url http://127.0.0.1:18766/mcp] [--expect-project AgentMcpTestbed] [--token TOKEN] [--out evidence.json]
-                      [--skip-slice1] [--skip-pie] [--pie-cycles 3] [--skip-p1] [--skip-p2] [--skip-p3] [--skip-p4]
+                      [--skip-slice1] [--skip-pie] [--pie-cycles 3] [--skip-p1] [--skip-p2] [--skip-p3] [--skip-p4] [--skip-p5]
 
 Before any check, the script asks the editor at --url for its project and stops unless it is --expect-project: the checks
 start and stop Play In Editor, change the level and save assets.
@@ -24,6 +26,7 @@ import base64
 import datetime
 import json
 import os
+import shutil
 import sys
 import threading
 import time
@@ -1009,6 +1012,106 @@ def run_p4(client, report, evidence):
                  not is_error and any("WBP_AgentMcpAuthoring" in path for path in (data or {}).get("deleted") or []), json.dumps((data or {}).get("deleted")))
 
 
+P5_TOOLS = {"skills_list", "skills_get"}
+# Config/DefaultEditorPerProjectUserSettings.ini of the testbed adds this folder to SkillDirectories.
+SMOKE_SKILLS_FOLDER = "Saved/MCP/SmokeSkills"
+PLUGIN_UMG_SKILL = "Plugins/AgentMcp/Skills/umg-authoring"
+
+
+def write_text(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
+
+
+def normalized_path(path):
+    return (path or "").replace("\\", "/").rstrip("/")
+
+
+def list_skills(client):
+    """The skills_list result and its skills by name; empty when the call fails."""
+    _, _, is_error, data, _ = client.call_tool("skills_list")
+    data = {} if is_error else (data or {})
+    return data, {skill.get("name"): skill for skill in data.get("skills") or []}
+
+
+def run_p5(client, report, evidence):
+    p5 = evidence.setdefault("p5", {})
+    instructions = (evidence.get("initialize") or {}).get("instructions") or ""
+    skills_line = instructions[instructions.find("- Skills"):] if "- Skills" in instructions else ""
+    report.check("initialize instructions list the skills and point to skills_get",
+                 "skills_get" in skills_line and "umg-authoring" in skills_line, skills_line[:200])
+
+    listing, skills = list_skills(client)
+    p5["list"] = listing
+    plugin_skill = skills.get("umg-authoring") or {}
+    report.check("skills_list returns the plugin skill umg-authoring with its description and folder",
+                 bool(plugin_skill.get("description")) and normalized_path(plugin_skill.get("path")).endswith(PLUGIN_UMG_SKILL),
+                 json.dumps(plugin_skill)[:300])
+
+    _, _, is_error, data, _ = client.call_tool("skills_get", {"name": "umg-authoring"})
+    content = (data or {}).get("content") or ""
+    report.check("skills_get returns the SKILL.md instructions without the front matter",
+                 not is_error and (data or {}).get("file") == "SKILL.md" and content.startswith("# ") and "name: umg-authoring" not in content,
+                 content[:120])
+
+    _, _, is_error, data, _ = client.call_tool("skills_get", {"name": "no-such-skill"})
+    hint = ((data or {}).get("error") or {}).get("hint") or ""
+    report.check("skills_get with an unknown name returns NOT_FOUND and names the available skills",
+                 is_error and error_code(data) == "NOT_FOUND" and "umg-authoring" in hint, hint[:200])
+
+    root = next((path for path in listing.get("searchedDirectories") or [] if normalized_path(path).endswith(SMOKE_SKILLS_FOLDER)), None)
+    if not report.check("skills_list searches the smoke test folder from SkillDirectories", bool(root), json.dumps(listing.get("searchedDirectories"))):
+        return
+    shutil.rmtree(root, ignore_errors=True)
+    try:
+        write_text(os.path.join(root, "smoke-guide", "SKILL.md"),
+                   "---\nname: smoke-guide\ndescription: >\n  Smoke test skill whose description\n  is folded over two lines.\n---\n\n"
+                   "# Smoke guide\n\nRead references/checklist.md.\n")
+        write_text(os.path.join(root, "smoke-guide", "references", "checklist.md"), "- first\n- second\n")
+        write_text(os.path.join(root, "smoke-guide", ".drafts", "note.md"), "hidden\n")
+        write_text(os.path.join(root, "no-description", "SKILL.md"), "---\nname: no-description\n---\n\n# Body\n")
+        write_text(os.path.join(root, "wrong-folder", "SKILL.md"), "---\nname: other-name\ndescription: The name differs from the folder.\n---\n\n# Body\n")
+        write_text(os.path.join(root, "umg-authoring", "SKILL.md"),
+                   "---\nname: umg-authoring\ndescription: \"Project rules: replace the plugin skill.\"\n---\n\n# Project UMG rules\n")
+
+        listing, skills = list_skills(client)
+        p5["listWithProjectSkills"] = listing
+        guide = skills.get("smoke-guide") or {}
+        report.check("skills_list reads a project skill with a folded description",
+                     guide.get("description") == "Smoke test skill whose description is folded over two lines.", json.dumps(guide)[:300])
+        problems = " | ".join(listing.get("problems") or [])
+        report.check("skills_list skips and reports skill files without a description or whose name differs from the folder",
+                     "no-description" in problems and "wrong-folder" in problems and "no-description" not in skills and "other-name" not in skills,
+                     problems[:400])
+        override = skills.get("umg-authoring") or {}
+        report.check("a project skill replaces the plugin skill with the same name",
+                     override.get("description") == "Project rules: replace the plugin skill."
+                     and normalized_path(override.get("overrides")).endswith(PLUGIN_UMG_SKILL), json.dumps(override)[:300])
+
+        _, _, is_error, data, _ = client.call_tool("skills_get", {"name": "smoke-guide"})
+        report.check("skills_get lists the other files of a skill and leaves out hidden ones",
+                     not is_error and (data or {}).get("files") == ["references/checklist.md"], json.dumps(data)[:300])
+
+        _, _, is_error, data, _ = client.call_tool("skills_get", {"name": "smoke-guide", "file": "references/checklist.md"})
+        report.check("skills_get reads a file of a skill",
+                     not is_error and (data or {}).get("file") == "references/checklist.md" and (data or {}).get("content") == "- first\n- second\n",
+                     json.dumps(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("skills_get", {"name": "smoke-guide", "file": "../umg-authoring/SKILL.md"})
+        report.check("skills_get refuses a file outside the skill folder", is_error and error_code(data) == "INVALID_ARGUMENT", error_message(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("skills_get", {"name": "smoke-guide", "file": "references/missing.md"})
+        report.check("skills_get reports a missing file as NOT_FOUND", is_error and error_code(data) == "NOT_FOUND", error_message(data)[:200])
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+    _, skills = list_skills(client)
+    report.check("skill files are read on every call: removing the project skills restores the plugin skill",
+                 normalized_path((skills.get("umg-authoring") or {}).get("path")).endswith(PLUGIN_UMG_SKILL) and "smoke-guide" not in skills,
+                 json.dumps(sorted(skills))[:200])
+
+
 def run_protocol_errors(client, report):
     status, _, payload, _ = client.request("tools/call", {"name": "no_such_tool", "arguments": {}})
     report.check("unknown tool returns JSON-RPC -32602", ((payload or {}).get("error") or {}).get("code") == -32602, str((payload or {}).get("error")))
@@ -1072,6 +1175,7 @@ def main():
     parser.add_argument("--skip-p2", action="store_true", help="skip DataTable editing and saving (needs the testbed fixture toolset)")
     parser.add_argument("--skip-p3", action="store_true", help="skip compile, capture, Live Coding, rollback and cancellation (needs the testbed toolset)")
     parser.add_argument("--skip-p4", action="store_true", help="skip Widget Blueprint authoring (needs the testbed toolset)")
+    parser.add_argument("--skip-p5", action="store_true", help="skip skills (the project skill checks need the testbed configuration)")
     args = parser.parse_args()
 
     # Every editor with the plugin serves the same default port, so make sure the smoke test talks to the intended project.
@@ -1100,6 +1204,8 @@ def main():
         expected_tools |= P3_TOOLS
     if not args.skip_p4:
         expected_tools |= P4_TOOLS
+    if not args.skip_p5:
+        expected_tools |= P5_TOOLS
     try:
         run_p0(client, report, evidence, expected_tools)
         if not args.skip_slice1:
@@ -1112,6 +1218,8 @@ def main():
             run_p3(client, report, evidence)
         if not args.skip_p4:
             run_p4(client, report, evidence)
+        if not args.skip_p5:
+            run_p5(client, report, evidence)
         run_protocol_errors(client, report)
     except Exception as error:  # Keep the evidence of the checks that did run.
         report.check("smoke test ran to completion", False, f"{type(error).__name__}: {error}")

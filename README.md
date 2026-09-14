@@ -10,16 +10,18 @@ agents such as Claude Code can investigate a project, change it, run it and chec
   save assets explicitly
 - compile Blueprints, compile C++ with Live Coding, start and stop Play In Editor
 - read the editor log and capture the viewport, including the game UI of a play session
+- serve skills: task guides, such as how to build game UI with these tools, that every connected agent reads in the same version
 
 Tools are plain `static UFUNCTION`s. Their names, descriptions and JSON schemas come from reflection, so a new tool is one
 function.
 
 > **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this
-> repository passes 137 checks against the testbed project. Other engine versions and platforms have not been tried.
+> repository passes 150 checks against the testbed project. Other engine versions and platforms have not been tried.
 
 - [Installation](#installation)
 - [Connecting a client](#connecting-a-client)
 - [Tools](#tools)
+- [Skills](#skills)
 - [Safety](#safety)
 - [Settings](#settings)
 - [Writing tools](#writing-tools)
@@ -40,7 +42,7 @@ function.
 When the editor has loaded, the output log shows:
 
 ```
-LogAgentMcpProtocol: Agent MCP server listening on http://127.0.0.1:18765/mcp (35 tools).
+LogAgentMcpProtocol: Agent MCP server listening on http://127.0.0.1:18765/mcp (37 tools).
 ```
 
 ## Connecting a client
@@ -59,7 +61,8 @@ For Claude Code, add a `.mcp.json` file to the project root:
 
 If `AuthToken` is set, add `"headers": { "Authorization": "Bearer <token>" }` to the server entry.
 
-The server returns short usage instructions from `initialize`. Agents should start with `editor_get_state`.
+The server returns short usage instructions from `initialize`, including the list of skills. Agents should start with
+`editor_get_state`.
 
 **One port per editor.** Every editor that enables the plugin uses the configured port. When two editors run at the same
 time, the second one cannot bind the port, logs `Agent MCP server failed to start`, and serves no tools. Give projects that
@@ -102,6 +105,8 @@ tools change editor state that cannot be undone: play sessions, compiling, savin
 | `umg_remove_widgets` | Destructive | Remove widgets with their descendants, property bindings and graph references |
 | `viewport_capture` | Read | PNG of the level viewport or the play session, including the game UI |
 | `livecoding_compile` | Control | Compile changed C++ with Live Coding and wait for the result |
+| `skills_list` | Read | Skills of the plugin and the project with their descriptions, and skill files that were skipped |
+| `skills_get` | Read | Instructions of a skill, or one of its other files |
 
 A typical verification loop: `blueprint_compile` → `pie_start` → `log_get_recent` from the returned `startLogSequence` →
 `viewport_capture` → `pie_stop`.
@@ -113,10 +118,36 @@ a struct value may list only the fields to set, and enum values are names (`HAli
 be a Widget Blueprint, whose instance properties are set the same way. The edit tools read back only the requested fields;
 `umg_inspect` with `bIncludeProperties` returns complete values.
 
-The tools build whatever tree they are given. For the way a UI team would build it (reusable component Widget Blueprints,
-style values in one place, data-driven lists and a capture review), this repository includes the Claude Code skill
-[`.claude/skills/umg-authoring`](.claude/skills/umg-authoring/SKILL.md); copy it into your project and adapt it to your
-conventions.
+The tools build whatever tree they are given. How a UI team would build it (reusable component Widget Blueprints, style values in
+one place, data-driven lists and a capture review) is described by the plugin's skill `umg-authoring`; see [Skills](#skills).
+
+## Skills
+
+A skill is a task guide for agents: a folder with a `SKILL.md` file whose front matter has a `name` and a `description`, the format
+that Claude Code and Codex use for their own skills. The editor serves the skills, so every connected agent reads the same version,
+and the skills travel with the plugin.
+
+- The server instructions returned by `initialize` list each skill with its description.
+- `skills_list` returns the skills with their folders, and the skill files that were skipped with the reason.
+- `skills_get` returns the instructions of a skill and, on request, its other files, such as references or examples.
+
+Skills are read from these folders in this order. A skill replaces one with the same name from an earlier folder, so a project can
+adapt a plugin skill.
+
+1. `Plugins/AgentMcp/Skills`: the skills of the plugin, currently `umg-authoring`
+2. `AgentMcp/Skills` in the project folder
+3. the folders of the `SkillDirectories` setting
+
+The files are read on every call, so a changed skill applies without restarting the editor. Only the list in the server
+instructions is made when the server starts.
+
+Claude Code and Codex choose skills by their descriptions. To let them start a served skill on their own, add a short `SKILL.md`
+with the same name and description to `.claude/skills/<name>/` for Claude Code or `.agents/skills/<name>/` for Codex that tells the
+agent to call `skills_get`. This repository has both for `umg-authoring`.
+
+Unreal Engine 5.8 serves skills the same way: skills are `UAgentSkill` classes defined in C++, Python or Blueprint, read through
+`ListSkills` and `GetSkills` tools. Agent MCP reads Markdown files instead, so a skill is edited as text and has the same format as
+the skills of Claude Code and Codex.
 
 ## Safety
 
@@ -131,6 +162,7 @@ conventions.
 - **Dry runs.** Destructive tools need `bConfirm: true` to act.
 - **Allow and block lists.** `AllowedTools` and `BlockedTools` hide tools, and `BlockedProperties` protects properties from
   `object_set_properties` and the `umg` tools.
+- **Skill files only.** `skills_get` reads files inside a skill folder only; other paths and hidden files are refused.
 - There is no tool that runs console commands or scripts.
 
 ## Settings
@@ -156,6 +188,7 @@ Port=18765
 | `BusyWaitTimeoutSeconds` | `10` | How long a call waits while the editor saves, collects garbage or loads assets |
 | `MaxResultBytes` | `65536` | Result text above this size is truncated |
 | `LogBufferLines` | `20000` | Log lines kept for `log_get_recent` |
+| `SkillDirectories` | empty | More skill folders, searched after the plugin's and the project's; relative paths start at the project folder |
 
 ## Writing tools
 
@@ -213,13 +246,13 @@ The repository root is a small Unreal Engine 5.5 project that builds and tests t
 
 | Path | Contents |
 |---|---|
-| `Plugins/AgentMcp` | The plugin |
+| `Plugins/AgentMcp` | The plugin, with its skills in `Plugins/AgentMcp/Skills` |
 | `Source/AgentMcpTestbed` | Row struct, widget base class and game mode used by the tests, and the C++ classes of the UI sample |
 | `Source/AgentMcpTestbedEditor` | `testbed_*` tools that create test assets under `/Game/AgentMcpFixtures`, hooks for rollback and cancellation checks, and `sample_show_widget` |
 | `Content/Samples/DungeonUi` | Widget Blueprints of the UI sample, built with the `umg` tools |
 | `Docs` | How the samples were built |
-| `.claude/skills/umg-authoring` | Claude Code skill for production UMG work with the `umg` tools |
-| `Config` | The testbed serves port **18766**, so that it never answers in place of another project on the default port |
+| `.claude/skills`, `.agents/skills` | Short skill files that let Claude Code and Codex start the plugin skill `umg-authoring` |
+| `Config` | The testbed serves port **18766**, so that it never answers in place of another project on the default port, and adds the smoke test's skill folder to `SkillDirectories` |
 | `Tools/mcp_smoke.py` | Smoke test (Python 3, standard library only) |
 | `Tools/mcp_call.py` | Calls one tool from the command line |
 
@@ -230,8 +263,8 @@ The repository root is a small Unreal Engine 5.5 project that builds and tests t
 
 The smoke test first checks that the editor behind the URL is the `AgentMcpTestbed` project and stops otherwise, because
 it starts Play In Editor, changes the level and saves the test assets. It covers the MCP transport and its errors, every
-tool, undo and rollback, request cancellation, Play In Editor, viewport capture with the game UI, Live Coding and Widget
-Blueprint editing, including nested Widget Blueprint instances.
+tool, undo and rollback, request cancellation, Play In Editor, viewport capture with the game UI, Live Coding, Widget
+Blueprint editing including nested Widget Blueprint instances, and skills.
 
 To call a single tool:
 
@@ -255,7 +288,7 @@ modular, and how to run it.
   From Claude Code 2.1.270, `editor_get_state`, `actor_find` and `viewport_capture` were called from the desktop app and the
   CLI. While building the UI sample, the desktop app also called `umg_create_widget_blueprint`, `umg_add_widgets`,
   `umg_set_widget_properties`, `umg_remove_widgets`, `blueprint_compile`, `pie_start`, `pie_stop`, `asset_save` and
-  `livecoding_compile`. The other tools have not been called from Claude Code yet.
+  `livecoding_compile`, and later `skills_list` and `skills_get`. The other tools have not been called from Claude Code yet.
 - Responses are plain JSON. There is no streaming: no SSE and no progress notifications. `pie_start` and similar tools hold
   the request until they finish.
 - Requests run on the editor's game thread. An editor in the background with **Use Less CPU when in Background** enabled

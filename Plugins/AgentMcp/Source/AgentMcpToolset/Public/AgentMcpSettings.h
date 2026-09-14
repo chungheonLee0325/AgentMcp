@@ -73,4 +73,11 @@ public:
 	/** Number of log lines kept in memory for log_get_recent. */
 	UPROPERTY(Config, EditAnywhere, Category = "Logs", meta = (ClampMin = "100"))
 	int32 LogBufferLines = 20000;
+
+	/**
+	 * More folders with skills (task guides for agents, one SKILL.md per subfolder), searched after the plugin's Skills folder and the
+	 * project's AgentMcp/Skills folder. Relative paths start at the project folder. A skill replaces one with the same name found earlier.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Skills")
+	TArray<FString> SkillDirectories;
 };

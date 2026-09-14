@@ -10,16 +10,18 @@ Agent MCP는 언리얼 에디터 안에서 [Model Context Protocol](https://mode
   명시적으로 저장
 - 블루프린트 컴파일, Live Coding으로 C++ 컴파일, Play In Editor 시작과 종료
 - 에디터 로그 읽기, 뷰포트 캡처(플레이 세션의 게임 UI 포함)
+- 스킬 제공: 이 도구로 게임 UI를 만드는 방법 같은 작업 지침을, 연결된 모든 에이전트가 같은 버전으로 읽음
 
 도구는 일반 `static UFUNCTION`입니다. 이름, 설명, JSON 스키마를 리플렉션에서 만들기 때문에 함수 하나를 추가하면 도구
 하나가 생깁니다.
 
 > **상태: 베타.** Windows 64비트의 Unreal Engine 5.5.4(설치형 빌드)로 빌드하고 테스트했습니다. 이 저장소의 smoke 테스트는
-> 테스트베드 프로젝트에서 137개 검사를 통과합니다. 다른 엔진 버전과 플랫폼은 확인하지 않았습니다.
+> 테스트베드 프로젝트에서 150개 검사를 통과합니다. 다른 엔진 버전과 플랫폼은 확인하지 않았습니다.
 
 - [설치](#설치)
 - [클라이언트 연결](#클라이언트-연결)
 - [도구](#도구)
+- [스킬](#스킬)
 - [안전장치](#안전장치)
 - [설정](#설정)
 - [도구 만들기](#도구-만들기)
@@ -40,7 +42,7 @@ Agent MCP는 언리얼 에디터 안에서 [Model Context Protocol](https://mode
 에디터 로딩이 끝나면 출력 로그에 다음 줄이 나옵니다.
 
 ```
-LogAgentMcpProtocol: Agent MCP server listening on http://127.0.0.1:18765/mcp (35 tools).
+LogAgentMcpProtocol: Agent MCP server listening on http://127.0.0.1:18765/mcp (37 tools).
 ```
 
 ## 클라이언트 연결
@@ -59,7 +61,7 @@ Claude Code에서는 프로젝트 루트에 `.mcp.json` 파일을 추가합니�
 
 `AuthToken`을 설정했다면 서버 항목에 `"headers": { "Authorization": "Bearer <token>" }`를 추가합니다.
 
-서버는 `initialize` 응답으로 짧은 사용 안내를 보냅니다. 에이전트는 `editor_get_state`로 작업을 시작하는 것이 좋습니다.
+서버는 `initialize` 응답으로 짧은 사용 안내와 스킬 목록을 보냅니다. 에이전트는 `editor_get_state`로 작업을 시작하는 것이 좋습니다.
 
 **에디터마다 포트 하나.** plugin을 켠 에디터는 모두 설정된 포트를 씁니다. 에디터 두 개를 동시에 실행하면 두 번째
 에디터는 포트를 열지 못해 `Agent MCP server failed to start`를 기록하고 도구를 제공하지 않습니다. 동시에 여는 프로젝트에는
@@ -102,6 +104,8 @@ Claude Code에서는 프로젝트 루트에 `.mcp.json` 파일을 추가합니�
 | `umg_remove_widgets` | Destructive | 위젯과 하위 위젯, 프로퍼티 바인딩, 그래프 참조 삭제 |
 | `viewport_capture` | Read | 레벨 뷰포트나 플레이 세션의 PNG 캡처(게임 UI 포함) |
 | `livecoding_compile` | Control | 바뀐 C++를 Live Coding으로 컴파일하고 결과까지 대기 |
+| `skills_list` | Read | 플러그인과 프로젝트의 스킬과 설명, 건너뛴 스킬 파일 |
+| `skills_get` | Read | 스킬의 지침이나 스킬에 딸린 파일 하나 |
 
 일반적인 검증 흐름: `blueprint_compile` → `pie_start` → 반환된 `startLogSequence`부터 `log_get_recent` → `viewport_capture`
 → `pie_stop`
@@ -113,8 +117,35 @@ UI를 만드는 흐름: `umg_create_widget_blueprint`(`BindWidget` 프로퍼티�
 설정합니다. 편집 도구는 요청한 필드만 되읽어 돌려주고, 전체 값은 `umg_inspect`의 `bIncludeProperties`로 확인합니다.
 
 도구는 받은 트리를 그대로 만듭니다. UI 팀이 만드는 방식(재사용하는 부품 위젯 블루프린트, 한곳에 모은 스타일 값, 데이터로 채우는
-목록, 캡처 검토)은 이 저장소의 Claude Code 스킬 [`.claude/skills/umg-authoring`](.claude/skills/umg-authoring/SKILL.md)에
-정리했습니다. 프로젝트에 복사해 팀 관례에 맞게 고쳐 쓰세요.
+목록, 캡처 검토)은 플러그인 스킬 `umg-authoring`에 있습니다. [스킬](#스킬)을 참고하세요.
+
+## 스킬
+
+스킬은 에이전트용 작업 지침입니다. `SKILL.md` 파일이 있는 폴더이고, 파일 앞머리(front matter)에 `name`과 `description`이 있습니다.
+Claude Code와 Codex가 자기 스킬에 쓰는 형식과 같습니다. 스킬은 에디터가 제공하므로 연결된 모든 에이전트가 같은 버전을 읽고,
+플러그인을 옮기면 스킬도 따라갑니다.
+
+- `initialize`가 돌려주는 서버 안내에 스킬마다 이름과 설명이 들어 있습니다.
+- `skills_list`는 스킬과 그 폴더, 그리고 건너뛴 스킬 파일과 이유를 돌려줍니다.
+- `skills_get`은 스킬의 지침을 돌려주고, 요청하면 참고 자료나 예제 같은 딸린 파일도 돌려줍니다.
+
+스킬은 다음 폴더에서 이 순서로 읽습니다. 뒤 폴더의 스킬이 앞 폴더의 같은 이름 스킬을 대신하므로, 프로젝트가 플러그인 스킬을 고쳐 쓸
+수 있습니다.
+
+1. `Plugins/AgentMcp/Skills`: 플러그인 스킬. 지금은 `umg-authoring`
+2. 프로젝트 폴더의 `AgentMcp/Skills`
+3. `SkillDirectories` 설정의 폴더
+
+파일은 호출할 때마다 새로 읽으므로 스킬을 고치면 에디터를 다시 시작하지 않아도 반영됩니다. 서버 안내에 들어가는 목록만 서버가 시작할
+때 만들어집니다.
+
+Claude Code와 Codex는 설명을 보고 스킬을 고릅니다. 서버 스킬도 스스로 시작하게 하려면, 같은 이름과 설명에 `skills_get`을 호출하라는
+내용만 적은 짧은 `SKILL.md`를 Claude Code는 `.claude/skills/<이름>/`, Codex는 `.agents/skills/<이름>/`에 둡니다. 이 저장소에는
+`umg-authoring`용으로 둘 다 있습니다.
+
+Unreal Engine 5.8도 같은 방식으로 스킬을 제공합니다. 스킬은 C++, Python, 블루프린트로 정의한 `UAgentSkill` 클래스이고
+`ListSkills`, `GetSkills` 도구로 읽습니다. Agent MCP는 대신 Markdown 파일을 읽으므로 스킬을 텍스트로 고치고, Claude Code·Codex
+스킬과 형식이 같습니다.
 
 ## 안전장치
 
@@ -129,6 +160,7 @@ UI를 만드는 흐름: `umg_create_widget_blueprint`(`BindWidget` 프로퍼티�
 - **dry run.** Destructive 도구는 `bConfirm: true`가 있어야 실제로 실행합니다.
 - **허용·차단 목록.** `AllowedTools`와 `BlockedTools`로 도구를 숨기고, `BlockedProperties`로 `object_set_properties`와
   `umg` 도구가 바꾸지 못할 프로퍼티를 지정합니다.
+- **스킬 파일만 읽기.** `skills_get`은 스킬 폴더 안의 파일만 읽고, 그 밖의 경로와 숨김 파일은 거부합니다.
 - 콘솔 명령이나 스크립트를 실행하는 도구는 없습니다.
 
 ## 설정
@@ -154,6 +186,7 @@ Port=18765
 | `BusyWaitTimeoutSeconds` | `10` | 에디터가 저장, 가비지 수집, 에셋 로딩 중일 때 호출이 기다리는 시간 |
 | `MaxResultBytes` | `65536` | 이 크기를 넘는 결과 텍스트는 잘림 |
 | `LogBufferLines` | `20000` | `log_get_recent`용으로 보관하는 로그 줄 수 |
+| `SkillDirectories` | 비어 있음 | 플러그인과 프로젝트 스킬 폴더 다음에 찾을 스킬 폴더. 상대 경로는 프로젝트 폴더 기준 |
 
 ## 도구 만들기
 
@@ -209,13 +242,13 @@ public:
 
 | 경로 | 내용 |
 |---|---|
-| `Plugins/AgentMcp` | plugin |
+| `Plugins/AgentMcp` | plugin. 스킬은 `Plugins/AgentMcp/Skills`에 있음 |
 | `Source/AgentMcpTestbed` | 테스트용 행 구조체, 위젯 부모 클래스, 게임 모드, UI 샘플의 C++ 클래스 |
 | `Source/AgentMcpTestbedEditor` | `/Game/AgentMcpFixtures` 아래에 테스트 에셋을 만드는 `testbed_*` 도구, 롤백·취소 검사용 훅, `sample_show_widget` |
 | `Content/Samples/DungeonUi` | `umg` 도구로 만든 UI 샘플 위젯 블루프린트 |
 | `Docs` | 샘플을 만든 과정 |
-| `.claude/skills/umg-authoring` | `umg` 도구로 실무형 UMG 작업을 하는 Claude Code 스킬 |
-| `Config` | 테스트베드는 포트 **18766**을 써서, 기본 포트를 쓰는 다른 프로젝트 대신 응답하는 일이 없음 |
+| `.claude/skills`, `.agents/skills` | Claude Code와 Codex가 플러그인 스킬 `umg-authoring`을 시작하게 하는 짧은 스킬 파일 |
+| `Config` | 테스트베드는 포트 **18766**을 써서, 기본 포트를 쓰는 다른 프로젝트 대신 응답하는 일이 없음. smoke 테스트용 스킬 폴더를 `SkillDirectories`에 추가 |
 | `Tools/mcp_smoke.py` | smoke 테스트(Python 3, 표준 라이브러리만 사용) |
 | `Tools/mcp_call.py` | 명령줄에서 도구 하나 호출 |
 
@@ -226,8 +259,8 @@ public:
 
 smoke 테스트는 Play In Editor를 시작하고, 레벨을 바꾸고, 테스트 에셋을 저장합니다. 그래서 먼저 URL에 응답하는 에디터가
 `AgentMcpTestbed` 프로젝트인지 확인하고, 아니면 멈춥니다. MCP 전송과 오류 처리, 모든 도구, undo와 롤백, 요청 취소,
-Play In Editor, 게임 UI를 포함한 뷰포트 캡처, Live Coding, 중첩된 위젯 블루프린트 인스턴스를 포함한 위젯 블루프린트 편집을
-검사합니다.
+Play In Editor, 게임 UI를 포함한 뷰포트 캡처, Live Coding, 중첩된 위젯 블루프린트 인스턴스를 포함한 위젯 블루프린트 편집,
+스킬을 검사합니다.
 
 도구 하나만 호출하려면:
 
@@ -249,8 +282,8 @@ python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --exp
 - Windows 64비트의 Unreal Engine 5.5.4에서만 테스트했습니다. 모든 도구는 `Tools`의 Python 클라이언트로 테스트했습니다.
   Claude Code 2.1.270에서는 데스크톱 앱과 CLI로 `editor_get_state`, `actor_find`, `viewport_capture`를 호출했고, UI 샘플을
   만들면서 데스크톱 앱으로 `umg_create_widget_blueprint`, `umg_add_widgets`, `umg_set_widget_properties`,
-  `umg_remove_widgets`, `blueprint_compile`, `pie_start`, `pie_stop`, `asset_save`, `livecoding_compile`도 호출했습니다.
-  나머지 도구는 아직 Claude Code에서 호출해 보지 않았습니다.
+  `umg_remove_widgets`, `blueprint_compile`, `pie_start`, `pie_stop`, `asset_save`, `livecoding_compile`도 호출했고, 이후
+  `skills_list`, `skills_get`도 호출했습니다. 나머지 도구는 아직 Claude Code에서 호출해 보지 않았습니다.
 - 응답은 일반 JSON입니다. 스트리밍(SSE, 진행 알림)은 없습니다. `pie_start` 같은 도구는 끝날 때까지 요청을 붙잡고 있습니다.
 - 요청은 에디터의 게임 스레드에서 처리됩니다. **Use Less CPU when in Background**가 켜진 채 에디터가 백그라운드에 있으면
   초당 약 3번만 틱하므로 호출마다 약 0.3초가 걸립니다. 에이전트가 작업하는 동안에는 이 에디터 설정을 끄세요.

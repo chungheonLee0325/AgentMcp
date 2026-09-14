@@ -4,6 +4,7 @@
 #include "AgentMcpReflectedTool.h"
 #include "AgentMcpServer.h"
 #include "AgentMcpSettings.h"
+#include "AgentMcpSkills.h"
 #include "AgentMcpToolsetLog.h"
 #include "IAgentMcpTool.h"
 
@@ -45,7 +46,7 @@ namespace UE::AgentMcp::RuntimePrivate
 
 	FString BuildInstructions()
 	{
-		return FString::Printf(TEXT(
+		FString Instructions = FString::Printf(TEXT(
 			"Unreal Editor tools for project '%s' (engine %s).\n"
 			"- Start with editor_get_state: current level, play session, dirty packages, selection, undo state.\n"
 			"- Read tools are side-effect free. Write tools run inside an undoable editor transaction (editor_undo reverts the last one), "
@@ -57,6 +58,13 @@ namespace UE::AgentMcp::RuntimePrivate
 			"- Object arguments are object paths such as /Game/Folder/Asset.Asset; package names, actor labels and ActorLabel.ComponentName are also accepted.\n"
 			"- List tools accept limit and cursor; request only the properties you need. Empty fields are left out of results."),
 			FApp::GetProjectName(), *FEngineVersion::Current().ToString(EVersionComponent::Patch));
+
+		const FString SkillInstructions = BuildSkillInstructions();
+		if (!SkillInstructions.IsEmpty())
+		{
+			Instructions += TEXT("\n") + SkillInstructions;
+		}
+		return Instructions;
 	}
 }
 
