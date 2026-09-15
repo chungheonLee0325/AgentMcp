@@ -198,6 +198,9 @@ to keep the look.
 7. **Gallery.** The first layout of the gallery was too tall for the play viewport and was drawn at 40%, and the second overflowed it.
    The final page has a fixed size, two columns of text styles, and entries wide enough for the longest names.
 
+8. **Freeze.** The user approved the gallery. Its capture and the captures of the result popup and the HUD became the baseline in
+   `Art/Style/baseline/`, and [Art/Style/ui_style.md](../Art/Style/ui_style.md) was written again from the theme values.
+
 Every step after the C++ build went through the tools and the scripts; nobody opened the UMG designer.
 
 ## Limitations
@@ -207,5 +210,5 @@ Every step after the C++ build went through the tools and the scripts; nobody op
   class yet.
 - The extraction sees Widget Blueprints only. Colors that code sets at runtime use tokens in the code and are checked by reading it.
 - A map of the theme can only be written as a whole through `object_set_properties`.
-- The style is not frozen yet: `Art/Style/ui_style.md` still holds the notes written before the style was built, and there is no
-  approved baseline in `Art/Style/baseline/`.
+- The baseline captures in `Art/Style/baseline/` have the size of the play viewport when they were taken, 1144 × 894, which follows the
+  editor window; comparisons need captures of the same size.

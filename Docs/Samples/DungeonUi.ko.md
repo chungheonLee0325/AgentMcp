@@ -224,7 +224,7 @@ User Review
 
 ![키트 갤러리](../Images/ui_kit_gallery.jpg)
 
-그 뒤 추출 결과에는 위젯 블루프린트에 직접 넣은 색, 글자 크기, 반경, 선 굵기가 없고 간격은 모두 4 단위입니다. 구성 요소, 스크립트, 검토 과정은 [UI 스타일 시스템](../UiStyleSystem.ko.md)에 자세히 있습니다.
+그 뒤 추출 결과에는 위젯 블루프린트에 직접 넣은 색, 글자 크기, 반경, 선 굵기가 없고 간격은 모두 4 단위입니다. 구성 요소, 스크립트, 검토 과정은 [UI 스타일 시스템](../UiStyleSystem.ko.md)에 자세히 있습니다. 사용자는 이어서 스타일을 확정했습니다. [Art/Style/ui_style.md](../../Art/Style/ui_style.md)에 값과 규칙이, `Art/Style/baseline/`에 승인된 캡처가 있습니다.
 
 ## 이 사례가 Agent MCP 설계에 준 영향
 
@@ -245,4 +245,3 @@ User Review
 - UMG Widget Animation 생성·편집은 아직 지원하지 않습니다. 등장 연출은 C++ 부모 클래스의 코드이고 그 값만 데이터입니다. 관련 실험은 [WidgetAnimationAuthoring.md](../Experiments/WidgetAnimationAuthoring.md)에 정리되어 있습니다.
 - 처음 받은 이미지들이 수정 요청 상태라서 아이콘, 프레임, 카드 패널은 여전히 placeholder shape입니다.
 - 위젯을 다른 부모로 옮기거나 다른 클래스로 바꾸는 Tool은 아직 없어서, 구조 변경 시 기존 subtree를 제거하고 동일 이름의 component instance를 다시 추가합니다.
-- 스타일은 아직 확정하지 않았습니다. `Art/Style/ui_style.md`에는 스타일을 만들기 전에 적은 메모가 그대로 있고, 승인된 갤러리 기준 캡처도 없습니다.

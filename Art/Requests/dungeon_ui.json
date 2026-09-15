@@ -1,8 +1,8 @@
 {
   "feature": "dungeon_ui",
   "description": "Item icons, rarity frames and the popup panel of the dungeon result sample (Content/Samples/DungeonUi). Until the images arrive, reward slots draw the fallback shapes of the item table, and common and uncommon slots keep their drawn outline.",
-  "style": "Follow the style frame in references and the draft UI kit in Art/Style/ui_style.md: dark translucent navy panels with thin cyan lines, gold only for rank and currency, painted icons with light from the top left. No text, logos or watermarks.",
-  "references": ["Art/Style/style_frame_dungeon_result.png", "Docs/Images/dungeon_result.jpg"],
+  "style": "Follow the frozen UI style in Art/Style/ui_style.md, with the style frame and the baseline captures in references: dark translucent navy panels with thin lines, cyan accents, gold only for rank, currency and rewards, painted icons with light from the top left. No text, logos or watermarks.",
+  "references": ["Art/Style/style_frame_dungeon_result.png", "Art/Style/baseline/dungeon_result.png", "Art/Style/baseline/dungeon_hud.png", "Art/Style/baseline/ui_kit_gallery.png"],
   "captures": ["Saved/MCP/Captures/Play_20260915_024755_689.png", "Saved/MCP/Captures/Play_20260915_093324_506.png"],
   "items": [
     {

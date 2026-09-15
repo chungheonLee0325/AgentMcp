@@ -224,7 +224,7 @@ Connecting the first images from the art request showed that they matched neithe
 
 ![Kit gallery](../Images/ui_kit_gallery.jpg)
 
-Afterwards the extraction finds no colors, font sizes, radii or line widths of their own in the Widget Blueprints, and all spacing on a 4 unit grid. [UI style system](../UiStyleSystem.md) describes the parts, the scripts and the review in detail.
+Afterwards the extraction finds no colors, font sizes, radii or line widths of their own in the Widget Blueprints, and all spacing on a 4 unit grid. [UI style system](../UiStyleSystem.md) describes the parts, the scripts and the review in detail. The user then froze the style: [Art/Style/ui_style.md](../../Art/Style/ui_style.md) holds its values and rules, and `Art/Style/baseline/` its approved captures.
 
 ## How this sample changed Agent MCP
 
@@ -245,4 +245,3 @@ In other words, **real agent failures were fed back into both tool and skill des
 - UMG Widget Animation creation/editing is not supported yet; the intro is code in the C++ base with its values in data. The planned experiment is documented in [WidgetAnimationAuthoring.md](../Experiments/WidgetAnimationAuthoring.md).
 - The icons, frames and card panel are still placeholder shapes: the first delivered images were sent back for revision.
 - There is no tool for directly moving a widget to another parent or changing its class yet; restructuring removes a subtree and re-adds component instances under the new parent.
-- The style is not frozen yet. `Art/Style/ui_style.md` still holds the notes written before the style was built, and there is no approved baseline capture of the gallery.
