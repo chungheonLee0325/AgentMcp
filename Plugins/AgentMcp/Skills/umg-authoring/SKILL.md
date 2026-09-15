@@ -21,7 +21,9 @@ Write a short plan first and keep it in the conversation:
 - **Dynamic lists.** When the number of entries comes from data, the screen holds a `DynamicEntryBox` (small lists) or a
   `ListView`/`TileView` (long, scrolling lists) whose entry class is the component; code creates the entries.
 - **Style tokens.** Name the few colors, radii and font sizes the screens use (panel, accent, text, muted text, success, danger,
-  rarity colors) and keep them in one theme data asset that the widgets read, so that a style change needs no build.
+  rarity colors) and keep them in one theme data asset that the widgets read, so that a style change needs no build. When the project
+  has styled widgets (a `Style` name that the widget looks up in the theme) or CommonUI styles, build with them instead of setting
+  brushes and fonts on each widget; the `ui-style-system` skill sets such a system up.
 - **Content data.** Values that differ per item (names, icons, rarity) live in a DataTable; components reference a row instead of
   copying its values.
 - **Decoration.** Panels, section dividers, corner ornaments and title plates come from the project's UI kit in
@@ -41,8 +43,9 @@ Write a short plan first and keep it in the conversation:
   - `UPROPERTY(EditAnywhere, BlueprintReadWrite)` for the inputs, often one struct such as `Reward`.
   - Apply the inputs in `NativePreConstruct`, so that the component's own designer, parent screens and instances all preview them.
   - A setter (`SetReward`, `SetProgress`) for runtime updates.
-  - Colors and frames that depend on data (rarity, state) come from the theme data asset; shapes, paddings and static colors stay
-    in the Widget Blueprint so that designers can still change them.
+  - Colors and frames that depend on data (rarity, state) come from the theme data asset in code. Static looks are styles: the
+    `Style` of a styled widget, or brush and font values in the Widget Blueprint in projects without styles, so that designers can
+    still change them.
   - Textures are soft references in the data, loaded when the component applies its inputs. While one is missing, the component
     draws its fallback, so the screen works before the art exists.
 - **Layers for frames.** A `Border` whose brush is a texture draws only that texture, so a frame image would also remove the fill of
@@ -90,8 +93,8 @@ Write a short plan first and keep it in the conversation:
 - A `Border` holds one child; use a `SizeBox` for fixed sizes; `RoundedBox` brushes need no texture.
 - A 9-slice brush (`DrawAs` `Box`) draws its margins at the texture's pixel size, whatever `ImageSize` says: size the texture for
   the border that should appear.
-- The tools cannot move a widget to another parent. To change the nesting, remove the subtree with `umg_remove_widgets` and add it
-  again with the same names, so that the `BindWidget` contracts stay bound.
+- The tools cannot move a widget to another parent or change its class. To change the nesting or the class, remove the subtree with
+  `umg_remove_widgets` and add it again with the same names, so that the `BindWidget` contracts stay bound.
 - `ProgressBar` multiplies its fill by `FillColorAndOpacity`, which defaults to blue; set it to white when the brush carries the
   color.
 - Writes are refused during Play In Editor; call `pie_stop` before editing. Nothing is saved until `asset_save`.

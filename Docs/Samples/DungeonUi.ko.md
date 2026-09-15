@@ -44,10 +44,11 @@ Theme Data Asset
 | `WBP_DungeonHud` | `AgentMcpSampleDungeonHud` | 타이머와 진행도, 목표 행 인스턴스, 보스 체력 바를 조합한 HUD |
 | `WBP_DungeonResult` | `AgentMcpSampleDungeonResult` | 통계 타일과 `DynamicEntryBox` 기반 보상 목록을 가진 결과 카드 |
 | `WBP_DungeonDemo` | `UserWidget` | HUD와 결과 화면을 함께 보여 주는 데모 화면 |
-| `Data/DA_DungeonUiTheme` | `AgentMcpSampleUiTheme` | 텍스트·상태·등급 색과 프레임 브러시를 모은 Theme Data Asset |
+| `WBP_UiKitGallery` | `AgentMcpSampleUiKitGallery` | 테마의 모든 색·박스·텍스트·바·버튼 스타일과 상태별 부품을 보여 주는 키트 갤러리 |
+| `Data/DA_DungeonUiTheme` | `AgentMcpSampleUiTheme` | 색·반경 토큰, 토큰으로 만든 박스·텍스트·바·버튼 스타일, 등급마다 색과 선택적인 프레임 브러시를 담은 Theme Data Asset. `Config/DefaultGame.ini`가 이 에셋을 지정 |
 | `Data/DT_DungeonItems` | `AgentMcpSampleItemRow` | 이름, 등급, 아이콘 텍스처와 fallback 표현을 가진 아이템 테이블 |
 
-C++ 클래스는 `Source/AgentMcpTestbed`에 있습니다.
+C++ 클래스는 `Source/AgentMcpTestbed`에 있습니다. 위젯 블루프린트는 `AgentMcpSampleStyledWidgets.h`의 스타일 위젯으로 그립니다. 스타일 위젯은 스타일 이름만 저장하고 모양은 테마에서 가져옵니다. 자세한 내용은 [UI 스타일 시스템](../UiStyleSystem.ko.md)에 있습니다. 텍스트는 한국어입니다. Roboto에는 한글 글리프가 없어서 엔진의 대체 폰트로 표시됩니다.
 
 ## 실행
 
@@ -60,7 +61,8 @@ viewport_capture
 pie_stop
 ```
 
-`viewport_capture` 전에 등장 연출이 끝나도록 약 3초 기다립니다.
+`viewport_capture` 전에 등장 연출이 끝나도록 5초쯤 기다립니다. 연출은 2.75초지만 새 플레이 세션에서는 늦게 시작할 수 있습니다.
+키트 갤러리는 `/Game/Samples/DungeonUi/WBP_UiKitGallery.WBP_UiKitGallery_C`로 같은 방법으로 띄웁니다.
 
 ## 1. 첫 버전 — 동작하지만 유지보수하기 어려운 UI
 
@@ -210,6 +212,20 @@ User Review
 
 이렇게 해서 UMG 제작 범위를 Widget Tree 조작에서 **UI 제작 협업 프로세스**까지 확장했습니다.
 
+## 7. 네 번째 버전 — 스타일 시스템
+
+아트 요청의 첫 이미지를 연결해 보니 이미지끼리도, 화면과도 어울리지 않았고, 화면에는 맞춰야 할 하나의 스타일이 없었습니다. 새 [`ui-style-system`](../../Plugins/AgentMcp/Skills/ui-style-system/SKILL.md) 스킬의 `style_extract.py`는 위젯 블루프린트 6개에서 색 묶음 30개, 글자 크기 14가지, 모서리 반경 9가지, 간격 17가지를 찾았습니다. 사용자는 지금 모양을 유지하면서 정리하는 쪽을 골랐습니다.
+
+1. **토큰과 스타일.** 테마 데이터 에셋에 색·반경 토큰과, 토큰으로 만든 박스·텍스트·바·버튼 스타일 맵을 두고, 화면에 이미 있던 값을 역할마다 하나로 넣었습니다.
+2. **스타일 위젯.** `Border`, `TextBlock`, `ProgressBar`, `Button`의 하위 클래스가 스타일 이름을 저장하고 테마의 스타일을 적용합니다.
+3. **트리 다시 만들기.** 스크립트가 `umg_remove_widgets`와 `umg_add_widgets`로 위젯 블루프린트 5개의 그리는 위젯을 스타일 위젯으로 바꿨습니다. 이름과 `BindWidget` 규칙은 그대로 두고, 패딩은 4 단위에 맞췄습니다.
+4. **검토.** 전후 캡처에서 배치는 같았고 결과 카드만 조금 커졌습니다. 차이처럼 보인 것 하나는 아직 페이드 인 중이던 등장 연출이었고, 실제 차이였던 다시 도전 버튼의 외곽선은 테마와 `style_extract.py`에서 고쳤습니다.
+5. **키트 갤러리.** `WBP_UiKitGallery`가 모든 토큰, 스타일, 부품을 한 화면에 보여 줍니다.
+
+![키트 갤러리](../Images/ui_kit_gallery.jpg)
+
+그 뒤 추출 결과에는 위젯 블루프린트에 직접 넣은 색, 글자 크기, 반경, 선 굵기가 없고 간격은 모두 4 단위입니다. 구성 요소, 스크립트, 검토 과정은 [UI 스타일 시스템](../UiStyleSystem.ko.md)에 자세히 있습니다.
+
 ## 이 사례가 Agent MCP 설계에 준 영향
 
 이 샘플은 완성된 UI를 보여 주기 위한 데모이면서 동시에 Agent MCP 자체의 설계 테스트였습니다.
@@ -219,12 +235,14 @@ User Review
 - Claude Code 전용 Skill → MCP 서버가 Skill을 제공하도록 확장
 - 인라인 스타일 → Theme Data Asset과 DataTable Tool 추가
 - placeholder art → `ui-art-requests` workflow 추가
+- 화면마다 흩어진 스타일 값 → `ui-style-system`으로 추출하고 테마의 토큰과 스타일로 정리
 - 결과를 대화로 추측 → PIE + viewport capture 기반 검토
 
 즉, **실제 에이전트 작업을 돌려 보고 실패한 지점을 Tool과 Skill 설계로 다시 환류**한 사례입니다.
 
 ## 현재 다루지 않는 것
 
-- UMG Widget Animation 생성·편집은 아직 지원하지 않습니다. 관련 실험은 [WidgetAnimationAuthoring.md](../Experiments/WidgetAnimationAuthoring.md)에 정리되어 있습니다.
-- 아트 요청의 일부 이미지는 아직 placeholder shape 상태입니다.
-- 위젯을 다른 부모로 직접 이동하는 Tool은 아직 없어서, 구조 변경 시 기존 subtree를 제거하고 동일 이름의 component instance를 다시 추가합니다.
+- UMG Widget Animation 생성·편집은 아직 지원하지 않습니다. 등장 연출은 C++ 부모 클래스의 코드이고 그 값만 데이터입니다. 관련 실험은 [WidgetAnimationAuthoring.md](../Experiments/WidgetAnimationAuthoring.md)에 정리되어 있습니다.
+- 처음 받은 이미지들이 수정 요청 상태라서 아이콘, 프레임, 카드 패널은 여전히 placeholder shape입니다.
+- 위젯을 다른 부모로 옮기거나 다른 클래스로 바꾸는 Tool은 아직 없어서, 구조 변경 시 기존 subtree를 제거하고 동일 이름의 component instance를 다시 추가합니다.
+- 스타일은 아직 확정하지 않았습니다. `Art/Style/ui_style.md`에는 스타일을 만들기 전에 적은 메모가 그대로 있고, 승인된 갤러리 기준 캡처도 없습니다.

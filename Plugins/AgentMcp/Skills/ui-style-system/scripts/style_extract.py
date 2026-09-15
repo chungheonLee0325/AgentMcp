@@ -5,10 +5,11 @@ Usage:
   python style_extract.py [--url URL] [--token TOKEN] [--path /Game/UI] [--theme OBJECT_PATH] [--name NAME] [--out FOLDER]
 
 Reads every Widget Blueprint under --path with umg_inspect and, with --theme, the theme data asset with object_get_properties. Writes
-<out>/<name>.json with the token candidates and <out>/<name>.html with a report: color clusters (sRGB, and the linear values that
-Unreal stores) with their uses and the theme token they match, near duplicates, the type scale, corner radii, line widths, spacing and
-how much of it fits a 4 and an 8 unit grid, fixed sizes and textures. Values that code or Blueprint graphs set at runtime are not in the
-Widget Blueprints; only their placeholders are.
+<out>/<name>.json with the token candidates and <out>/<name>.html with a report: which widgets use styles of the theme and which still
+carry their own values, color clusters (sRGB, and the linear values that Unreal stores) with their uses and the theme token they match,
+near duplicates, the type scale, corner radii, line widths, spacing and how much of it fits a 4 and an 8 unit grid, fixed sizes and
+textures. A widget with a Style property counts as styled, and its own look values are skipped as placeholders. Values that code or
+Blueprint graphs set at runtime are not in the Widget Blueprints.
 
 --url defaults to the AGENT_MCP_URL environment variable, then to http://127.0.0.1:18765/mcp. --out defaults to Saved/UiStyle of the
 current folder, which should be the project folder.
@@ -28,6 +29,11 @@ import urllib.request
 
 TEXT_CLASSES = {"TextBlock", "RichTextBlock", "EditableText", "EditableTextBox", "MultiLineEditableText", "MultiLineEditableTextBox",
                 "CommonTextBlock"}
+# Widget classes that draw a look of their own; they count as unstyled while they have no Style.
+VISUAL_CLASSES = TEXT_CLASSES | {"Border", "Image", "ProgressBar", "Button", "CommonBorder", "CheckBox", "Slider"}
+# Look values of a styled widget, which its style replaces when it is synchronized.
+STYLED_PROPERTIES = {"Background", "BrushColor", "Font", "ColorAndOpacity", "ShadowColorAndOpacity", "ShadowOffset", "WidgetStyle",
+                     "FillColorAndOpacity", "Padding", "Style", "Color"}
 SIZE_KEYS = ("WidthOverride", "HeightOverride", "MinDesiredWidth", "MinDesiredHeight", "MaxDesiredWidth", "MaxDesiredHeight")
 # Colors whose sRGB channels differ by at most SAME_COLOR and whose alpha differs by at most SAME_ALPHA count as one color.
 SAME_COLOR = 10
@@ -100,6 +106,10 @@ def is_color(value):
     return isinstance(value, dict) and all(isinstance(value.get(key), (int, float)) for key in ("r", "g", "b", "a"))
 
 
+def is_name(value):
+    return isinstance(value, str) and value not in ("", "None")
+
+
 def to_srgb(channel):
     channel = min(max(float(channel), 0.0), 1.0)
     return round(255 * (12.92 * channel if channel <= 0.0031308 else 1.055 * channel ** (1 / 2.4) - 0.055))
@@ -134,6 +144,9 @@ class Record:
         self.spacing = collections.defaultdict(list)
         self.sizes = collections.defaultdict(list)
         self.textures = collections.defaultdict(list)
+        self.styles = collections.defaultdict(list)
+        self.color_tokens = collections.defaultdict(list)
+        self.unstyled = []
 
     def add_tree(self, blueprint, tree):
         short = blueprint.rsplit("/", 1)[-1].split(".")[0]
@@ -143,6 +156,13 @@ class Record:
             owner = f"{short}.{widget.get('name')}"
             class_name = widget.get("className") or ""
             properties = widget.get("properties") or {}
+            styled = is_name(properties.get("Style"))
+            if styled:
+                self.styles[(class_name, properties["Style"])].append(owner)
+                if is_name(properties.get("Color")):
+                    self.color_tokens[properties["Color"]].append(owner)
+            elif class_name in VISUAL_CLASSES:
+                self.unstyled.append(f"{owner} ({class_name})")
             for key in SIZE_KEYS:
                 if isinstance(properties.get(key), (int, float)) and properties.get("bOverride_" + key):
                     self.sizes[(key, properties[key])].append(owner)
@@ -152,7 +172,8 @@ class Record:
                     if isinstance(entry_spacing.get(axis), (int, float)) and entry_spacing[axis]:
                         self.spacing[entry_spacing[axis]].append(owner + ".EntrySpacing")
             for key, value in properties.items():
-                self.collect(value, [key], owner, class_name)
+                if not (styled and key in STYLED_PROPERTIES):
+                    self.collect(value, [key], owner, class_name)
             slot = widget.get("slot") or {}
             # A Border's Padding is its content slot's padding, which the parent already reports.
             if slot.get("className") != "BorderSlot":
@@ -206,6 +227,9 @@ class Record:
         outline = brush.get("outlineSettings") or {}
         width = outline.get("width") or 0
         line = (outline.get("color") or {}).get("specifiedColor")
+        if is_color(line) and is_color(tint) and outline.get("bUseBrushTransparency"):
+            # Slate then draws the line with the opacity of the fill, not with its own (the default of UMG buttons).
+            line = dict(line, a=tint["a"])
         if width > 0 and is_color(line) and line["a"] > 0:
             self.color(line, "line", owner, path + ["outline"])
             self.widths[width].append(where)
@@ -305,6 +329,7 @@ def summarize(record, project, path, theme_path, theme_values):
     def grid_share(step):
         return round(sum(len(uses) for value, uses in spacing_values if value % step == 0) / spacing_total, 2)
 
+    styled_count = sum(len(uses) for uses in record.styles.values())
     return {
         "generated": datetime.datetime.now().isoformat(timespec="seconds"),
         "project": project,
@@ -312,6 +337,12 @@ def summarize(record, project, path, theme_path, theme_values):
         "theme": theme_path,
         "widgetBlueprints": record.blueprints,
         "widgetCount": record.widget_count,
+        "styledCount": styled_count,
+        "styles": [{"class": class_name, "style": style, "count": len(uses), "usedIn": sorted(set(uses))}
+                   for (class_name, style), uses in sorted(record.styles.items(), key=lambda item: (item[0][0], -len(item[1]), item[0][1]))],
+        "colorTokens": [{"token": token, "count": len(uses), "usedIn": sorted(set(uses))}
+                        for token, uses in sorted(record.color_tokens.items(), key=lambda item: -len(item[1]))],
+        "unstyled": sorted(record.unstyled),
         "colors": colors,
         "themeColors": tokens,
         "fonts": [{"family": family, "typeface": typeface, "size": size, "count": len(uses), "usedIn": sorted(set(uses))}
@@ -382,6 +413,11 @@ def render(summary):
     theme_rows = [f"<tr><td>{swatch(token['hex'], token['alpha'])}</td><td><b>{html.escape(token['name'])}</b></td><td>{token['hex']} "
                   f"alpha {token['alpha']:.2f}</td><td class='muted'>linear {', '.join(f'{v:.3f}' for v in token['linear'])}</td></tr>"
                   for token in summary["themeColors"]]
+    style_rows = [f"<tr><td>{html.escape(style['class'])}</td><td><b>{html.escape(style['style'])}</b></td><td>{style['count']}</td>"
+                  f"<td>{use_list(style['usedIn'])}</td></tr>" for style in summary["styles"]]
+    token_rows = [f"<tr><td><b>{html.escape(token['token'])}</b></td><td>{token['count']}</td><td>{use_list(token['usedIn'])}</td></tr>"
+                  for token in summary["colorTokens"]]
+    unstyled = "".join(f"<li>{html.escape(item)}</li>" for item in summary["unstyled"])
     font_rows = []
     for font in summary["fonts"]:
         weight = 700 if "bold" in font["typeface"].lower() else 400
@@ -399,25 +435,30 @@ def render(summary):
     size_rows = [f"<tr><td>{html.escape(size['property'])}</td><td>{number_text(size['value'])}</td><td>{size['count']}</td>"
                  f"<td>{use_list(size['usedIn'])}</td></tr>" for size in summary["sizes"]]
     texture_rows = [f"<tr><td>{html.escape(texture['texture'])}</td><td>{use_list(texture['usedIn'])}</td></tr>" for texture in summary["textures"]]
+    empty = "<p class='muted'>None.</p>"
 
     return (f"<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>"
             f"<title>UI style of {html.escape(summary['path'])}</title><style>{STYLE}</style></head><body>"
             f"<h1>UI style used under {html.escape(summary['path'])}</h1>"
             f"<div class='muted'>{html.escape(str(summary['project']))} - {len(summary['widgetBlueprints'])} Widget Blueprints, "
             f"{summary['widgetCount']} widgets - theme {html.escape(summary['theme'] or 'not given')} - {summary['generated']}</div>"
-            f"<div class='summary'><span>{len(colors)} colors</span><span>{matched} in the theme</span><span>{len(colors) - matched} not in the theme</span>"
-            f"<span>{near} near duplicates</span><span>{len(summary['fonts'])} text styles</span>"
+            f"<div class='summary'><span>{summary['styledCount']} styled widgets</span><span>{len(summary['unstyled'])} unstyled</span>"
+            f"<span>{len(colors)} own colors</span><span>{matched} in the theme</span><span>{len(colors) - matched} not in the theme</span>"
+            f"<span>{near} near duplicates</span><span>{len(summary['fonts'])} own text styles</span>"
             f"<span>{int(spacing['grid4'] * 100)}% of spacing on a 4 grid, {int(spacing['grid8'] * 100)}% on 8</span></div>"
-            f"<p class='muted'>Values that code or Blueprint graphs set at runtime, such as colors read from the theme, are not in the Widget "
-            f"Blueprints; they show here only as the placeholders the widgets were built with.</p>"
-            f"<h2>Colors</h2>{table(['', 'Color', 'Uses', 'As', 'Theme token', 'Used in'], color_rows)}"
+            f"<p class='muted'>Styled widgets take their look from a style of the theme, so their own look values are skipped. Values that "
+            f"code or Blueprint graphs set at runtime are not in the Widget Blueprints; they show here only as placeholders.</p>"
+            f"<h2>Styles in use</h2>{table(['Class', 'Style', 'Uses', 'Used in'], style_rows) if style_rows else empty}"
+            f"<h2>Color tokens of styled widgets</h2>{table(['Token', 'Uses', 'Used in'], token_rows) if token_rows else empty}"
+            f"<h2>Unstyled widgets with a look of their own</h2>{('<ul class=uses>' + unstyled + '</ul>') if unstyled else empty}"
+            f"<h2>Own colors</h2>{table(['', 'Color', 'Uses', 'As', 'Theme token', 'Used in'], color_rows) if color_rows else empty}"
             f"<h2>Theme tokens</h2>{table(['', 'Token', 'sRGB', 'Linear'], theme_rows) if theme_rows else '<p class=muted>No theme was read.</p>'}"
-            f"<h2>Text styles</h2>{table(['Font', 'Size', 'Uses', 'Sample', 'Used in'], font_rows)}"
-            f"<h2>Shapes</h2>{table(['', 'Value', 'Uses', 'Used in'], shape_rows)}"
+            f"<h2>Own text styles</h2>{table(['Font', 'Size', 'Uses', 'Sample', 'Used in'], font_rows) if font_rows else empty}"
+            f"<h2>Shapes</h2>{table(['', 'Value', 'Uses', 'Used in'], shape_rows) if shape_rows else empty}"
             f"<h2>Spacing</h2><p>{spacing_values}</p>"
             f"{table(['Not on a 4 grid', 'Used in'], [off_grid]) if off_grid else ''}"
-            f"<h2>Fixed sizes</h2>{table(['Property', 'Value', 'Uses', 'Used in'], size_rows)}"
-            f"<h2>Textures</h2>{table(['Texture', 'Used in'], texture_rows) if texture_rows else '<p class=muted>None.</p>'}"
+            f"<h2>Fixed sizes</h2>{table(['Property', 'Value', 'Uses', 'Used in'], size_rows) if size_rows else empty}"
+            f"<h2>Textures</h2>{table(['Texture', 'Used in'], texture_rows) if texture_rows else empty}"
             f"</body></html>\n")
 
 
@@ -470,11 +511,13 @@ def main():
     colors = summary["colors"]
     matched = sum(1 for color in colors if color["theme"])
     print(f"{project}: {len(paths)} Widget Blueprints, {record.widget_count} widgets under {args.path}")
-    print(f"Colors: {len(colors)} from {len(record.colors)} uses; {matched} match theme tokens, {len(colors) - matched} do not, "
+    print(f"Styled: {summary['styledCount']} widgets use {len(summary['styles'])} theme styles; {len(summary['unstyled'])} widgets with a "
+          f"look of their own have no style")
+    print(f"Own colors: {len(colors)} from {len(record.colors)} uses; {matched} match theme tokens, {len(colors) - matched} do not, "
           f"{sum(1 for color in colors if color['nearDuplicateOf'])} near duplicates")
-    print("Text styles: " + ", ".join(f"{font['typeface']} {number_text(font['size'] or 0)} x{font['count']}" for font in summary["fonts"]))
-    print("Corner radii: " + ", ".join(f"{radius['value']} x{radius['count']}" for radius in summary["radii"])
-          + " | line widths: " + ", ".join(f"{number_text(width['value'])} x{width['count']}" for width in summary["lineWidths"]))
+    print("Own text styles: " + (", ".join(f"{font['typeface']} {number_text(font['size'] or 0)} x{font['count']}" for font in summary["fonts"]) or "none"))
+    print("Corner radii: " + (", ".join(f"{radius['value']} x{radius['count']}" for radius in summary["radii"]) or "none")
+          + " | line widths: " + (", ".join(f"{number_text(width['value'])} x{width['count']}" for width in summary["lineWidths"]) or "none"))
     print(f"Spacing: {len(summary['spacing']['values'])} values, {int(summary['spacing']['grid4'] * 100)}% on a 4 grid, "
           f"{int(summary['spacing']['grid8'] * 100)}% on an 8 grid")
     print(f"Report: {os.path.join(out, name + '.html')}")

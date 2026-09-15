@@ -69,6 +69,8 @@ Theme Data Asset
 
 The [Dungeon UI case study](Docs/Samples/DungeonUi.md) records the rejected versions, the problems they revealed, and how those findings changed both the sample and the plugin workflow.
 
+Its look is a small design system: color and radius tokens and named box, text, bar and button styles in a theme data asset, styled widgets that store only a style name, and a kit gallery that shows every token and component. [UI style system](Docs/UiStyleSystem.md) describes how an agent extracts, applies and checks a style with the scripts of the `ui-style-system` skill.
+
 ## Documentation
 
 - [Installation](#installation)
@@ -282,9 +284,10 @@ The repository root is a small Unreal Engine 5.5 project that builds and tests t
 | `Source/AgentMcpTestbedEditor` | Test-only tools and `sample_show_widget` |
 | `Content/Samples/DungeonUi` | Widget Blueprints, theme data asset and item table built through the tools |
 | `Art/Requests` | Art requests for the sample |
-| `Docs` | Case studies and experiments |
+| `Docs` | Case studies, the UI style system of the sample, and experiments |
 | `.mcp.json`, `.codex/config.toml` | Claude Code and Codex connection settings for testbed port 18766 |
 | `.claude/skills`, `.agents/skills` | Bridges that let clients begin the served plugin skills |
+| `Config` | Testbed port **18766**, the smoke test's skill folder in `SkillDirectories`, and the UI sample's theme in `DefaultGame.ini` |
 | `Tools/mcp_smoke.py` | Smoke test using Python 3 standard library only |
 | `Tools/mcp_call.py` | Calls one tool from the command line |
 
@@ -309,7 +312,7 @@ python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --exp
 - Responses are plain JSON. There is no SSE or progress streaming.
 - Requests execute on the editor game thread. **Use Less CPU when in Background** can make calls noticeably slower when the editor is unfocused.
 - `livecoding_compile` blocks until compilation completes, and Live Coding cannot apply reflected declaration changes to `UCLASS`, `USTRUCT`, `UPROPERTY` or `UFUNCTION`.
-- Blueprint graphs and class defaults, widget animations and designer property bindings can be inspected but not edited, and widgets cannot yet be moved to a different parent.
+- Blueprint graphs and class defaults, widget animations and designer property bindings can be inspected but not edited, and widgets cannot yet be moved to a different parent or changed to another class; the UI sample rebuilt subtrees instead.
 - `ToolSearch` exposure mode and source-control handling on save have not yet been tested.
 
 ## Background
