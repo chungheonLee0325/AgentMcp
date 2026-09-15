@@ -8,9 +8,10 @@ The request format is described in the ui-art-requests skill. Delivered images a
 project folder, which is the folder that contains Art/Requests unless --project says otherwise. The sheet is one HTML file with the
 images embedded, written to Saved/ArtReview/<feature>.html of the project by default.
 
-Checks of the request: a known status, a unique id and target, a size, and a 9-slice border that leaves a middle to stretch. Checks of
-each image: a PNG of the requested size, an alpha channel when the item is transparent, the requested padding around an icon, and a
-record <id>.json next to it.
+Checks of the request: a known status, a unique id and target, a size, a 9-slice border that leaves a middle to stretch, and an inset
+of four values. Checks of each image: a PNG of the requested size, an alpha channel when the item is transparent, the requested
+padding around an icon, a 9-slice border that reaches the image edge and ends inside the 9-slice border and the inset, and a record
+<id>.json next to it. Slate draws 9-slice margins at the texture's pixel size, so pixels of the border are Slate units in the widget.
 
 Exit code: 1 when the request has an error or an item marked delivered, imported or approved has an image error, 2 when the request
 cannot be read, otherwise 0.
@@ -28,9 +29,11 @@ import zlib
 
 STATUSES = ["requested", "delivered", "imported", "approved", "revise"]
 DELIVERED = ("delivered", "imported", "approved")
-USAGES = ["icon", "frame", "panel", "decoration", "background"]
+USAGES = ["icon", "frame", "panel", "divider", "ornament", "decoration", "background"]
 ID_CHARACTERS = set("abcdefghijklmnopqrstuvwxyz0123456789_")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+# Pixels with this alpha or less count as transparent when the edges of an image are measured, so that faint noise does not count.
+VISIBLE_ALPHA = 8
 
 
 def png_chunks(data):
@@ -52,19 +55,21 @@ def paeth(left, up, up_left):
     return up if distance_up <= distance_up_left else up_left
 
 
-def rgba_alpha_bounds(data, width, height):
-    """Bounds (left, top, right, bottom) of the pixels with alpha > 0 of an 8-bit RGBA PNG, or None when every pixel is transparent."""
+def rgba_alphas(data, width, height):
+    """Alpha values, row by row, of an 8-bit RGBA PNG without interlacing."""
     compressed = b"".join(payload for kind, payload in png_chunks(data) if kind == b"IDAT")
     raw = zlib.decompress(compressed)
     stride = width * 4
     previous = bytearray(stride)
-    left, top, right, bottom = width, height, -1, -1
+    alphas = bytearray(width * height)
     offset = 0
     for y in range(height):
         filter_type = raw[offset]
         if filter_type > 4:
             raise ValueError(f"unknown PNG filter {filter_type}")
         line = bytearray(raw[offset + 1:offset + 1 + stride])
+        if len(line) < stride:
+            raise ValueError("the image data is truncated")
         offset += 1 + stride
         for x in range(stride):
             a = line[x - 4] if x >= 4 else 0
@@ -78,12 +83,34 @@ def rgba_alpha_bounds(data, width, height):
                 line[x] = (line[x] + ((a + b) >> 1)) & 0xFF
             elif filter_type == 4:
                 line[x] = (line[x] + paeth(a, b, c)) & 0xFF
-        for x in range(width):
-            if line[x * 4 + 3]:
-                left, right = min(left, x), max(right, x)
-                top, bottom = min(top, y), max(bottom, y)
+        alphas[y * width:(y + 1) * width] = line[3::4]
         previous = line
+    return alphas
+
+
+def alpha_bounds(alphas, width, height, threshold=0):
+    """Inclusive bounds (left, top, right, bottom) of the pixels with alpha above threshold, or None when there are none."""
+    left, top, right, bottom = width, height, -1, -1
+    for y in range(height):
+        row = alphas[y * width:(y + 1) * width]
+        if max(row) <= threshold:
+            continue
+        first = next(x for x, alpha in enumerate(row) if alpha > threshold)
+        last = width - 1 - next(x for x, alpha in enumerate(reversed(row)) if alpha > threshold)
+        left, right = min(left, first), max(right, last)
+        top, bottom = min(top, y), y
     return None if right < 0 else (left, top, right, bottom)
+
+
+def band_depth(values):
+    """Pixels from the start of values to the end of its first visible run, or None when that run does not end before the middle."""
+    seen = False
+    for index, value in enumerate(values[:len(values) // 2]):
+        if value > VISIBLE_ALPHA:
+            seen = True
+        elif seen:
+            return index
+    return None
 
 
 def items_text(count):
@@ -97,6 +124,42 @@ def is_pixels(value, minimum=0):
 def valid_size(item):
     size = item.get("size")
     return size if isinstance(size, list) and len(size) == 2 and all(is_pixels(value, 1) for value in size) else None
+
+
+def valid_sides(value):
+    return isinstance(value, list) and len(value) == 4 and all(is_pixels(side) for side in value)
+
+
+def joined(values):
+    return "/".join("-" if value is None else str(value) for value in values)
+
+
+def check_nine_slice(item, alphas, width, height):
+    """Problems of the edges of a 9-slice image, whose border pixels are Slate units inside the widget."""
+    problems = []
+    visible = alpha_bounds(alphas, width, height, VISIBLE_ALPHA)
+    if visible is None:
+        return problems
+    padding = item.get("padding") if is_pixels(item.get("padding")) else 0
+    left, top, right, bottom = visible
+    margins = [left, top, width - 1 - right, height - 1 - bottom]
+    if max(margins) > padding + 2:
+        problems.append(("error", f"{joined(margins)} px (left/top/right/bottom) are transparent outside the border, and Slate draws "
+                                  "them as empty space inside the widget; fit the image with art_fit.py or make it without that margin"))
+    if alphas[(height // 2) * width + width // 2] > VISIBLE_ALPHA:
+        return problems
+    row = alphas[(height // 2) * width:(height // 2 + 1) * width]
+    column = bytes(alphas[y * width + width // 2] for y in range(height))
+    depths = [band_depth(row), band_depth(column), band_depth(row[::-1]), band_depth(column[::-1])]
+    nine_slice = item["nineSlice"]
+    if any(depth is not None and depth > border for depth, border in zip(depths, nine_slice)):
+        problems.append(("warning", f"the border ornament reaches {joined(depths)} px (left/top/right/bottom), past the 9-slice border of "
+                                    f"{joined(nine_slice)} px, so its inner part stretches"))
+    inset = item.get("inset")
+    if valid_sides(inset) and any(depth is not None and depth > limit for depth, limit in zip(depths, inset)):
+        problems.append(("error", f"the border reaches {joined(depths)} units into the widget (left/top/right/bottom), past its inset of "
+                                  f"{joined(inset)}, so it covers the content"))
+    return problems
 
 
 def inspect_image(path, item):
@@ -118,13 +181,14 @@ def inspect_image(path, item):
         problems.append(("error", "the image has no alpha channel, but the item is transparent"))
         return problems
     if color_type != 6 or bit_depth != 8 or interlace != 0:
-        problems.append(("note", "transparency and padding were not measured (only 8-bit RGBA PNG files without interlacing are)"))
+        problems.append(("note", "transparency, padding and borders were not measured (only 8-bit RGBA PNG files without interlacing are)"))
         return problems
     try:
-        bounds = rgba_alpha_bounds(data, width, height)
+        alphas = rgba_alphas(data, width, height)
     except (zlib.error, IndexError, ValueError):
         problems.append(("error", "the image data is damaged"))
         return problems
+    bounds = alpha_bounds(alphas, width, height)
     if bounds is None:
         problems.append(("error", "every pixel is transparent"))
         return problems
@@ -134,6 +198,8 @@ def inspect_image(path, item):
         margin = min(left, top, width - 1 - right, height - 1 - bottom)
         if margin < padding:
             problems.append(("warning", f"the content comes within {margin} px of the edge; the request asks for {padding} px of padding"))
+    if valid_sides(item.get("nineSlice")):
+        problems.extend(check_nine_slice(item, alphas, width, height))
     return problems
 
 
@@ -176,10 +242,16 @@ def check_request_item(item, seen_ids, seen_targets):
     nine_slice = item.get("nineSlice")
     size = valid_size(item)
     if nine_slice is not None:
-        if not (isinstance(nine_slice, list) and len(nine_slice) == 4 and all(is_pixels(value) for value in nine_slice)):
+        if not valid_sides(nine_slice):
             problems.append(("error", "nineSlice must be [left, top, right, bottom] in whole pixels"))
         elif size and (nine_slice[0] + nine_slice[2] >= size[0] or nine_slice[1] + nine_slice[3] >= size[1]):
             problems.append(("error", "the 9-slice border leaves no middle to stretch"))
+        else:
+            problems.append(("note", f"Slate draws this border {joined(nine_slice)} units wide (left/top/right/bottom): 9-slice margins "
+                                     "use the texture's pixel size, not ImageSize"))
+    inset = item.get("inset")
+    if inset is not None and not valid_sides(inset):
+        problems.append(("error", "inset must be [left, top, right, bottom] in whole Slate units"))
     return problems
 
 
@@ -267,7 +339,7 @@ def render_item(item, image, problems):
     item_id = html.escape(str(item.get("id") or "(no id)"))
     status = html.escape(str(item.get("status") or ""))
     rows = []
-    for field in ("usage", "subject", "size", "transparent", "padding", "nineSlice", "target", "usedBy"):
+    for field in ("usage", "subject", "size", "transparent", "padding", "nineSlice", "inset", "target", "usedBy"):
         if field in item:
             value = item[field]
             if field == "size" and isinstance(value, list):
@@ -285,13 +357,13 @@ def render_item(item, image, problems):
         parts = [f'<figure><img class="checker" src="{uri}" alt=""><figcaption>actual size</figcaption></figure>',
                  f'<figure class="panel"><img src="{uri}" alt=""><figcaption>on the panel color</figcaption></figure>']
         nine_slice = item.get("nineSlice")
-        if size and isinstance(nine_slice, list) and len(nine_slice) == 4 and all(is_pixels(value) for value in nine_slice):
+        if size and valid_sides(nine_slice):
             left, top, right, bottom = nine_slice
             width = max(round(size[0] * 1.6), left + right + 16)
             height = max(round(size[1] * 0.8), top + bottom + 16)
             parts.append(f'<figure class="panel"><div class="stretch" style="width:{width}px;height:{height}px;border-style:solid;'
                          f'border-width:{top}px {right}px {bottom}px {left}px;border-image:url({uri}) {top} {right} {bottom} {left} fill stretch;"></div>'
-                         f'<figcaption>9-slice stretched to {width}x{height}</figcaption></figure>')
+                         f'<figcaption>9-slice stretched to {width}x{height}, borders as Slate draws them</figcaption></figure>')
         previews = '<div class="previews">' + "".join(parts) + "</div>"
 
     checks = list(problems)

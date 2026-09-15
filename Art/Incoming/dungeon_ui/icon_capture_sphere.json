@@ -1,0 +1,13 @@
+{
+  "maker": "ChatGPT image generation in a chat session that was given only the review sheet HTML",
+  "model": "not recorded",
+  "answer": "first answer of the chat",
+  "source": "A:/A_Workspace/Test/Test2/test2_6.png",
+  "sourceSize": [
+    1254,
+    1254
+  ],
+  "fit": "art_fit.py cropped to 804x949 at 225,153, scaled to 94x112 and centered with 8 px padding",
+  "note": "the second answer looks close to a well-known capture ball design",
+  "date": "2026-09-15"
+}

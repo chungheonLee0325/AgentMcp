@@ -24,8 +24,11 @@ Write a short plan first and keep it in the conversation:
   rarity colors) and keep them in one theme data asset that the widgets read, so that a style change needs no build.
 - **Content data.** Values that differ per item (names, icons, rarity) live in a DataTable; components reference a row instead of
   copying its values.
-- **Art.** Images the screen needs but the project does not have yet (item icons, frames, panels) go into an art request; see the
-  `ui-art-requests` skill. Until they arrive, components draw a fallback such as a brush shape.
+- **Decoration.** Panels, section dividers, corner ornaments and title plates come from the project's UI kit in
+  `Art/Style/ui_style.md` (see the `ui-art-requests` skill), not from decoration made for one screen. Lines, dividers, outlines and
+  small diamonds are brushes with theme colors; only icons, emblems and ornate pieces need textures.
+- **Art.** Images the screen needs but the project does not have yet (item icons, emblems, kit textures) go into an art request; see
+  the `ui-art-requests` skill. Until they arrive, components draw a fallback such as a brush shape.
 - **Motion.** Decide for each animated element whether it is simple motion in code or a timeline animation (section 4).
 - **What already exists.** Look before creating: `asset_find` for Widget Blueprints and style assets, `class_find_derived` on
   `UserWidget` for C++ bases, `umg_inspect` on similar screens. Follow the project's conventions (folders, prefixes, CommonUI)
@@ -42,6 +45,9 @@ Write a short plan first and keep it in the conversation:
     in the Widget Blueprint so that designers can still change them.
   - Textures are soft references in the data, loaded when the component applies its inputs. While one is missing, the component
     draws its fallback, so the screen works before the art exists.
+- **Layers for frames.** A `Border` whose brush is a texture draws only that texture, so a frame image would also remove the fill of
+  that brush. Build a framed element as an `Overlay`: a fill `Border` that holds the content, and on top a frame `Border`
+  (`HitTestInvisible`) whose brush the code or the theme sets. The border of a frame image ends inside the fill's padding.
 - **Build the component once:** `umg_create_widget_blueprint` with `parentClass`, `umg_add_widgets` for its tree, then
   `blueprint_compile`. Fix every missing `BindWidget` before moving on.
 - **Place instances** in screens with an entry whose class is the component's generated class, and set its inputs as instance
@@ -82,6 +88,10 @@ Write a short plan first and keep it in the conversation:
 - `object_list_properties` on a class default object (`/Script/UMG.Default__TextBlock`, `/Script/UMG.Default__CanvasPanelSlot`)
   lists property names and types.
 - A `Border` holds one child; use a `SizeBox` for fixed sizes; `RoundedBox` brushes need no texture.
+- A 9-slice brush (`DrawAs` `Box`) draws its margins at the texture's pixel size, whatever `ImageSize` says: size the texture for
+  the border that should appear.
+- The tools cannot move a widget to another parent. To change the nesting, remove the subtree with `umg_remove_widgets` and add it
+  again with the same names, so that the `BindWidget` contracts stay bound.
 - `ProgressBar` multiplies its fill by `FillColorAndOpacity`, which defaults to blue; set it to white when the brush carries the
   color.
 - Writes are refused during Play In Editor; call `pie_stop` before editing. Nothing is saved until `asset_save`.
@@ -89,15 +99,17 @@ Write a short plan first and keep it in the conversation:
 ## 6. Review like a UI lead
 
 1. `blueprint_compile` every changed Widget Blueprint, components first.
-2. Look at it in a play session: `pie_start`, show the screen the way the project does (the Agent MCP testbed has
-   `sample_show_widget`), `viewport_capture`, `pie_stop`. Wait for intro animations to finish before capturing; when timing is the
-   point of a change, also capture at the moment that matters.
-3. Check the capture critically: text fits and is not clipped, alignment and spacing are consistent, colors match the tokens,
-   CJK glyphs render, nothing overlaps at the play viewport size, repeated elements look identical.
+2. Capture before and after. Before a change to layout, style or art, look at the screen in a play session: `pie_start`, show the
+   screen the way the project does (the Agent MCP testbed has `sample_show_widget`), `viewport_capture`, `pie_stop`. Capture it
+   again after the change at the same viewport size, and put the two side by side. Wait for intro animations to finish before
+   capturing; when timing is the point of a change, also capture at the moment that matters.
+3. Check the captures critically: content stays inside its panels and frames, nothing moved that should not, text fits and is not
+   clipped, alignment and spacing follow one grid, colors match the tokens, decoration follows the UI kit, CJK glyphs render,
+   nothing overlaps at the play viewport size, repeated elements look identical.
 4. Fix with `umg_set_widget_properties` on the component when the problem repeats, not on each instance.
 5. `asset_save` components and screens at the end.
 
 ## 7. Report
 
-Tell the user which components were created and where they are used, the inputs of each, the style tokens, what the capture
+Tell the user which components were created and where they are used, the inputs of each, the style tokens, what the captures
 showed, and anything left for a designer or for Blueprint graphs.

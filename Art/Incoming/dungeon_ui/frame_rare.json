@@ -1,0 +1,13 @@
+{
+  "maker": "ChatGPT image generation in a chat session that was given only the review sheet HTML",
+  "model": "not recorded",
+  "answer": "first answer of the chat",
+  "source": "A:/A_Workspace/Test/Test2/test2_2.png",
+  "sourceSize": [
+    1254,
+    1254
+  ],
+  "fit": "art_fit.py cropped to 1154x1123 at 50,64 and stretched to 64x64, so that its border reaches the edge",
+  "note": "border about 14 px of 128 with corner studs; the second answer is a 6 px line",
+  "date": "2026-09-15"
+}

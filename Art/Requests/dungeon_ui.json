@@ -1,8 +1,9 @@
 {
   "feature": "dungeon_ui",
   "description": "Item icons, rarity frames and the popup panel of the dungeon result sample (Content/Samples/DungeonUi). Until the images arrive, reward slots draw the fallback shapes of the item table, and common and uncommon slots keep their drawn outline.",
-  "style": "Bright fantasy creature-collecting game UI that fits Docs/Images/dungeon_result.jpg: clean readable silhouettes, a dark outline, soft two-tone shading, light from the top left, saturated colors that stand out on a dark navy interface. No text, logos or watermarks.",
-  "references": ["Docs/Images/dungeon_result.jpg"],
+  "style": "Follow the style frame in references and the draft UI kit in Art/Style/ui_style.md: dark translucent navy panels with thin cyan lines, gold only for rank and currency, painted icons with light from the top left. No text, logos or watermarks.",
+  "references": ["Art/Style/style_frame_dungeon_result.png", "Docs/Images/dungeon_result.jpg"],
+  "captures": ["Saved/MCP/Captures/Play_20260915_024755_689.png", "Saved/MCP/Captures/Play_20260915_093324_506.png"],
   "items": [
     {
       "id": "icon_golem_core",
@@ -13,7 +14,8 @@
       "padding": 8,
       "target": "/Game/Samples/DungeonUi/Textures/T_Icon_GolemCore",
       "usedBy": "/Game/Samples/DungeonUi/Data/DT_DungeonItems: row GolemCore, column Icon",
-      "status": "requested"
+      "status": "revise",
+      "feedback": "Style: the icons were made one at a time, and their rendering differs from each other and from the UI. Remake the set in one batch with the style frame and Art/Style/ui_style.md once the kit is approved."
     },
     {
       "id": "icon_ancient_parts",
@@ -24,7 +26,8 @@
       "padding": 8,
       "target": "/Game/Samples/DungeonUi/Textures/T_Icon_AncientParts",
       "usedBy": "/Game/Samples/DungeonUi/Data/DT_DungeonItems: row AncientParts, column Icon",
-      "status": "requested"
+      "status": "revise",
+      "feedback": "Style: the icons were made one at a time, and their rendering differs from each other and from the UI. Remake the set in one batch with the style frame and Art/Style/ui_style.md once the kit is approved."
     },
     {
       "id": "icon_pure_quartz",
@@ -35,7 +38,8 @@
       "padding": 8,
       "target": "/Game/Samples/DungeonUi/Textures/T_Icon_PureQuartz",
       "usedBy": "/Game/Samples/DungeonUi/Data/DT_DungeonItems: row PureQuartz, column Icon",
-      "status": "requested"
+      "status": "revise",
+      "feedback": "Style: the icons were made one at a time, and their rendering differs from each other and from the UI. Remake the set in one batch with the style frame and Art/Style/ui_style.md once the kit is approved."
     },
     {
       "id": "icon_capture_sphere",
@@ -46,7 +50,8 @@
       "padding": 8,
       "target": "/Game/Samples/DungeonUi/Textures/T_Icon_CaptureSphere",
       "usedBy": "/Game/Samples/DungeonUi/Data/DT_DungeonItems: row CaptureSphere, column Icon",
-      "status": "requested"
+      "status": "revise",
+      "feedback": "Style: the icons were made one at a time, and their rendering differs from each other and from the UI. Remake the set in one batch with the style frame and Art/Style/ui_style.md once the kit is approved."
     },
     {
       "id": "icon_gold_coins",
@@ -57,40 +62,47 @@
       "padding": 8,
       "target": "/Game/Samples/DungeonUi/Textures/T_Icon_GoldCoins",
       "usedBy": "/Game/Samples/DungeonUi/Data/DT_DungeonItems: row GoldCoins, column Icon",
-      "status": "requested"
+      "status": "revise",
+      "feedback": "Style: the icons were made one at a time, and their rendering differs from each other and from the UI. Remake the set in one batch with the style frame and Art/Style/ui_style.md once the kit is approved."
     },
     {
       "id": "frame_rare",
       "usage": "frame",
       "subject": "Reward slot frame for rare items: blue metal border with small studs in the corners and a transparent middle",
-      "size": [128, 128],
+      "size": [64, 64],
       "transparent": true,
-      "nineSlice": [24, 24, 24, 24],
+      "nineSlice": [12, 12, 12, 12],
+      "inset": [8, 10, 8, 10],
       "target": "/Game/Samples/DungeonUi/Textures/T_Frame_Rare",
-      "usedBy": "/Game/Samples/DungeonUi/Data/DA_DungeonUiTheme: property Rare.Frame (DrawAs Box, Margin 0.1875, ImageSize 64x64)",
-      "status": "requested"
+      "usedBy": "/Game/Samples/DungeonUi/Data/DA_DungeonUiTheme: property Rare.Frame (DrawAs Box, Margin 0.1875), drawn by the Frame border of WBP_RewardSlot over its Fill border",
+      "status": "revise",
+      "feedback": "Layout: Slate draws 9-slice margins at the texture's pixel size, so the 128 px frame drew a 24 unit border over the slot content; the request is now 64 px with a 12 px border that starts at the image edge and ends inside the 8/10 unit inset. Style: it does not match the icons or the sample UI. The draft kit in Art/Style/ui_style.md draws slot frames with brushes, so this item goes away if the kit is approved."
     },
     {
       "id": "frame_epic",
       "usage": "frame",
       "subject": "Reward slot frame for epic items: violet metal border with engraved corners and a transparent middle",
-      "size": [128, 128],
+      "size": [64, 64],
       "transparent": true,
-      "nineSlice": [24, 24, 24, 24],
+      "nineSlice": [12, 12, 12, 12],
+      "inset": [8, 10, 8, 10],
       "target": "/Game/Samples/DungeonUi/Textures/T_Frame_Epic",
-      "usedBy": "/Game/Samples/DungeonUi/Data/DA_DungeonUiTheme: property Epic.Frame (DrawAs Box, Margin 0.1875, ImageSize 64x64)",
-      "status": "requested"
+      "usedBy": "/Game/Samples/DungeonUi/Data/DA_DungeonUiTheme: property Epic.Frame (DrawAs Box, Margin 0.1875), drawn by the Frame border of WBP_RewardSlot over its Fill border",
+      "status": "revise",
+      "feedback": "Layout: Slate draws 9-slice margins at the texture's pixel size, so the 128 px frame drew a 24 unit border over the slot content; the request is now 64 px with a 12 px border that starts at the image edge and ends inside the 8/10 unit inset. Style: it does not match the icons or the sample UI. The draft kit in Art/Style/ui_style.md draws slot frames with brushes, so this item goes away if the kit is approved."
     },
     {
       "id": "frame_legendary",
       "usage": "frame",
       "subject": "Reward slot frame for legendary items: ornate gold border with a small gem in each corner and a transparent middle",
-      "size": [128, 128],
+      "size": [64, 64],
       "transparent": true,
-      "nineSlice": [24, 24, 24, 24],
+      "nineSlice": [12, 12, 12, 12],
+      "inset": [8, 10, 8, 10],
       "target": "/Game/Samples/DungeonUi/Textures/T_Frame_Legendary",
-      "usedBy": "/Game/Samples/DungeonUi/Data/DA_DungeonUiTheme: property Legendary.Frame (DrawAs Box, Margin 0.1875, ImageSize 64x64)",
-      "status": "requested"
+      "usedBy": "/Game/Samples/DungeonUi/Data/DA_DungeonUiTheme: property Legendary.Frame (DrawAs Box, Margin 0.1875), drawn by the Frame border of WBP_RewardSlot over its Fill border",
+      "status": "revise",
+      "feedback": "Layout: Slate draws 9-slice margins at the texture's pixel size, so the 128 px frame drew a 24 unit border over the slot content; the request is now 64 px with a 12 px border that starts at the image edge and ends inside the 8/10 unit inset. Style: it does not match the icons or the sample UI. The draft kit in Art/Style/ui_style.md draws slot frames with brushes, so this item goes away if the kit is approved."
     },
     {
       "id": "panel_result_card",
@@ -99,9 +111,11 @@
       "size": [512, 512],
       "transparent": true,
       "nineSlice": [64, 64, 64, 64],
+      "inset": [34, 28, 34, 30],
       "target": "/Game/Samples/DungeonUi/Textures/T_Panel_ResultCard",
-      "usedBy": "/Game/Samples/DungeonUi/WBP_DungeonResult: widget Card, property Background (DrawAs Box, Margin 0.125, ImageSize 256x256)",
-      "status": "requested"
+      "usedBy": "/Game/Samples/DungeonUi/WBP_DungeonResult: widget Card, property Background (DrawAs Box, Margin 0.125, TintColor white)",
+      "status": "revise",
+      "feedback": "Layout: its 43-48 px transparent margin was drawn inside the card, so the title, tiles and buttons overflowed the visible panel; the image must reach its edges. Style: it does not match the sample UI. The draft kit in Art/Style/ui_style.md draws panels with brushes, so this item goes away if the kit is approved."
     }
   ]
 }

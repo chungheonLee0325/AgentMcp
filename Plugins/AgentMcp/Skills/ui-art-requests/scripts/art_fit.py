@@ -5,9 +5,12 @@ Usage:
   python art_fit.py SOURCE.png Art/Requests/<feature>.json ITEM_ID [--project FOLDER] [--out FILE]
 
 Writes Art/Incoming/<feature>/<id>.png of the project, an 8-bit RGBA PNG of exactly the size of the item:
+- A 9-slice item (a frame or panel) is cropped to its visible pixels and stretched to the size, less its padding when it has one, so
+  that its border reaches the edge of the widget. Slate draws 9-slice margins at the texture's pixel size, so a transparent margin
+  in the image becomes empty space inside the widget.
 - An item with padding, such as an icon, is cropped to its visible pixels, scaled to fit inside the size less the padding on every
   side, and centered on a transparent canvas.
-- Any other item is scaled as a whole to the size, so that a 9-slice border keeps its place.
+- Any other item is scaled as a whole to the size.
 
 Reductions average the covered source pixels and enlargements interpolate linearly, both with premultiplied alpha, so that the colors
 of transparent pixels leave no fringe. Reads 8-bit PNG files without interlacing: gray, RGB, palette, gray with alpha and RGBA.
@@ -27,7 +30,7 @@ from array import array
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 CHANNELS = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}
-# Pixels with this alpha or less do not count as content when an icon is cropped, so that faint noise does not shift it.
+# Pixels with this alpha or less do not count as content when an image is cropped, so that faint noise does not shift it.
 VISIBLE_ALPHA = 8
 
 
@@ -263,6 +266,9 @@ def main():
     if padded and (2 * padding >= target_width or 2 * padding >= target_height):
         print(f"The padding of the item {args.item} leaves no room in {target_width}x{target_height}.", file=sys.stderr)
         return 2
+    nine_slice = item.get("nineSlice")
+    sliced = isinstance(nine_slice, list) and len(nine_slice) == 4 and all(
+        isinstance(value, (int, float)) and not isinstance(value, bool) for value in nine_slice)
 
     feature = str(request.get("feature") or os.path.splitext(os.path.basename(request_path))[0])
     project = os.path.abspath(args.project) if args.project else os.path.dirname(os.path.dirname(os.path.dirname(request_path)))
@@ -279,18 +285,33 @@ def main():
         return 1
 
     notes = []
-    if padded:
+    if sliced or padded:
         box = visible_bounds(rgba, width, height)
         if box is None:
             print(f"Cannot fit {args.source}: it has no visible pixels.", file=sys.stderr)
             return 1
         left, top, right, bottom = box
+        content_width, content_height = right - left, bottom - top
+    if sliced:
+        margin = padding if padded else 0
+        fitted_width, fitted_height = target_width - 2 * margin, target_height - 2 * margin
+        offset_x = offset_y = margin
+        done = (f"cropped to {content_width}x{content_height} at {left},{top} and stretched to {fitted_width}x{fitted_height}"
+                + (f" inside {margin} px padding" if margin else ", so that its border reaches the edge"))
+        enlarged = max(fitted_width / content_width, fitted_height / content_height)
+        if abs((content_width / content_height) / (fitted_width / fitted_height) - 1) > 0.02:
+            notes.append(f"the proportions change from {content_width}x{content_height} to {fitted_width}x{fitted_height}")
+        scale_x, scale_y = content_width / fitted_width, content_height / fitted_height
+        source_border = [round(max(0, nine_slice[0] - margin) * scale_x), round(max(0, nine_slice[1] - margin) * scale_y),
+                         round(max(0, nine_slice[2] - margin) * scale_x), round(max(0, nine_slice[3] - margin) * scale_y)]
+        notes.append(f"the 9-slice border {nine_slice} is {source_border} px of the cropped source; its ornament must end inside it")
+    elif padded:
         room_width, room_height = target_width - 2 * padding, target_height - 2 * padding
-        scale = min(room_width / (right - left), room_height / (bottom - top))
-        fitted_width = max(1, min(room_width, math.floor((right - left) * scale + 1e-6)))
-        fitted_height = max(1, min(room_height, math.floor((bottom - top) * scale + 1e-6)))
+        scale = min(room_width / content_width, room_height / content_height)
+        fitted_width = max(1, min(room_width, math.floor(content_width * scale + 1e-6)))
+        fitted_height = max(1, min(room_height, math.floor(content_height * scale + 1e-6)))
         offset_x, offset_y = (target_width - fitted_width) // 2, (target_height - fitted_height) // 2
-        done = (f"cropped to {right - left}x{bottom - top} at {left},{top}, scaled to {fitted_width}x{fitted_height} "
+        done = (f"cropped to {content_width}x{content_height} at {left},{top}, scaled to {fitted_width}x{fitted_height} "
                 f"and centered with {padding} px padding")
         enlarged = scale
     else:
@@ -300,11 +321,6 @@ def main():
         enlarged = max(target_width / width, target_height / height)
         if abs((width / height) / (target_width / target_height) - 1) > 0.01:
             notes.append(f"the proportions change from {width}x{height} to {target_width}x{target_height}")
-        nine_slice = item.get("nineSlice")
-        if isinstance(nine_slice, list) and len(nine_slice) == 4 and all(isinstance(value, (int, float)) for value in nine_slice):
-            source_border = [round(nine_slice[0] * width / target_width), round(nine_slice[1] * height / target_height),
-                             round(nine_slice[2] * width / target_width), round(nine_slice[3] * height / target_height)]
-            notes.append(f"the 9-slice border {nine_slice} is {source_border} px of the source; its ornament must end inside it")
     if enlarged > 1.01:
         notes.append(f"the image is enlarged {enlarged:.2f} times and may look soft; a larger source is better")
 
