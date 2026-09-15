@@ -152,7 +152,8 @@ only a text style each look fine and do not belong together.
      `{"object": "/Game/UI/Data/DA_UiTheme.DA_UiTheme", "values": {"Epic": {"Frame": {"ResourceObject": "<texture object path>", "DrawAs": "Box", "Margin": {"Left": 0.1875, "Top": 0.1875, "Right": 0.1875, "Bottom": 0.1875}, "TintColor": {"SpecifiedColor": {"R": 1, "G": 1, "B": 1, "A": 1}}}}}}`.
      `Margin` is the `nineSlice` pixels divided by the width or height. Set `TintColor` to white when the brush had a tint.
    - a widget property with `umg_set_widget_properties`, then `blueprint_compile`
-5. Capture the screen again at the same viewport size and put both captures side by side before judging any image. Every panel and
+5. Capture the screen again at the same viewport size and compare both captures before judging any image, with
+   `scripts/capture_compare.py` of the `ui-style-system` skill. Every panel and
    frame still surrounds its content, nothing moved or overlaps, and the new images agree with the style frame and with each other
    (line weight, palette, light, level of detail). Then look at sharpness at play resolution, alpha edges and stretched borders. Put
    both capture paths into `captures`.

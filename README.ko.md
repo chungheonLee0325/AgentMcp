@@ -136,7 +136,8 @@ datatable 도구로 채우고, `asset_import_textures`로 아이콘과 프레임
 
 도구는 받은 트리를 그대로 만듭니다. UI 팀이 만드는 방식(재사용하는 부품 위젯 블루프린트, 한곳에 모은 스타일 값, 데이터로 채우는
 목록, 캡처 검토)은 플러그인 스킬 `umg-authoring`에 있습니다. 이미지 모델이나 다른 에이전트, 아티스트에게 이미지를 요청하고 리뷰
-시트로 확인해 연결하는 방법은 `ui-art-requests`에 있습니다. [스킬](#스킬)을 참고하세요.
+시트로 확인해 연결하는 방법은 `ui-art-requests`에 있습니다. 위젯 블루프린트나 목업에서 프로젝트 스타일을 추출해 디자인 토큰과 키트
+갤러리로 두고 캡처 비교로 확인하는 방법은 `ui-style-system`에 있습니다. [스킬](#스킬)을 참고하세요.
 
 ## 스킬
 
@@ -152,7 +153,7 @@ Claude Code와 Codex가 자기 스킬에 쓰는 형식과 같습니다. 스킬�
 스킬은 다음 폴더에서 이 순서로 읽습니다. 뒤 폴더의 스킬이 앞 폴더의 같은 이름 스킬을 대신하므로, 프로젝트가 플러그인 스킬을 고쳐 쓸
 수 있습니다.
 
-1. `Plugins/AgentMcp/Skills`: 플러그인 스킬. 지금은 `umg-authoring`과 `ui-art-requests`
+1. `Plugins/AgentMcp/Skills`: 플러그인 스킬. 지금은 `umg-authoring`, `ui-art-requests`, `ui-style-system`
 2. 프로젝트 폴더의 `AgentMcp/Skills`
 3. `SkillDirectories` 설정의 폴더
 
@@ -161,7 +162,7 @@ Claude Code와 Codex가 자기 스킬에 쓰는 형식과 같습니다. 스킬�
 
 Claude Code와 Codex는 설명을 보고 스킬을 고릅니다. 서버 스킬도 스스로 시작하게 하려면, 같은 이름과 설명에 `skills_get`을 호출하라는
 내용만 적은 짧은 `SKILL.md`를 Claude Code는 `.claude/skills/<이름>/`, Codex는 `.agents/skills/<이름>/`에 둡니다. 이 저장소에는
-플러그인 스킬 두 개 모두 양쪽에 있습니다.
+플러그인 스킬 모두 양쪽에 있습니다.
 
 Unreal Engine 5.8도 같은 방식으로 스킬을 제공합니다. 스킬은 C++, Python, 블루프린트로 정의한 `UAgentSkill` 클래스이고
 `ListSkills`, `GetSkills` 도구로 읽습니다. Agent MCP는 대신 Markdown 파일을 읽으므로 스킬을 텍스트로 고치고, Claude Code·Codex

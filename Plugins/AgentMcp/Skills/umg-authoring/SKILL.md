@@ -101,7 +101,8 @@ Write a short plan first and keep it in the conversation:
 1. `blueprint_compile` every changed Widget Blueprint, components first.
 2. Capture before and after. Before a change to layout, style or art, look at the screen in a play session: `pie_start`, show the
    screen the way the project does (the Agent MCP testbed has `sample_show_widget`), `viewport_capture`, `pie_stop`. Capture it
-   again after the change at the same viewport size, and put the two side by side. Wait for intro animations to finish before
+   again after the change at the same viewport size, and compare the two with `scripts/capture_compare.py` of the `ui-style-system`
+   skill, which reports how much changed and marks the changed pixels. Wait for intro animations to finish before
    capturing; when timing is the point of a change, also capture at the moment that matters.
 3. Check the captures critically: content stays inside its panels and frames, nothing moved that should not, text fits and is not
    clipped, alignment and spacing follow one grid, colors match the tokens, decoration follows the UI kit, CJK glyphs render,

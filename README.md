@@ -138,8 +138,9 @@ datatable tools fill them, and `asset_import_textures` brings in icons and frame
 
 The tools build whatever tree they are given. How a UI team would build it (reusable component Widget Blueprints, style values in
 one place, data-driven lists and a capture review) is described by the plugin's skill `umg-authoring`. How images are requested from
-an image model, another agent or an artist, checked on a review sheet and connected is described by `ui-art-requests`; see
-[Skills](#skills).
+an image model, another agent or an artist, checked on a review sheet and connected is described by `ui-art-requests`. How the
+style of a project is extracted from its Widget Blueprints or a mockup, kept as design tokens and a kit gallery, and checked with
+capture comparisons is described by `ui-style-system`; see [Skills](#skills).
 
 ## Skills
 
@@ -155,7 +156,7 @@ and the skills travel with the plugin.
 Skills are read from these folders in this order. A skill replaces one with the same name from an earlier folder, so a project can
 adapt a plugin skill.
 
-1. `Plugins/AgentMcp/Skills`: the skills of the plugin, currently `umg-authoring` and `ui-art-requests`
+1. `Plugins/AgentMcp/Skills`: the skills of the plugin, currently `umg-authoring`, `ui-art-requests` and `ui-style-system`
 2. `AgentMcp/Skills` in the project folder
 3. the folders of the `SkillDirectories` setting
 
@@ -164,7 +165,7 @@ instructions is made when the server starts.
 
 Claude Code and Codex choose skills by their descriptions. To let them start a served skill on their own, add a short `SKILL.md`
 with the same name and description to `.claude/skills/<name>/` for Claude Code or `.agents/skills/<name>/` for Codex that tells the
-agent to call `skills_get`. This repository has both for the two plugin skills.
+agent to call `skills_get`. This repository has both for the plugin skills.
 
 Unreal Engine 5.8 serves skills the same way: skills are `UAgentSkill` classes defined in C++, Python or Blueprint, read through
 `ListSkills` and `GetSkills` tools. Agent MCP reads Markdown files instead, so a skill is edited as text and has the same format as

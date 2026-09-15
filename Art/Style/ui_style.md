@@ -1,6 +1,8 @@
 # UI style of the testbed samples
 
-Draft of 2026-09-15, not approved yet. No kit piece is requested before the user approves it.
+Notes of 2026-09-15, written before the style was built. The style is settled with the `ui-style-system` skill: tokens in the
+theme, a kit gallery and captures. When the user freezes it, this file is written again from the theme values; until then these notes
+are input, not rules, and no kit piece is requested.
 
 The style frame is the dungeon result mockup that the user made with ChatGPT on 2026-09-15. Save it as
 `Art/Style/style_frame_dungeon_result.png`; requests list it in `references`. Take its structure and restraint, not its excess (see
