@@ -376,6 +376,22 @@ def run_slice1(client, report, evidence, run_pie, pie_cycles):
     _, _, is_error, data, _ = client.call_tool("pie_status")
     report.check("no play session remains after the PIE checks", not is_error and ((data or {}).get("playSession") or {}).get("bActive") is False, json.dumps((data or {}).get("playSession")))
 
+    # A play window of a set size gives captures of that size, whatever the size of the editor window.
+    _, _, is_error, data, _ = client.call_tool("pie_start", {"windowWidth": 100, "windowHeight": 100})
+    report.check("pie_start refuses a play window below the minimum size", is_error and error_code(data) == "INVALID_ARGUMENT", error_message(data)[:160])
+    _, _, is_error, data, _ = client.call_tool("pie_start", {"windowWidth": 640})
+    report.check("pie_start refuses a window width without a height", is_error and error_code(data) == "INVALID_ARGUMENT", error_message(data)[:160])
+    _, _, is_error, data, _ = client.call_tool("pie_start", {"warmupSeconds": 0.5, "windowWidth": 640, "windowHeight": 360})
+    if report.check("pie_start opens a play window of the requested size",
+                    not is_error and (data or {}).get("viewportWidth") == 640 and (data or {}).get("viewportHeight") == 360,
+                    f"viewport {(data or {}).get('viewportWidth')}x{(data or {}).get('viewportHeight')}, error={error_code(data)} {error_message(data)[:120]}"):
+        _, _, is_error, data, _ = client.call_tool("viewport_capture", {"maxWidth": 1920})
+        report.check("viewport_capture of the play window has the window size",
+                     not is_error and (data or {}).get("source") == "Play" and (data or {}).get("width") == 640 and (data or {}).get("height") == 360,
+                     f"{(data or {}).get('source')} {(data or {}).get('width')}x{(data or {}).get('height')}")
+    _, _, is_error, data, _ = client.call_tool("pie_stop")
+    report.check("pie_stop ends the play window session", not is_error and ((data or {}).get("playSession") or {}).get("bActive") is False, json.dumps((data or {}).get("playSession"))[:160])
+
 
 def run_p1(client, report, evidence):
     p1 = evidence.setdefault("p1", {})

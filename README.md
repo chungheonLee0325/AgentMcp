@@ -40,7 +40,7 @@ Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
 
 Tools are plain `static UFUNCTION`s. Names, descriptions, arguments and result JSON schemas are generated from Unreal Reflection, so adding a function to a toolset creates an MCP tool.
 
-> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 180 checks against the testbed project. Other engine versions and platforms have not been tried.
+> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 185 checks against the testbed project. Other engine versions and platforms have not been tried.
 
 ## Dungeon UI — workflow case study
 
@@ -145,7 +145,7 @@ The server returns short usage instructions from `initialize`, including the lis
 | `object_list_properties` | Read | Properties of an object and whether they can be changed |
 | `object_get_properties` | Read | Property values as JSON |
 | `object_set_properties` | Write | Change properties of an actor or component in the editor level, or of a project asset such as a data asset or texture, with readback |
-| `pie_start`, `pie_stop` | Control | Start or stop Play In Editor and wait until the session has begun or shut down |
+| `pie_start`, `pie_stop` | Control | Start or stop Play In Editor and wait until the session has begun or shut down. `pie_start` plays in the level viewport, or with `windowWidth` and `windowHeight` in a new window whose viewport has that size |
 | `pie_status` | Read | Whether a play session is starting or running |
 | `asset_find` | Read | Assets by folder, class and name, without loading them |
 | `asset_inspect` | Read | Class, tags, file size, loaded and dirty state and reference counts of an asset |

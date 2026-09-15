@@ -22,6 +22,14 @@ struct FAgentMcpPieStartResult
 	/** Seconds from the request until the play world began play. */
 	UPROPERTY()
 	double StartupSeconds = 0.0;
+
+	/** Width in pixels of the play viewport, which viewport_capture captures. */
+	UPROPERTY()
+	int32 ViewportWidth = 0;
+
+	/** Height in pixels of the play viewport. */
+	UPROPERTY()
+	int32 ViewportHeight = 0;
 };
 
 USTRUCT(BlueprintType)
@@ -66,15 +74,19 @@ class UAgentMcpPieTools : public UAgentMcpToolset
 
 public:
 	/**
-	 * Starts Play In Editor (or Simulate) in the level viewport and waits until the play world has begun play.
-	 * Refuses to start while loaded Blueprints have compile errors, because the editor would stop on a confirmation dialog.
-	 * @param bSimulate Simulate In Editor instead of Play In Editor.
+	 * Starts Play In Editor (or Simulate) and waits until the play world has begun play. The session plays in the level viewport, whose size
+	 * follows the editor window, or, with WindowWidth and WindowHeight, in a new window whose client area has that size, so that captures to
+	 * compare have the same size on every run. Refuses to start while loaded Blueprints have compile errors, because the editor would stop
+	 * on a confirmation dialog.
+	 * @param bSimulate Simulate In Editor instead of Play In Editor. It runs in the level viewport.
 	 * @param WarmupSeconds Seconds to wait after BeginPlay so startup logic and logs settle (0-60).
 	 * @param TimeoutSeconds Maximum seconds to wait for the session to begin play (5-600).
-	 * @return Play session state, and the log sequence from which to read the session log.
+	 * @param WindowWidth Width in pixels (320-7680) of a new play window, also used for the windows of additional clients. 0 plays in the level viewport.
+	 * @param WindowHeight Height in pixels (240-4320) of the new play window. 0 plays in the level viewport.
+	 * @return Play session state, the size of the play viewport, and the log sequence from which to read the session log.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|PIE", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))
-	static UAgentMcpAsyncResult* Start(bool bSimulate = false, float WarmupSeconds = 1.0f, float TimeoutSeconds = 120.0f);
+	static UAgentMcpAsyncResult* Start(bool bSimulate = false, float WarmupSeconds = 1.0f, float TimeoutSeconds = 120.0f, int32 WindowWidth = 0, int32 WindowHeight = 0);
 
 	/**
 	 * Stops the play session and waits until it has shut down. Succeeds with bWasActive false when no session is running.

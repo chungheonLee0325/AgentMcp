@@ -102,9 +102,10 @@ Write a short plan first and keep it in the conversation:
 ## 6. Review like a UI lead
 
 1. `blueprint_compile` every changed Widget Blueprint, components first.
-2. Capture before and after. Before a change to layout, style or art, look at the screen in a play session: `pie_start`, show the
+2. Capture before and after. Before a change to layout, style or art, look at the screen in a play session: `pie_start` with
+   `windowWidth` and `windowHeight` (for example 1280 and 720), so that the capture size does not depend on the editor window, show the
    screen the way the project does (the Agent MCP testbed has `sample_show_widget`), `viewport_capture`, `pie_stop`. Capture it
-   again after the change at the same viewport size, and compare the two with `scripts/capture_compare.py` of the `ui-style-system`
+   again after the change with the same window size, and compare the two with `scripts/capture_compare.py` of the `ui-style-system`
    skill, which reports how much changed and marks the changed pixels. Wait for intro animations to finish before
    capturing; when timing is the point of a change, also capture at the moment that matters.
 3. Check the captures critically: content stays inside its panels and frames, nothing moved that should not, text fits and is not

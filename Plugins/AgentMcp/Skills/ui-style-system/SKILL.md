@@ -77,7 +77,9 @@ When the user approves the gallery capture:
 ## 4. After the freeze
 
 - New screens use tokens, styled widgets and kit components. A new component goes into the gallery first.
-- After every change to the theme, a component or a screen, capture the gallery and the touched screens at the baseline's viewport size
+- After every change to the theme, a component or a screen, capture the gallery and the touched screens in a play window of the
+  baseline's size (`pie_start` with `windowWidth` and `windowHeight`; the level viewport follows the editor window and renders edges
+  slightly differently)
   and run `python <path>/scripts/capture_compare.py <baseline>.png <capture>.png --region <left> <top> <right> <bottom>`. Capture after
   intro animations have finished: a capture taken during a fade looks like a broken style. Keep the region away from timers and other
   changing parts. Replace the baseline only when the user approves the change.
