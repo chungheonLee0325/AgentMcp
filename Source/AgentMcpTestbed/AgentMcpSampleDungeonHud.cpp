@@ -85,8 +85,10 @@ void UAgentMcpSampleDungeonHud::RefreshProgress()
 		{
 			// In the last minute the timer pulses between the text and danger colors of the theme.
 			const float Pulse = 0.5f + 0.5f * FMath::Sin(RunningTime * 6.0f);
+			static const FName TextToken(TEXT("Text"));
+			static const FName DangerToken(TEXT("Danger"));
 			const UAgentMcpSampleUiTheme& Theme = UAgentMcpSampleUiTheme::Get();
-			TimerText->SetColorAndOpacity(FSlateColor(FMath::Lerp(Theme.Text, Theme.Danger, Pulse)));
+			TimerText->SetColorAndOpacity(FSlateColor(FMath::Lerp(Theme.GetColor(TextToken), Theme.GetColor(DangerToken), Pulse)));
 		}
 	}
 	if (ProgressBar)

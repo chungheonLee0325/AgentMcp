@@ -19,26 +19,32 @@ void UAgentMcpSampleObjectiveRow::NativePreConstruct()
 
 void UAgentMcpSampleObjectiveRow::ApplyProgress()
 {
+	static const FName AccentToken(TEXT("Accent"));
+	static const FName SuccessToken(TEXT("Success"));
+	static const FName TextToken(TEXT("Text"));
+	static const FName MutedTextToken(TEXT("MutedText"));
+
 	const UAgentMcpSampleUiTheme& Theme = UAgentMcpSampleUiTheme::Get();
-	const FLinearColor OpenColor = AccentColor.A > 0.0f ? AccentColor : Theme.Accent;
+	const FLinearColor SuccessColor = Theme.GetColor(SuccessToken);
+	const FLinearColor OpenTint = Theme.GetColor(OpenColor.IsNone() ? AccentToken : OpenColor);
 	const bool bComplete = Done >= Total;
 	if (Check)
 	{
-		// Open objectives show an outline in the accent color, completed ones a filled mark in the success color.
+		// Open objectives show an outline in the open color, completed ones a filled mark in the success color.
 		FSlateBrush CheckBrush = Check->Background;
-		CheckBrush.TintColor = FSlateColor(bComplete ? Theme.Success : FLinearColor::Transparent);
-		CheckBrush.OutlineSettings.Color = FSlateColor(bComplete ? Theme.Success : OpenColor);
+		CheckBrush.TintColor = FSlateColor(bComplete ? SuccessColor : FLinearColor::Transparent);
+		CheckBrush.OutlineSettings.Color = FSlateColor(bComplete ? SuccessColor : OpenTint);
 		CheckBrush.OutlineSettings.Width = bComplete ? 0.0f : 2.0f;
 		Check->SetBrush(CheckBrush);
 	}
 	if (LabelText)
 	{
 		LabelText->SetText(Label);
-		LabelText->SetColorAndOpacity(FSlateColor(bComplete ? Theme.MutedText : Theme.Text));
+		LabelText->SetColorAndOpacity(FSlateColor(Theme.GetColor(bComplete ? MutedTextToken : TextToken)));
 	}
 	if (CountText)
 	{
 		CountText->SetText(FText::FromString(FString::Printf(TEXT("%d/%d"), Done, Total)));
-		CountText->SetColorAndOpacity(FSlateColor(bComplete ? Theme.Success : OpenColor));
+		CountText->SetColorAndOpacity(FSlateColor(bComplete ? SuccessColor : OpenTint));
 	}
 }

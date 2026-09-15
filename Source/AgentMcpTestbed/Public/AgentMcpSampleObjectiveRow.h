@@ -39,9 +39,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Objective", meta = (ClampMin = "1"))
 	int32 Total = 1;
 
-	/** Color of the check outline and the count while the objective is open. Fully transparent uses the accent color of the UI theme. */
+	/** Color token of the check outline and the count while the objective is open; None uses Accent. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Objective")
-	FLinearColor AccentColor = FLinearColor::Transparent;
+	FName OpenColor;
 
 	UFUNCTION(BlueprintCallable, Category = "Objective")
 	void SetProgress(int32 InDone, int32 InTotal);
