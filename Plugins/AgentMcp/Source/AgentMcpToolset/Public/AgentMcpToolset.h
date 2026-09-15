@@ -44,7 +44,8 @@ namespace UE::AgentMcp
 
 	/**
 	 * Resolves a class the way tool arguments are resolved: a short name such as TextBlock, a path such as /Script/UMG.TextBlock, or
-	 * the object path of a Blueprint for its generated class. Returns null when nothing matches.
+	 * the object path of a Blueprint for its generated class. Returns null when nothing matches. A short name of several classes raises
+	 * AMBIGUOUS_REFERENCE with their paths and returns null.
 	 */
 	AGENTMCPTOOLSET_API UClass* ResolveClassName(const FString& NameOrPath);
 

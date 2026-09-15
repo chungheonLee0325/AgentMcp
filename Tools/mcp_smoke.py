@@ -835,6 +835,8 @@ def run_p4(client, report, evidence):
     missing_binding = next((path for path in fixtures.get("widgetBlueprints") or [] if "WBP_AgentMcpMissingBinding" in path), None)
 
     # --- umg_create_widget_blueprint ------------------------------------------------------------------
+    _, _, _, data, _ = client.call_tool("log_get_recent", {"maxEntries": 1})
+    log_start = (data or {}).get("nextSequence", 0)
     _, _, is_error, data, _ = client.call_tool("umg_create_widget_blueprint", {
         "assetPath": AUTHORING_WIDGET, "parentClass": "AgentMcpTestbedWidget", "rootWidgetClass": "CanvasPanel"})
     created = data or {}
@@ -870,6 +872,12 @@ def run_p4(client, report, evidence):
                  and not (data or {}).get("missingBindWidgets") and ((data or {}).get("undo") or {}).get("recorded") is True,
                  json.dumps(data)[:400])
     p4["add"] = data
+
+    # UClass::TryFindTypeSlow logged a warning with a callstack for each class name without a path, such as CanvasPanel and TextBlock above.
+    _, _, _, data, _ = client.call_tool("log_get_recent", {"sinceSequence": log_start, "minVerbosity": "Warning", "contains": "Short type name"})
+    short_name_warnings = (data or {}).get("entries") or []
+    report.check("class names without a path resolve without log warnings", not short_name_warnings,
+                 (short_name_warnings[0].get("message") or "")[:160] if short_name_warnings else "")
 
     nodes = widget_nodes(client, wbp, include_properties=True)
     title = nodes.get("TitleText") or {}
@@ -957,6 +965,15 @@ def run_p4(client, report, evidence):
     report.check("a component Widget Blueprint for nesting is created and compiles",
                  not is_error and bool(part_root) and not add_error and not compile_error and (compiled or {}).get("errorCount") == 0,
                  json.dumps(compiled)[:200] if not add_error else error_message(added)[:200])
+
+    # Two Widget Blueprints with the same asset name in different folders share a class name, so that name alone is ambiguous.
+    part_copy = FIXTURE_FOLDER + "/Copy/WBP_AgentMcpAuthoringPart"
+    _, _, copy_error, _, _ = client.call_tool("umg_create_widget_blueprint", {"assetPath": part_copy})
+    _, _, is_error, data, _ = client.call_tool("umg_add_widgets", {"widgetBlueprint": wbp, "parent": root, "widgets": [{"class": "WBP_AgentMcpAuthoringPart_C"}]})
+    hint = ((data or {}).get("error") or {}).get("hint") or ""
+    report.check("umg_add_widgets reports a class name of two Widget Blueprints as ambiguous and lists both classes",
+                 not copy_error and is_error and error_code(data) == "AMBIGUOUS_REFERENCE" and part_class in hint and part_copy + "." in hint,
+                 error_message(data)[:160] + " " + hint[:300])
 
     _, _, is_error, data, _ = client.call_tool("umg_add_widgets", {"widgetBlueprint": wbp, "parent": root, "widgets": [
         {"class": part_class, "name": "PartInstance", "properties": {"Caption": "Nested"}},
@@ -1200,6 +1217,10 @@ def run_p6(client, report, evidence):
     count_after_redo = read_property(client, data_asset, "Count")
     report.check("editor_undo and editor_redo restore data asset values", count_after_undo == 0 and count_after_redo == 7,
                  f"after undo {count_after_undo}, after redo {count_after_redo}")
+
+    _, _, is_error, data, _ = client.call_tool("object_set_properties", {"object": data_asset, "values": {"Tokens": {"LineStrong": 1, "ItemID": 2}}})
+    tokens = ((data or {}).get("after") or {}).get("Tokens")
+    report.check("map keys keep their case in results", not is_error and tokens == {"LineStrong": 1, "ItemID": 2}, json.dumps(tokens))
 
     _, _, is_error, data, _ = client.call_tool("object_set_properties", {"object": bound_widget, "values": {"BlueprintDescription": "x"}})
     report.check("object_set_properties refuses Blueprints", is_error and error_code(data) == "NOT_SUPPORTED", error_message(data)[:200])

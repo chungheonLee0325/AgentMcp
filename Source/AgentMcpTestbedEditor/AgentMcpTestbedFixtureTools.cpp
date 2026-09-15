@@ -36,9 +36,10 @@ namespace AgentMcpTestbedPrivate
 	/** Created by the smoke test with umg_create_widget_blueprint; every reset deletes it again. */
 	const TCHAR* const AuthoringWidgetName = TEXT("WBP_AgentMcpAuthoring");
 
+	/** Object path of a fixture asset; AssetName may start with a subfolder, as in Copy/WBP_Name. */
 	FString MakeObjectPath(const TCHAR* AssetName)
 	{
-		return FString::Printf(TEXT("%s/%s.%s"), FixtureFolder, AssetName, AssetName);
+		return FString::Printf(TEXT("%s/%s.%s"), FixtureFolder, AssetName, *FPackageName::GetShortName(FString(AssetName)));
 	}
 
 	IAssetTools& GetAssetTools()
@@ -179,6 +180,7 @@ FAgentMcpTestbedFixtures UAgentMcpTestbedFixtureTools::ResetFixtures()
 	// the authoring Widget Blueprint, so it goes second.
 	DeleteFixtureAsset(AuthoringWidgetName, Result.Deleted);
 	DeleteFixtureAsset(TEXT("WBP_AgentMcpAuthoringPart"), Result.Deleted);
+	DeleteFixtureAsset(TEXT("Copy/WBP_AgentMcpAuthoringPart"), Result.Deleted);
 	// Created with asset_create and asset_import_textures. The data asset refers to the texture, so it goes first.
 	DeleteFixtureAsset(TEXT("DA_AgentMcpSmoke"), Result.Deleted);
 	DeleteFixtureAsset(TEXT("DT_AgentMcpCreated"), Result.Deleted);

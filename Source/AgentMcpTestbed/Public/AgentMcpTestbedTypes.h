@@ -65,4 +65,8 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke")
 	FSlateBrush Brush;
+
+	/** Named values; the smoke test checks that map keys keep their case in results. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke")
+	TMap<FName, int32> Tokens;
 };

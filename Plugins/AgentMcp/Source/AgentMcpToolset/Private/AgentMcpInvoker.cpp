@@ -193,13 +193,31 @@ namespace UE::AgentMcp::InvokerPrivate
 	UClass* ResolveClass(const FString& InText)
 	{
 		const FString Path = StripObjectPathWrapper(InText);
-		if (Path.IsEmpty())
+		if (Path.IsEmpty() || Path.Len() > MaxNameLength)
 		{
 			return nullptr;
 		}
 		if (!Path.StartsWith(TEXT("/")))
 		{
-			return UClass::TryFindTypeSlow<UClass>(Path);
+			// UClass::TryFindTypeSlow logs a warning with a callstack for every name without a path, so look the name up directly.
+			const FName Name(*Path, FNAME_Find);
+			TArray<UObject*> Classes;
+			if (Name.IsNone() || !StaticFindAllObjectsFast(Classes, UClass::StaticClass(), Name))
+			{
+				return nullptr;
+			}
+			if (Classes.Num() > 1)
+			{
+				TArray<FString> Candidates;
+				for (const UObject* Class : Classes)
+				{
+					Candidates.Add(Class->GetPathName());
+				}
+				RaiseToolError(TEXT("AMBIGUOUS_REFERENCE"), FString::Printf(TEXT("'%s' matches more than one class."), *Path),
+					FString::Printf(TEXT("Pass one of these class paths instead: %s"), *FString::Join(Candidates, TEXT(", "))));
+				return nullptr;
+			}
+			return Cast<UClass>(Classes[0]);
 		}
 		if (UClass* Found = FindObject<UClass>(nullptr, *Path))
 		{
@@ -550,7 +568,7 @@ namespace UE::AgentMcp::InvokerPrivate
 
 	/**
 	 * Custom export: object references, including instanced sub-objects, become paths so results stay small and never recurse,
-	 * and FAgentMcpImage values become a summary while their bytes are collected for image content.
+	 * FAgentMcpImage values become a summary while their bytes are collected for image content, and map keys keep their case.
 	 */
 	TSharedPtr<FJsonValue> ExportObjectReference(FProperty* Property, const void* Value)
 	{
@@ -588,6 +606,30 @@ namespace UE::AgentMcp::InvokerPrivate
 				return MakeShared<FJsonValueNull>();
 			}
 			return MakeShared<FJsonValueString>(Object->GetPathName());
+		}
+
+		if (const FMapProperty* MapProperty = CastField<FMapProperty>(Property))
+		{
+			// FJsonObjectConverter starts name and enum keys with a lower-case letter (StandardizeCase), but keys are data and keep their case.
+			const FJsonObjectConverter::CustomExportCallback ExportCallback = FJsonObjectConverter::CustomExportCallback::CreateStatic(&ExportObjectReference);
+			const TSharedRef<FJsonObject> Entries = MakeShared<FJsonObject>();
+			FScriptMapHelper Helper(MapProperty, Value);
+			for (FScriptMapHelper::FIterator It(Helper); It; ++It)
+			{
+				const TSharedPtr<FJsonValue> KeyValue = FJsonObjectConverter::UPropertyToJsonValue(MapProperty->KeyProp, Helper.GetKeyPtr(It), 0, 0, &ExportCallback);
+				const TSharedPtr<FJsonValue> EntryValue = FJsonObjectConverter::UPropertyToJsonValue(MapProperty->ValueProp, Helper.GetValuePtr(It), 0, 0, &ExportCallback);
+				if (!KeyValue.IsValid() || !EntryValue.IsValid())
+				{
+					continue;
+				}
+				FString Key;
+				if (!KeyValue->TryGetString(Key))
+				{
+					MapProperty->KeyProp->ExportTextItem_Direct(Key, Helper.GetKeyPtr(It), nullptr, nullptr, PPF_None);
+				}
+				Entries->SetField(Key, EntryValue);
+			}
+			return MakeShared<FJsonValueObject>(Entries);
 		}
 		return nullptr;
 	}
