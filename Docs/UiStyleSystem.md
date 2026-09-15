@@ -116,7 +116,7 @@ second line, which is how the slot behaves at a small UI scale.
 Show it like any screen:
 
 ```
-pie_start
+pie_start {"windowWidth": 1144, "windowHeight": 894}
 sample_show_widget {"widgetClass": "/Game/Samples/DungeonUi/WBP_UiKitGallery.WBP_UiKitGallery_C"}
 viewport_capture
 pie_stop
@@ -199,7 +199,9 @@ to keep the look.
    The final page has a fixed size, two columns of text styles, and entries wide enough for the longest names.
 
 8. **Freeze.** The user approved the gallery. Its capture and the captures of the result popup and the HUD became the baseline in
-   `Art/Style/baseline/`, and [Art/Style/ui_style.md](../Art/Style/ui_style.md) was written again from the theme values.
+   `Art/Style/baseline/`, and [Art/Style/ui_style.md](../Art/Style/ui_style.md) was written again from the theme values. Once `pie_start`
+   could open a play window of a set size, the baseline was captured again in a 1144 × 894 window: captures in the level viewport depend
+   on the editor window, and their edges differed from window captures by 3 to 7% of the pixels.
 
 Every step after the C++ build went through the tools and the scripts; nobody opened the UMG designer.
 
@@ -210,5 +212,5 @@ Every step after the C++ build went through the tools and the scripts; nobody op
   class yet.
 - The extraction sees Widget Blueprints only. Colors that code sets at runtime use tokens in the code and are checked by reading it.
 - A map of the theme can only be written as a whole through `object_set_properties`.
-- The baseline captures in `Art/Style/baseline/` have the size of the play viewport when they were taken, 1144 × 894, which follows the
-  editor window; comparisons need captures of the same size.
+- The baseline captures come from a 1144 × 894 play window (`pie_start` with `windowWidth` and `windowHeight`); captures to compare need
+  the same window size.

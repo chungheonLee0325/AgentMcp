@@ -117,12 +117,10 @@ These come from the notes written before the style was built. They govern decora
 
 ## Baseline
 
-Captured on 2026-09-15 in play sessions of the testbed editor. Each screen was shown with `sample_show_widget` and captured with
-`viewport_capture` after the wait below. Two play sessions gave identical captures of each screen, so a difference in a comparison is a
-change, not noise.
-
-The play viewport was 1144 × 894. Its size follows the editor window, and `capture_compare.py` refuses captures of different sizes:
-compare at this size, or recapture the baseline with the user's approval.
+Captured on 2026-09-16 in a 1144 × 894 play window of the testbed editor: `pie_start` with `windowWidth` 1144 and `windowHeight` 894,
+`sample_show_widget`, the wait below, `viewport_capture`. Two play sessions gave the same captures (at most 0.01% of the pixels, where the
+level-up badge pulses), so a difference in a comparison is a change, not noise. Capture in the same window size: the level viewport
+follows the editor window and draws edges slightly differently, and `capture_compare.py` refuses captures of different sizes.
 
 | File | Widget class | Wait |
 |---|---|---|

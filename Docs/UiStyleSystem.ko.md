@@ -115,7 +115,7 @@
 다른 화면처럼 띄웁니다.
 
 ```
-pie_start
+pie_start {"windowWidth": 1144, "windowHeight": 894}
 sample_show_widget {"widgetClass": "/Game/Samples/DungeonUi/WBP_UiKitGallery.WBP_UiKitGallery_C"}
 viewport_capture
 pie_stop
@@ -194,7 +194,8 @@ python Plugins/AgentMcp/Skills/ui-style-system/scripts/capture_compare.py before
    고정 크기이고, 텍스트 스타일을 두 열로 놓고, 항목 너비를 가장 긴 이름에 맞췄습니다.
 
 8. **확정.** 사용자가 갤러리를 승인했습니다. 갤러리, 결과 팝업, HUD 캡처를 `Art/Style/baseline/`의 기준으로 두고, 테마 값으로
-   [Art/Style/ui_style.md](../Art/Style/ui_style.md)를 다시 썼습니다.
+   [Art/Style/ui_style.md](../Art/Style/ui_style.md)를 다시 썼습니다. `pie_start`가 정해진 크기의 플레이 창을 열 수 있게 된 뒤에는
+   기준을 1144 × 894 창에서 다시 찍었습니다. 레벨 뷰포트 캡처는 에디터 창에 따라 달라지고, 창 캡처와 가장자리 픽셀이 3~7% 달랐습니다.
 
 C++ 빌드 뒤의 모든 단계는 도구와 스크립트로 진행했고, UMG 디자이너는 열지 않았습니다.
 
@@ -204,5 +205,5 @@ C++ 빌드 뒤의 모든 단계는 도구와 스크립트로 진행했고, UMG �
 - 스타일 위젯은 보더, 텍스트, 진행 바, 버튼에만 있습니다. 이미지, 체크박스, 슬라이더, CommonUI 위젯용 스타일 클래스는 아직 없습니다.
 - 추출은 위젯 블루프린트만 봅니다. 코드가 실행 중에 넣는 색은 코드에서 토큰으로 쓰고, 코드를 읽어서 확인합니다.
 - 테마의 맵은 `object_set_properties`로 통째로만 쓸 수 있습니다.
-- `Art/Style/baseline/`의 기준 캡처는 찍을 때의 플레이 뷰포트 크기인 1144 × 894이고, 이 크기는 에디터 창을 따릅니다. 비교하려면 같은
-  크기로 캡처해야 합니다.
+- 기준 캡처는 1144 × 894 플레이 창(`pie_start`의 `windowWidth`, `windowHeight`)에서 찍었습니다. 비교할 캡처도 같은 창 크기로 찍어야
+  합니다.
