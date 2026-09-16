@@ -1,119 +1,230 @@
-# Dungeon UI sample
+# Dungeon UI — Agent MCP workflow case study
 
 [한국어](DungeonUi.ko.md)
 
-A dungeon progress HUD and a dungeon result popup in the style of a creature-collecting survival game. Claude Code (desktop app,
-version 2.1.270) built them in the Agent MCP testbed through the tools; nobody opened the UMG designer. This page records how,
-including the versions that reviews sent back, so that the workflow can be judged and not only the screenshots.
+This document is more than a screenshot gallery. It records **how Claude Code used Agent MCP tools and skills to build UMG UI, receive review feedback, and improve both the UI structure and the plugin workflow**.
+
+The sample is a dungeon progress HUD and result popup in the style of a creature-collecting survival game. It was built in the Agent MCP testbed, and **the UMG Designer was never opened during the authoring process**.
+
+## What this case study verifies
+
+```text
+Flat Widget Tree
+      ↓ review
+Reusable Widget Blueprint Components
++ C++ BindWidget Contracts
++ DynamicEntryBox
+      ↓ review
+Theme Data Asset
++ DataTable
++ Art Request Pipeline
++ Capture-based Review
+```
+
+This case study tests whether an agent can:
+
+- create and edit Widget Blueprints entirely through MCP tools
+- preserve C++ `BindWidget` contracts while restructuring UI
+- replace copied subtrees with reusable Widget Blueprint components
+- replace fixed copies with data-driven lists and a Theme Data Asset
+- review its own changes through PIE and viewport captures
+- keep tool capability separate from project-specific authoring rules by moving those rules into skills
 
 ![Result popup over the HUD](../Images/dungeon_result.jpg)
 
 ![Dungeon progress HUD](../Images/dungeon_hud.jpg)
 
-## Contents
+## Final structure
 
 | Asset under `/Game/Samples/DungeonUi` | C++ class | Role |
 |---|---|---|
-| `Components/WBP_RewardSlot` | `AgentMcpSampleRewardSlot` | Reward slot with icon, name and count. Its `Reward` input is a row of the item table and a count; the theme gives the rarity colors and frames. |
-| `Components/WBP_StatTile` | `AgentMcpSampleStatTile` | Label above a large value: `Label`, `Value`, `SetValue`. |
-| `Components/WBP_ObjectiveRow` | `AgentMcpSampleObjectiveRow` | Check mark, label and done/total. Open objectives use the theme accent unless the instance sets `AccentColor`; completed ones use the success color. |
-| `WBP_DungeonHud` | `AgentMcpSampleDungeonHud` | Dungeon card with timer and progress, three objective row instances, boss health bar. |
-| `WBP_DungeonResult` | `AgentMcpSampleDungeonResult` | Result card with three stat tile instances and a `DynamicEntryBox` that creates one reward slot per entry of `Rewards`. Plays the intro, whose timing, distances and scales are the `Motion` property. |
-| `WBP_DungeonDemo` | `UserWidget` | Demo screen: a HUD instance and a result instance whose `Rewards` refer to five rows of the item table. |
-| `Data/DA_DungeonUiTheme` | `AgentMcpSampleUiTheme` | Theme data asset: text and state colors, and a color and an optional frame brush per rarity. `Config/DefaultGame.ini` selects it. |
-| `Data/DT_DungeonItems` | `AgentMcpSampleItemRow` | Item table: name, rarity, icon texture, and the shape drawn while the icon is missing. |
+| `Components/WBP_RewardSlot` | `AgentMcpSampleRewardSlot` | Reusable reward slot with icon, name and count. `Reward` is an item-table row plus count; rarity colors and frames come from the theme. |
+| `Components/WBP_StatTile` | `AgentMcpSampleStatTile` | Reusable statistic tile with a large value and label. |
+| `Components/WBP_ObjectiveRow` | `AgentMcpSampleObjectiveRow` | Reusable objective row with check mark, label and done/total values. |
+| `WBP_DungeonHud` | `AgentMcpSampleDungeonHud` | HUD composed from timer/progress, objective-row instances and a boss health bar. |
+| `WBP_DungeonResult` | `AgentMcpSampleDungeonResult` | Result card composed from stat tiles and a `DynamicEntryBox` reward list. |
+| `WBP_DungeonDemo` | `UserWidget` | Demo screen containing the HUD and result screen. |
+| `Data/DA_DungeonUiTheme` | `AgentMcpSampleUiTheme` | Theme Data Asset containing text, state and rarity colors plus optional frame brushes. |
+| `Data/DT_DungeonItems` | `AgentMcpSampleItemRow` | Item table with name, rarity, icon texture and fallback presentation. |
 
-The C++ classes are in `Source/AgentMcpTestbed`. The texts are Korean; Roboto has no Hangul glyphs, so they render with the engine's
-fallback font.
+The C++ classes live under `Source/AgentMcpTestbed`.
 
 ## Run it
 
 Open the testbed as described in [Testbed and smoke test](../../README.md#testbed-and-smoke-test), then call:
 
-```
+```text
 pie_start
 sample_show_widget {"widgetClass": "/Game/Samples/DungeonUi/WBP_DungeonDemo.WBP_DungeonDemo_C"}
 viewport_capture
 pie_stop
 ```
 
-Wait about three seconds before `viewport_capture`, until the intro animation has finished.
+Wait about three seconds before `viewport_capture` so the intro motion has finished.
 
-## How it was built
+## 1. First version — functional, but hard to maintain
 
-### First version: one flat tree per screen
+The initial request was a HUD and result popup that looked like a commercial game. Claude Code wrote C++ bases for data and motion, then built each screen in one `umg_add_widgets` call.
 
-The request was a HUD and a result popup that look like a commercial game. Claude Code wrote C++ bases for data and animation and
-built each screen with a single `umg_add_widgets` call (48 and 78 widgets), with brushes, fonts and slot layout inline. Looking at
-the result found two problems:
+- HUD: 48 widgets
+- result popup: 78 widgets
 
-- The first `viewport_capture` showed blue-tinted progress bars. `ProgressBar` multiplies its fill by `FillColorAndOpacity`, which
-  defaults to blue. One `umg_set_widget_properties` call set it to white.
-- The two `umg_add_widgets` results were about 30,000 and 52,000 characters, because the tools read back complete struct
-  values; the second exceeded Claude Code's limit for tool output. The tools now read back only the requested fields. The change
-  went in with Live Coding and was checked with the smoke test.
+Brushes, fonts and slot layout were all authored inline. The screens appeared quickly, but the structure was flat.
 
-The user's review of that version: it looked finished, but nothing in it was reusable. The five reward slots, three stat tiles and
-three objective rows were numbered copies, 38 brushes were written out inline, and the reward list could not follow the data.
+### Tool problems found from the running result
 
-### Where the fix belongs
+The first `viewport_capture` showed blue-tinted progress bars. `ProgressBar` multiplies its fill brush by `FillColorAndOpacity`, whose default is blue, so one `umg_set_widget_properties` call changed it to white.
 
-Splitting repeated elements into components is a working practice, not a property of the tools, and studios do it differently.
-So it went into a skill, [`umg-authoring`](../../Plugins/AgentMcp/Skills/umg-authoring/SKILL.md), rather than into the tool
-descriptions that every client loads with every request. The tool descriptions keep to what the tools do, for example that an entry
-class can be a Widget Blueprint, and name the skill. The skill started as a Claude Code skill in `.claude/skills`; the plugin now
-serves it with `skills_get`, so Codex and other MCP clients read the same version.
+A more important issue was tool output size. The two `umg_add_widgets` calls returned roughly 30,000 and 52,000 characters because the tool read back full struct values, and the second exceeded Claude Code's tool-output limit.
 
-### Second version: components, data and a demo screen
+The implementation was changed to **read back only the fields named by the request**, then verified through Live Coding and the smoke test.
 
-Following the skill:
+The sample therefore improved not only the UI, but also the tool-result design used by the agent.
 
-1. **Plan.** Components: reward slot, stat tile, objective row. Data: the `Reward` struct, labels and values, done/total. Dynamic
-   list: the rewards. Style tokens: `AgentMcpSampleStyle.h`, a header of color constants that the third version replaced.
-2. **C++ bases for the components**, with `BindWidget` contracts, instance-editable inputs applied in `NativePreConstruct`, and
-   setters. The screen bases bind the components by class and pass data into them. The new classes needed a build with the editor
-   closed.
-3. **Components.** `umg_create_widget_blueprint` without a root, so that the root widget can be added under its contract name, one
-   `umg_add_widgets` call per component, `blueprint_compile`.
-4. **Screens.** A dry run of `umg_remove_widgets` listed the copied subtrees (19 widgets in the HUD, 48 in the popup) and warned
-   that removing `TimeTile` leaves a required `BindWidget` unbound until its replacement exists. The confirmed call removed them.
-   `umg_add_widgets` then placed component instances with their labels as instance properties, and a `DynamicEntryBox` whose
-   `EntryWidgetClass` is the reward slot.
-5. **Demo screen** with a HUD instance and a result instance; its `Rewards` instance property holds five rewards with different
-   rarities and icon shapes.
-6. **Review.** `blueprint_compile` for every Widget Blueprint, components first; `pie_start`, `sample_show_widget`,
-   `viewport_capture` and `pie_stop` for the HUD alone and for the demo screen; `asset_save`.
+## 2. First review — the screen looked finished, but nothing was reusable
 
-The smoke test gained checks for these paths: a Widget Blueprint instance with an instance property, a `DynamicEntryBox` entry
-class, and the refusal to nest a Widget Blueprint in itself.
+Review of the first version found:
 
-### Third version: presentation in data
+- five copied reward slots
+- three copied stat tiles
+- three copied objective rows
+- 38 inline brushes
+- a reward list that could not grow from data
 
-The next review asked for decoration that changes without code: data, or Blueprints for simple cases, with icons and ornaments made
-by an image model, another agent or an artist. Three tools were added for this: `asset_create` for data assets and DataTables,
-`asset_import_textures`, and `object_set_properties` for project assets.
+The problem was not that `umg_add_widgets` lacked features. The important missing piece was **guidance about what kind of UI structure the agent should build**.
 
-1. **C++ contracts.** The color constants became the theme data asset class, selected in the project settings, with the class
-   defaults as its fallback. A reward became a row of the item table and a count. The reward slot got an optional `IconImage` and
-   draws the item's fallback shape while there is no icon texture. The timing of the result intro became the `Motion` property. These
-   were changes to reflected declarations, so the editor was closed for a build.
-2. **Data.** `asset_create` made `DA_DungeonUiTheme` and `DT_DungeonItems`, and `datatable_add_rows` added the five items.
-3. **Widgets.** `umg_add_widgets` put `IconImage` into the reward slot, and `umg_set_widget_properties` pointed the demo rewards at the
-   table rows. The changed Widget Blueprints compiled without errors, and the play session capture looked like the second version.
-4. **Check.** `object_set_properties` changed two colors of the theme: the accent and the legendary color. The next capture showed
-   the open objective and the legendary reward slot in the new colors, without a build.
+## 3. Separating tool capability from skill guidance
 
-   ![The theme with another accent and legendary color](../Images/dungeon_theme_change.jpg)
+Componentization and data separation are authoring practices, not intrinsic behavior of an editor tool. Those rules therefore moved into the [`umg-authoring`](../../Plugins/AgentMcp/Skills/umg-authoring/SKILL.md) skill instead of expanding every tool description.
 
-5. **Art request.** [`Art/Requests/dungeon_ui.json`](../../Art/Requests/dungeon_ui.json) lists the images that the sample still
-   draws as shapes: five item icons, frames for rare, epic and legendary slots, and the result card panel, each with its size, 9-slice
-   border, texture path, and the table cell or property it belongs to. The
-   [`ui-art-requests`](../../Plugins/AgentMcp/Skills/ui-art-requests/SKILL.md) skill describes how a request is filled, imported and
-   connected, and its script `art_review.py` writes a review sheet with every item, its image, automatic checks and the next step.
+Tools are responsible for things such as:
 
-## Not covered
+- inspecting Widget Blueprints
+- creating and editing Widget Trees
+- validating `BindWidget` contracts
+- compiling, starting PIE and capturing the viewport
 
-- The intro is code in the C++ base, with its values in data; the tools cannot author UMG widget animations.
-  [Docs/Experiments/WidgetAnimationAuthoring.md](../Experiments/WidgetAnimationAuthoring.md) plans an experiment for that.
-- The icons, frames and card panel are still shapes, because the art request is open.
-- The tools cannot move a widget to another parent, so the rework removed the copies and added instances instead.
+The skill is responsible for guidance such as:
+
+- turn repeated elements into separate Widget Blueprint components
+- keep C++ `BindWidget` contracts stable
+- use `DynamicEntryBox`, `ListView` or `TileView` for data-driven entries
+- centralize style values in a Theme Data Asset
+- review changes through PIE captures
+
+The guidance began as a Claude Code-only skill under `.claude/skills`. The plugin later gained `skills_get`, so Codex and other MCP clients can read the same skill directly from the editor.
+
+## 4. Second version — components and data
+
+The UI was rebuilt by following `umg-authoring`.
+
+1. **Plan**
+   - components: Reward Slot, Stat Tile, Objective Row
+   - data: `Reward`, Label/Value, Done/Total
+   - dynamic list: Rewards
+
+2. **C++ component bases**
+   - `BindWidget` contracts
+   - instance-editable inputs applied in `NativePreConstruct`
+   - runtime setters
+   - screens pass data into components instead of reaching into their child widgets
+
+3. **Component Widget Blueprints**
+   - `umg_create_widget_blueprint`
+   - `umg_add_widgets`
+   - `blueprint_compile`
+
+4. **Restructure the screens**
+   - dry-run `umg_remove_widgets` to inspect affected widgets and bindings
+   - remove 19 copied widgets from the HUD and 48 from the popup
+   - replace them with Reward Slot, Stat Tile and Objective Row instances
+   - replace fixed rewards with `DynamicEntryBox` + `EntryWidgetClass`
+
+5. **Review**
+   - compile components first
+   - `pie_start`
+   - `sample_show_widget`
+   - `viewport_capture`
+   - `pie_stop`
+   - `asset_save`
+
+The smoke test also gained checks for:
+
+- instance properties on Widget Blueprint instances
+- a `DynamicEntryBox` entry class
+- rejection of a Widget Blueprint nested inside itself
+
+## 5. Third version — moving presentation from code into data
+
+The next review asked for presentation that could change without a C++ build.
+
+Three tools were added or expanded for that workflow:
+
+- `asset_create`
+- `asset_import_textures`
+- `object_set_properties` extended to project assets
+
+The structure then changed to:
+
+1. move color constants into a Theme Data Asset class
+2. move item presentation into a DataTable
+3. represent a reward as an item-table row plus count
+4. draw fallback shapes when icon textures are missing
+5. expose result-popup motion values as data
+
+`asset_create` produced `DA_DungeonUiTheme` and `DT_DungeonItems`, and `datatable_add_rows` populated the item rows.
+
+After changing Accent and Legendary colors through `object_set_properties`, a new capture showed the updated play result **without rebuilding C++**.
+
+![Theme with changed accent and legendary colors](../Images/dungeon_theme_change.jpg)
+
+## 6. Extending the workflow into UI art production
+
+Image assets that cannot be represented as theme data are described in [`Art/Requests/dungeon_ui.json`](../../Art/Requests/dungeon_ui.json).
+
+The current request includes:
+
+- five item icons
+- rare / epic / legendary slot frames
+- result-card panel
+
+Each entry records its size, alpha requirements, 9-slice border, target texture path and where the texture will be connected.
+
+The [`ui-art-requests`](../../Plugins/AgentMcp/Skills/ui-art-requests/SKILL.md) skill connects them through this workflow:
+
+```text
+UI Agent
+  ↓ request JSON
+Image Model / Agent / Artist
+  ↓ delivered image
+Automated Review
+  ↓
+Texture Import
+  ↓
+Data / Theme / Widget connection
+  ↓
+PIE Capture
+  ↓
+User Review
+```
+
+This extends Agent MCP from Widget Tree manipulation into a broader **UI production workflow**.
+
+## How this sample changed Agent MCP
+
+The sample is both a demo and a design test for the plugin itself.
+
+- oversized tool results → read back only requested fields
+- flat UI → move authoring rules into `umg-authoring`
+- Claude Code-only guidance → serve skills directly through MCP
+- inline style values → add Theme Data Asset and DataTable workflows
+- placeholder art → add `ui-art-requests`
+- judging results from text → use PIE + viewport capture review
+
+In other words, **real agent failures were fed back into both tool and skill design**.
+
+## Not covered yet
+
+- UMG Widget Animation creation/editing is not supported yet. The planned experiment is documented in [WidgetAnimationAuthoring.md](../Experiments/WidgetAnimationAuthoring.md).
+- Some art-request items are still represented by placeholder shapes.
+- There is no tool for directly moving a widget to another parent yet; restructuring removes a subtree and re-adds component instances under the new parent.
