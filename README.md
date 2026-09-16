@@ -2,21 +2,74 @@
 
 [한국어](README.ko.md)
 
-Agent MCP runs a [Model Context Protocol](https://modelcontextprotocol.io) server inside the Unreal Editor, so that coding
-agents such as Claude Code can investigate a project, change it, run it and check the result:
+Agent MCP runs a [Model Context Protocol](https://modelcontextprotocol.io) server inside Unreal Engine 5.5, allowing coding agents such as Claude Code and Codex to **inspect a project, modify it, run it, and verify the result**.
 
-- inspect levels, actors, properties, assets, Blueprints, Widget Blueprints and DataTables
-- change actors, data assets and other project assets, DataTable rows and widget trees in undoable editor transactions
-- create Widget Blueprints, data assets and DataTables, import textures, and save assets explicitly
-- compile Blueprints, compile C++ with Live Coding, start and stop Play In Editor
-- read the editor log and capture the viewport, including the game UI of a play session
-- serve skills: task guides, such as how to build game UI with these tools, that every connected agent reads in the same version
+Rather than being only a remote-control layer for Unreal, the plugin focuses on **agent workflows for real game-development tasks**. Its design takes inspiration from the experimental MCP/toolset and Agent Skill concepts in Unreal Engine 5.8, but is reimplemented for UE 5.5. Skills are served as Markdown `SKILL.md` files compatible with Claude Code and Codex.
 
-Tools are plain `static UFUNCTION`s. Their names, descriptions and JSON schemas come from reflection, so a new tool is one
-function.
+## Core features
 
-> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this
-> repository passes 177 checks against the testbed project. Other engine versions and platforms have not been tried.
+### Agent Skills
+
+The plugin serves task guidance to connected agents. A skill consists of `SKILL.md` plus optional references and scripts, and project-specific skills can override the defaults that ship with the plugin.
+
+Included skills:
+
+- `umg-authoring`: production-oriented UMG authoring with reusable Widget Blueprint components, C++ `BindWidget` contracts, data-driven lists, Theme Data Assets and capture-based review
+- `ui-style-system`: design tokens, a UI kit/gallery, style extraction and viewport-capture comparison
+- `ui-art-requests`: an art request → review → import → connection workflow between UMG and an image model, another agent or an artist
+
+### UMG-focused tools
+
+The UMG toolset goes beyond creating Widget Blueprints.
+
+- inspect Widget Trees and Named Slots
+- inspect C++ parent classes and verify `BindWidget` / `BindWidgetOptional` contracts against the actual widget names and types
+- create Widget Blueprints, add whole subtrees, and change widget and slot properties
+- dry-run destructive edits and report the affected bindings and graph references before removal
+- iterate through Blueprint compile → PIE → viewport capture → review
+
+### Build → Run → Review
+
+Blueprint and C++ compilation, Play In Editor, editor logs and viewport capture are available through the same MCP server so an agent can verify what it changed in the running editor.
+
+```text
+Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
+```
+
+### Reflection-based toolsets
+
+Tools are plain `static UFUNCTION`s. Names, descriptions, arguments and result JSON schemas are generated from Unreal Reflection, so adding a function to a toolset creates an MCP tool.
+
+> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 177 checks against the testbed project. Other engine versions and platforms have not been tried.
+
+## Dungeon UI — workflow case study
+
+`Content/Samples/DungeonUi` contains a dungeon progress HUD and result popup built by Claude Code **without opening the UMG Designer**, using Agent MCP tools and skills.
+
+The first version was a flat tree of 48 and 78 widgets per screen. It worked, but repeated elements were copied, style values were scattered inline, and the reward list could not grow from data.
+
+After review, the production rules were moved into the `umg-authoring` skill and the UI was rebuilt around reusable components and data:
+
+```text
+Flat Widget Tree
+      ↓ review
+Reusable Widget Blueprint Components
++ C++ BindWidget Contracts
++ DynamicEntryBox
+      ↓ review
+Theme Data Asset
++ DataTable
++ Art Request Pipeline
++ Capture-based Review
+```
+
+![Dungeon result popup](Docs/Images/dungeon_result.jpg)
+
+![Dungeon progress HUD](Docs/Images/dungeon_hud.jpg)
+
+The [Dungeon UI case study](Docs/Samples/DungeonUi.md) records the rejected versions, the problems they revealed, and how those findings changed both the sample and the plugin workflow.
+
+## Documentation
 
 - [Installation](#installation)
 - [Connecting a client](#connecting-a-client)
@@ -26,8 +79,8 @@ function.
 - [Settings](#settings)
 - [Writing tools](#writing-tools)
 - [Testbed and smoke test](#testbed-and-smoke-test)
-- [UI sample](#ui-sample)
 - [Limitations](#limitations)
+- [Background](#background)
 - [License](#license)
 
 ## Installation
@@ -61,8 +114,7 @@ For Claude Code, add a `.mcp.json` file to the project root:
 
 If `AuthToken` is set, add `"headers": { "Authorization": "Bearer <token>" }` to the server entry.
 
-For Codex, add a `.codex/config.toml` file to the project root. Codex reads it only in a trusted project, one that
-`~/.codex/config.toml` lists with `trust_level = "trusted"` after you trust the folder.
+For Codex, add a `.codex/config.toml` file to the project root. Codex reads it only in a trusted project, one that `~/.codex/config.toml` lists with `trust_level = "trusted"` after you trust the folder.
 
 ```toml
 [mcp_servers.unreal]
@@ -70,22 +122,15 @@ url = "http://127.0.0.1:18765/mcp"
 tool_timeout_sec = 600
 ```
 
-`tool_timeout_sec` raises the Codex default of 60 seconds, which compiling, saving and play sessions can exceed. If `AuthToken` is
-set, add `http_headers = { Authorization = "Bearer <token>" }`, or name an environment variable that holds the token with
-`bearer_token_env_var`. Start a new Codex session after changing the file.
+`tool_timeout_sec` raises the Codex default of 60 seconds, which compiling, saving and play sessions can exceed. If `AuthToken` is set, add `http_headers = { Authorization = "Bearer <token>" }`, or name an environment variable that holds the token with `bearer_token_env_var`. Start a new Codex session after changing the file.
 
-The server returns short usage instructions from `initialize`, including the list of skills. Agents should start with
-`editor_get_state`.
+The server returns short usage instructions from `initialize`, including the list of skills. Agents should start with `editor_get_state`.
 
-**One port per editor.** Every editor that enables the plugin uses the configured port. When two editors run at the same
-time, the second one cannot bind the port, logs `Agent MCP server failed to start`, and serves no tools. Give projects that
-run at the same time different ports, and check the `project` field of `editor_get_state` before changing anything.
+**One port per editor.** Every editor that enables the plugin uses the configured port. When two editors run at the same time, the second one cannot bind the port, logs `Agent MCP server failed to start`, and serves no tools. Give projects that run at the same time different ports, and check the `project` field of `editor_get_state` before changing anything.
 
 ## Tools
 
-**Read** tools have no side effects. **Write** tools run in an undoable editor transaction and are refused during Play In
-Editor. **Destructive** tools are Write tools that only report what they would do unless `bConfirm` is true. **Control**
-tools change editor state that cannot be undone: play sessions, compiling, saving, and creating or importing assets.
+**Read** tools have no side effects. **Write** tools run in an undoable editor transaction and are refused during Play In Editor. **Destructive** tools are Write tools that only report what they would do unless `bConfirm` is true. **Control** tools change editor state that cannot be undone: play sessions, compiling, saving, and creating or importing assets.
 
 | Tool | Access | Description |
 |---|---|---|
@@ -123,72 +168,43 @@ tools change editor state that cannot be undone: play sessions, compiling, savin
 | `skills_list` | Read | Skills of the plugin and the project with their descriptions, and skill files that were skipped |
 | `skills_get` | Read | Instructions of a skill, or one of its other files |
 
-A typical verification loop: `blueprint_compile` → `pie_start` → `log_get_recent` from the returned `startLogSequence` →
-`viewport_capture` → `pie_stop`.
+A typical verification loop: `blueprint_compile` → `pie_start` → `log_get_recent` from the returned `startLogSequence` → `viewport_capture` → `pie_stop`.
 
-To build a user interface: `umg_create_widget_blueprint` (with a C++ parent class that declares `BindWidget` properties) →
-`umg_add_widgets` → `blueprint_compile` → look at it in a play session with `viewport_capture` → adjust it with
-`umg_set_widget_properties`. Values are JSON: property names are the C++ names (`Text`, `Font`, `Padding`, `LayoutData`),
-a struct value may list only the fields to set, and enum values are names (`HAlign_Center`, `RoundedBox`). An entry class can
-be a Widget Blueprint, whose instance properties are set the same way. The edit tools read back only the requested fields;
-`umg_inspect` with `bIncludeProperties` returns complete values.
+To build a user interface: `umg_create_widget_blueprint` (with a C++ parent class that declares `BindWidget` properties) → `umg_add_widgets` → `blueprint_compile` → inspect it in a play session with `viewport_capture` → adjust it with `umg_set_widget_properties`. Values are JSON: property names are the C++ names (`Text`, `Font`, `Padding`, `LayoutData`), struct values may list only the fields to set, and enum values are names (`HAlign_Center`, `RoundedBox`). Widget Blueprint classes can be nested as component instances and their instance properties can be set the same way.
 
-To keep the look of a UI in data: `asset_create` makes a theme data asset or an item DataTable, `object_set_properties` and the
-datatable tools fill them, and `asset_import_textures` brings in icons and frames with the texture settings for UMG.
-
-The tools build whatever tree they are given. How a UI team would build it (reusable component Widget Blueprints, style values in
-one place, data-driven lists and a capture review) is described by the plugin's skill `umg-authoring`. How images are requested from
-an image model, another agent or an artist, checked on a review sheet and connected is described by `ui-art-requests`. How the
-style of a project is extracted from its Widget Blueprints or a mockup, kept as design tokens and a kit gallery, and checked with
-capture comparisons is described by `ui-style-system`; see [Skills](#skills).
+To keep presentation in data, `asset_create` can make a theme data asset or item DataTable, `object_set_properties` and the datatable tools fill them, and `asset_import_textures` brings in icons and frames with UMG texture settings.
 
 ## Skills
 
-A skill is a task guide for agents: a folder with a `SKILL.md` file whose front matter has a `name` and a `description`, the format
-that Claude Code and Codex use for their own skills. The editor serves the skills, so every connected agent reads the same version,
-and the skills travel with the plugin.
+A skill is a task guide for agents: a folder with a `SKILL.md` file whose front matter contains a `name` and a `description`, matching the format used by Claude Code and Codex. The editor serves the skills, so every connected agent reads the same version and the guidance travels with the plugin.
 
-- The server instructions returned by `initialize` list each skill with its description.
-- `skills_list` returns the skills with their folders, and the skill files that were skipped with the reason.
-- `skills_get` returns the instructions and the folder of a skill and, on request, its other files, such as references or examples.
-  Scripts of a skill, such as the review sheet of `ui-art-requests`, run from that folder.
+- `initialize` lists skills and descriptions in the server instructions.
+- `skills_list` returns discovered skills and reports invalid skill files.
+- `skills_get` returns the guide and can also serve text files such as references, examples and scripts from inside the skill folder.
 
-Skills are read from these folders in this order. A skill replaces one with the same name from an earlier folder, so a project can
-adapt a plugin skill.
+Skills are read from these folders in this order. A skill from a later folder replaces one with the same name from an earlier folder, allowing projects to adapt plugin guidance.
 
-1. `Plugins/AgentMcp/Skills`: the skills of the plugin, currently `umg-authoring`, `ui-art-requests` and `ui-style-system`
+1. `Plugins/AgentMcp/Skills`: plugin skills, currently `umg-authoring`, `ui-art-requests` and `ui-style-system`
 2. `AgentMcp/Skills` in the project folder
-3. the folders of the `SkillDirectories` setting
+3. folders configured through `SkillDirectories`
 
-The files are read on every call, so a changed skill applies without restarting the editor. Only the list in the server
-instructions is made when the server starts.
+Skill files are read on every call, so edits apply without restarting the editor. Only the short list included in server instructions is created when the server starts.
 
-Claude Code and Codex choose skills by their descriptions. To let them start a served skill on their own, add a short `SKILL.md`
-with the same name and description to `.claude/skills/<name>/` for Claude Code or `.agents/skills/<name>/` for Codex that tells the
-agent to call `skills_get`. This repository has both for the plugin skills.
+Claude Code and Codex choose skills by their descriptions. To let them automatically begin a served skill, put a short `SKILL.md` with the same name and description under `.claude/skills/<name>/` or `.agents/skills/<name>/` that tells the agent to call `skills_get`. This repository includes those bridges for all plugin skills.
 
-Unreal Engine 5.8 serves skills the same way: skills are `UAgentSkill` classes defined in C++, Python or Blueprint, read through
-`ListSkills` and `GetSkills` tools. Agent MCP reads Markdown files instead, so a skill is edited as text and has the same format as
-the skills of Claude Code and Codex.
+Unreal Engine 5.8 also provides an Agent Skill concept. UE 5.8 uses `UAgentSkill` classes authored in C++, Python or Blueprint; Agent MCP instead implements Markdown skills so they are editable as text and share the same format as Claude Code and Codex skills.
 
 ## Safety
 
-- **Local only.** The server listens on `127.0.0.1`. Requests whose browser `Origin` is not `localhost`, `127.0.0.1` or
-  `[::1]` are refused, which blocks web pages from reaching the editor. `AuthToken` additionally requires a bearer token.
-- **Undoable, all-or-nothing writes.** Write tools validate every value before they change anything and run in an editor
-  transaction. If a tool fails after it has changed something, the transaction is undone.
-- **No writes during play.** Write tools and the tools that create or import assets are refused while Play In Editor is starting
-  or running.
-- **Project content only.** Tools create, import, change and save assets under `/Game` and in project plugins; engine content is
-  read-only. `object_set_properties` also refuses Blueprints and DataTables, which have their own tools, and levels that are not open.
-- **Explicit saving.** No tool saves as a side effect. `asset_save` saves loaded assets of the project only; levels are refused.
-- **Dry runs.** Destructive tools need `bConfirm: true` to act, and `asset_import_textures` checks every entry before it imports
-  anything.
-- **Allow and block lists.** `AllowedTools` and `BlockedTools` hide tools, and `BlockedProperties` protects properties from
-  `object_set_properties` and the `umg` tools.
-- **Files.** `skills_get` reads files inside a skill folder only; other paths and hidden files are refused.
-  `asset_import_textures` reads the image files it is given, also outside the project folder.
-- There is no tool that runs console commands or scripts.
+- **Local only.** The server listens on `127.0.0.1`. Requests whose browser `Origin` is not `localhost`, `127.0.0.1` or `[::1]` are refused. `AuthToken` additionally requires a bearer token.
+- **Undoable, all-or-nothing writes.** Write tools validate values before changing anything and run in an editor transaction. If a tool fails after changing state, the transaction is rolled back.
+- **No writes during play.** Write tools and asset creation/import tools are refused while Play In Editor is starting or running.
+- **Project content only.** Assets can be created, imported, changed and saved only under `/Game` and project plugins. Engine content is read-only.
+- **Explicit saving.** No tool saves as a side effect. `asset_save` saves loaded project assets only and refuses levels.
+- **Dry runs.** Destructive tools need `bConfirm: true` to act, and `asset_import_textures` validates every entry before importing anything.
+- **Allow and block lists.** `AllowedTools` and `BlockedTools` hide tools, while `BlockedProperties` protects properties from `object_set_properties` and UMG tools.
+- **Files.** `skills_get` can read only inside a skill folder and refuses outside paths and hidden files.
+- There is no tool that runs console commands or arbitrary scripts.
 
 ## Settings
 
@@ -207,18 +223,17 @@ Port=18765
 | `UrlPath` | `/mcp` | Endpoint path |
 | `AuthToken` | empty | When set, clients must send `Authorization: Bearer <token>` |
 | `ExposureMode` | `Native` | `Native` registers every tool. `ToolSearch` registers only `toolsets_list`, `toolsets_describe` and `tools_call` |
-| `BlockedTools`, `AllowedTools` | empty | Tool name wildcards (for example `datatable_*`) |
+| `BlockedTools`, `AllowedTools` | empty | Tool-name wildcards such as `datatable_*` |
 | `bAllowWritesDuringPIE` | `False` | Allow Write tools during Play In Editor |
-| `BlockedProperties` | empty | `ClassName.PropertyName` wildcards that `object_set_properties` and the `umg` tools refuse |
+| `BlockedProperties` | empty | `ClassName.PropertyName` wildcards refused by `object_set_properties` and UMG tools |
 | `BusyWaitTimeoutSeconds` | `10` | How long a call waits while the editor saves, collects garbage or loads assets |
 | `MaxResultBytes` | `65536` | Result text above this size is truncated |
 | `LogBufferLines` | `20000` | Log lines kept for `log_get_recent` |
-| `SkillDirectories` | empty | More skill folders, searched after the plugin's and the project's; relative paths start at the project folder |
+| `SkillDirectories` | empty | Additional skill folders searched after the plugin and project folders |
 
 ## Writing tools
 
-Add `AgentMcpToolset` to the dependencies of an editor module, then declare static functions on a `UAgentMcpToolset`
-subclass:
+Add `AgentMcpToolset` to the dependencies of an editor module, then declare static functions on a `UAgentMcpToolset` subclass:
 
 ```cpp
 #include "AgentMcpToolset.h"
@@ -228,41 +243,32 @@ subclass:
 USTRUCT(BlueprintType)
 struct FMyGreeting
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
-	UPROPERTY()
-	FString Message;
+    UPROPERTY()
+    FString Message;
 };
 
-/** Example tools. */
 UCLASS(meta = (McpToolset = "my"))
 class UMyTools : public UAgentMcpToolset
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
 public:
-	/**
-	 * Greets someone.
-	 * @param Name Who to greet.
-	 * @return The greeting.
-	 */
-	UFUNCTION(BlueprintCallable, Category = "My Tools", meta = (AICallable, McpAccess = "Read", BlueprintInternalUseOnly = "true"))
-	static FMyGreeting Greet(const FString& Name = TEXT("world"));
+    UFUNCTION(BlueprintCallable, Category = "My Tools", meta = (AICallable, McpAccess = "Read", BlueprintInternalUseOnly = "true"))
+    static FMyGreeting Greet(const FString& Name = TEXT("world"));
 };
 ```
 
 This becomes the tool `my_greet` with an optional string argument `name`.
 
-- Toolset classes are found automatically. The tool name is `<McpToolset>_<function name in snake_case>`, and the comment
-  provides the description.
-- `McpAccess` is `Read`, `Write`, `Destructive` or `Control`. A missing value is treated as `Write`.
-- Keep `BlueprintCallable`: Unreal Engine 5.5 records C++ default argument values only for Blueprint-callable functions, and
-  without them every argument becomes required. `BlueprintInternalUseOnly` keeps the function out of Blueprint menus.
-- Return a `USTRUCT(BlueprintType)`. Its fields become the JSON result; empty strings, arrays and structs are left out.
-- Report a failure with `UE::AgentMcp::RaiseToolError(TEXT("CODE"), TEXT("Message"), TEXT("Hint"))` and return.
-- Object arguments (`UObject*`, `AActor*`, `UClass*`) accept object paths, and actors also accept their labels.
-- For work that finishes on a later frame, return `UAgentMcpAsyncResult::Create(TimeoutSeconds, PollFunction)`. Only Read
-  and Control tools can do this.
+- Toolset classes are found automatically. Tool names are `<McpToolset>_<function name in snake_case>`, and comments provide descriptions.
+- `McpAccess` is `Read`, `Write`, `Destructive` or `Control`; a missing value is treated as `Write`.
+- Keep `BlueprintCallable`: Unreal Engine 5.5 records C++ default argument values only for Blueprint-callable functions.
+- Return a `USTRUCT(BlueprintType)`; its fields become the JSON result.
+- Report failures with `UE::AgentMcp::RaiseToolError(TEXT("CODE"), TEXT("Message"), TEXT("Hint"))`.
+- Object arguments (`UObject*`, `AActor*`, `UClass*`) accept object paths, and actors also accept labels.
+- For work that finishes on a later frame, return `UAgentMcpAsyncResult::Create(TimeoutSeconds, PollFunction)`; only Read and Control tools can do this.
 - To return an image, add an `FAgentMcpImage` field to the result struct.
 
 ## Testbed and smoke test
@@ -272,69 +278,45 @@ The repository root is a small Unreal Engine 5.5 project that builds and tests t
 | Path | Contents |
 |---|---|
 | `Plugins/AgentMcp` | The plugin, with its skills in `Plugins/AgentMcp/Skills` |
-| `Source/AgentMcpTestbed` | Row struct, data asset class, widget base class and game mode used by the tests, and the C++ classes of the UI sample |
-| `Source/AgentMcpTestbedEditor` | `testbed_*` tools that create test assets under `/Game/AgentMcpFixtures`, hooks for rollback and cancellation checks, and `sample_show_widget` |
-| `Content/Samples/DungeonUi` | Widget Blueprints, theme data asset and item table of the UI sample, built with the tools |
-| `Art/Requests` | Art requests of the samples |
-| `Docs` | How the samples were built, and a planned experiment |
-| `.mcp.json`, `.codex/config.toml` | Connect Claude Code and Codex to the testbed editor on port 18766 |
-| `.claude/skills`, `.agents/skills` | Short skill files that let Claude Code and Codex start the plugin skills |
-| `Config` | The testbed serves port **18766**, so that it never answers in place of another project on the default port, and adds the smoke test's skill folder to `SkillDirectories`. `DefaultGame.ini` selects the theme of the UI sample |
-| `Tools/mcp_smoke.py` | Smoke test (Python 3, standard library only) |
+| `Source/AgentMcpTestbed` | Row structs, data assets, widget bases, game mode and the C++ classes of the UI sample |
+| `Source/AgentMcpTestbedEditor` | Test-only tools and `sample_show_widget` |
+| `Content/Samples/DungeonUi` | Widget Blueprints, theme data asset and item table built through the tools |
+| `Art/Requests` | Art requests for the sample |
+| `Docs` | Case studies and experiments |
+| `.mcp.json`, `.codex/config.toml` | Claude Code and Codex connection settings for testbed port 18766 |
+| `.claude/skills`, `.agents/skills` | Bridges that let clients begin the served plugin skills |
+| `Tools/mcp_smoke.py` | Smoke test using Python 3 standard library only |
 | `Tools/mcp_call.py` | Calls one tool from the command line |
 
-1. Build the `AgentMcpTestbedEditor` target:
+1. Build the `AgentMcpTestbedEditor` target.  
    `<UE>\Engine\Build\BatchFiles\Build.bat AgentMcpTestbedEditor Win64 Development -Project=<path>\AgentMcpTestbed.uproject -WaitMutex`
 2. Open `AgentMcpTestbed.uproject` and wait for `Agent MCP server listening on http://127.0.0.1:18766/mcp`.
 3. Run `python Tools/mcp_smoke.py --out Saved/MCP/smoke.json`.
 
-The smoke test first checks that the editor behind the URL is the `AgentMcpTestbed` project and stops otherwise, because
-it starts Play In Editor, changes the level and saves the test assets. It covers the MCP transport and its errors, every
-tool, undo and rollback, request cancellation, Play In Editor, viewport capture with the game UI, Live Coding, Widget
-Blueprint editing including nested Widget Blueprint instances, skills, creating data assets and DataTables, and importing textures.
+The smoke test covers MCP transport and errors, every tool, undo and rollback, request cancellation, Play In Editor, viewport capture with game UI, Live Coding, nested Widget Blueprint editing, skills, data-asset/DataTable creation and texture import.
 
 To call a single tool:
 
-```
+```bash
 python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --expect-project AgentMcpTestbed
 ```
 
-## UI sample
-
-`Content/Samples/DungeonUi` holds a dungeon progress HUD and a dungeon result popup that Claude Code built through the tools:
-component Widget Blueprints for reward slots, stat tiles and objective rows, C++ bases with `BindWidget` contracts and intro
-animations, a `DynamicEntryBox` that creates one reward slot per reward, a theme data asset for colors and frames, and an item
-table. The icons and frames it still draws as shapes are listed in an art request. [Docs/Samples/DungeonUi.md](Docs/Samples/DungeonUi.md)
-describes how it was built, including the versions that reviews sent back, and how to run it.
-
-![Dungeon result popup](Docs/Images/dungeon_result.jpg)
-
 ## Limitations
 
-- Tested with Unreal Engine 5.5.4 on Windows 64-bit only. All tools have been tested with the Python client in `Tools`.
-  From Claude Code 2.1.270, `editor_get_state`, `actor_find` and `viewport_capture` were called from the desktop app and the
-  CLI. While building the UI sample, the desktop app also called `umg_create_widget_blueprint`, `umg_add_widgets`,
-  `umg_set_widget_properties`, `umg_remove_widgets`, `umg_inspect`, `blueprint_compile`, `pie_start`, `pie_stop`, `asset_save`,
-  `livecoding_compile`, `skills_list`, `skills_get`, `asset_create`, `datatable_add_rows`, `object_get_properties`,
-  `object_set_properties` and `editor_undo`. The other tools have not been called from Claude Code yet.
-- The Codex setup (`.codex/config.toml`, `.agents/skills`) follows the Codex documentation and has not been tested with Codex yet.
-- Responses are plain JSON. There is no streaming: no SSE and no progress notifications. `pie_start` and similar tools hold
-  the request until they finish.
-- Requests run on the editor's game thread. An editor in the background with **Use Less CPU when in Background** enabled
-  ticks about three times per second, so each call then takes about a third of a second. Disable that editor preference
-  while an agent works.
-- `livecoding_compile` blocks the editor until the compile has finished, and Live Coding cannot apply changes to `UCLASS`,
-  `USTRUCT`, `UPROPERTY` or `UFUNCTION` declarations. Close the editor and build instead.
-- Tools change DataTable rows, the widget trees of Widget Blueprints and the properties of data assets and other project assets,
-  and create data assets, DataTables and textures. Blueprint graphs and class defaults, widget animations and designer property
-  bindings can be inspected but not edited, and a widget cannot be moved to another parent yet.
-- The `ToolSearch` exposure mode and source control handling when saving have not been tested yet.
+- Tested with Unreal Engine 5.5.4 on Windows 64-bit only.
+- Major inspection, UMG, compilation, PIE, save, skill, DataTable and asset tools were used from Claude Code 2.1.270 while building the UI sample.
+- The Codex setup follows Codex documentation but has not yet been tested with Codex.
+- Responses are plain JSON. There is no SSE or progress streaming.
+- Requests execute on the editor game thread. **Use Less CPU when in Background** can make calls noticeably slower when the editor is unfocused.
+- `livecoding_compile` blocks until compilation completes, and Live Coding cannot apply reflected declaration changes to `UCLASS`, `USTRUCT`, `UPROPERTY` or `UFUNCTION`.
+- Blueprint graphs and class defaults, widget animations and designer property bindings can be inspected but not edited, and widgets cannot yet be moved to a different parent.
+- `ToolSearch` exposure mode and source-control handling on save have not yet been tested.
 
 ## Background
 
-The tool set and its reflection-based design follow the experimental Model Context Protocol and toolset plugins that Epic
-Games ships with Unreal Engine 5.8, reimplemented for Unreal Engine 5.5. This repository contains no source files from those
-plugins. Unreal and Unreal Engine are trademarks or registered trademarks of Epic Games, Inc.
+The toolset layout and reflection-based design take inspiration from the experimental Model Context Protocol/toolset plugins shipped by Epic Games with Unreal Engine 5.8 and were reimplemented for Unreal Engine 5.5. The Agent Skill concept was also an influence, but this project does not port `UAgentSkill`; it implements a separate Markdown `SKILL.md` system that can be shared with Claude Code and Codex.
+
+This repository contains no source files from Epic's plugins. Unreal and Unreal Engine are trademarks or registered trademarks of Epic Games, Inc.
 
 ## License
 

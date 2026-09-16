@@ -2,21 +2,74 @@
 
 [English](README.md)
 
-Agent MCP는 언리얼 에디터 안에서 [Model Context Protocol](https://modelcontextprotocol.io) 서버를 실행합니다. Claude Code
-같은 코딩 에이전트가 프로젝트를 조사하고, 수정하고, 실행한 뒤 결과를 확인할 수 있습니다.
+Agent MCP는 Unreal Engine 5.5 에디터 안에서 [Model Context Protocol](https://modelcontextprotocol.io) 서버를 실행하여 Claude Code, Codex 같은 코딩 에이전트가 프로젝트를 **조사하고, 수정하고, 실행한 뒤 결과를 검증**할 수 있게 하는 에디터 플러그인입니다.
 
-- 레벨, 액터, 프로퍼티, 에셋, 블루프린트, 위젯 블루프린트, DataTable 조회
-- 액터, 데이터 에셋과 그 밖의 프로젝트 에셋, DataTable 행, 위젯 트리를 되돌릴 수 있는 에디터 트랜잭션으로 변경
-- 위젯 블루프린트, 데이터 에셋, DataTable 생성, 텍스처 가져오기, 에셋의 명시적 저장
-- 블루프린트 컴파일, Live Coding으로 C++ 컴파일, Play In Editor 시작과 종료
-- 에디터 로그 읽기, 뷰포트 캡처(플레이 세션의 게임 UI 포함)
-- 스킬 제공: 이 도구로 게임 UI를 만드는 방법 같은 작업 지침을, 연결된 모든 에이전트가 같은 버전으로 읽음
+단순한 Unreal 원격 제어보다 **에이전트가 실제 게임 개발 작업을 수행하는 워크플로**에 초점을 맞췄습니다. Unreal Engine 5.8의 실험적 MCP/toolset 및 Agent Skill 개념을 참고하되, UE 5.5에서 동작하도록 새로 구현했고 Skill은 Claude Code·Codex와 호환되는 Markdown `SKILL.md` 형식으로 제공합니다.
 
-도구는 일반 `static UFUNCTION`입니다. 이름, 설명, JSON 스키마를 리플렉션에서 만들기 때문에 함수 하나를 추가하면 도구
-하나가 생깁니다.
+## 핵심 특징
 
-> **상태: 베타.** Windows 64비트의 Unreal Engine 5.5.4(설치형 빌드)로 빌드하고 테스트했습니다. 이 저장소의 smoke 테스트는
-> 테스트베드 프로젝트에서 177개 검사를 통과합니다. 다른 엔진 버전과 플랫폼은 확인하지 않았습니다.
+### Agent Skills
+
+플러그인 자체가 작업 지침을 에이전트에게 제공합니다. Skill은 `SKILL.md`와 참고 파일·스크립트로 구성되며, 플러그인 기본 Skill 위에 프로젝트별 Skill을 덮어쓸 수 있습니다.
+
+현재 포함된 Skill:
+
+- `umg-authoring`: 재사용 가능한 Widget Blueprint 컴포넌트, C++ `BindWidget` 계약, 데이터 기반 목록, Theme Data Asset, 캡처 검토를 포함한 UMG 제작 규칙
+- `ui-style-system`: 디자인 토큰, UI kit/gallery, 스타일 추출과 viewport capture 비교
+- `ui-art-requests`: 이미지 모델·다른 에이전트·아티스트와 UMG 사이의 아트 요청 → 검수 → import → 연결 워크플로
+
+### UMG 특화 도구
+
+Widget Blueprint를 단순히 생성하는 데서 끝나지 않습니다.
+
+- Widget Tree와 Named Slot 구조 분석
+- C++ 부모 클래스의 `BindWidget` / `BindWidgetOptional` 계약과 실제 위젯 타입 검증
+- Widget Blueprint 생성, 하위 트리 단위 추가, Widget/Slot 프로퍼티 변경
+- 삭제 전 dry run과 바인딩·그래프 참조 영향 경고
+- Blueprint compile → PIE → viewport capture → 수정의 반복 검증 루프
+
+### Build → Run → Review
+
+에이전트가 변경한 결과를 실행 화면으로 검증할 수 있도록 Blueprint/C++ 컴파일, Play In Editor, 로그 조회, viewport capture를 같은 MCP 서버에서 제공합니다.
+
+```text
+Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
+```
+
+### Reflection 기반 Toolset
+
+도구는 일반 `static UFUNCTION`입니다. 이름, 설명, 인자와 반환 JSON 스키마를 Unreal Reflection에서 생성하므로 Toolset에 함수를 추가하면 MCP 도구가 됩니다.
+
+> **상태: 베타.** Windows 64비트의 Unreal Engine 5.5.4(설치형 빌드)로 빌드하고 테스트했습니다. 이 저장소의 smoke 테스트는 테스트베드 프로젝트에서 177개 검사를 통과합니다. 다른 엔진 버전과 플랫폼은 확인하지 않았습니다.
+
+## Dungeon UI — 워크플로 검증 사례
+
+`Content/Samples/DungeonUi`에는 Claude Code가 **UMG Designer를 열지 않고 Agent MCP Tool과 Skill로 제작한** 던전 진행 HUD와 결과 팝업이 있습니다.
+
+첫 버전은 화면마다 48개/78개의 위젯을 한 번에 만든 평평한 트리였습니다. 동작은 했지만 반복 요소가 복사되어 있었고, 스타일 값이 인라인으로 흩어져 있었으며, 보상 목록도 데이터에 따라 늘어날 수 없었습니다.
+
+리뷰를 반영하면서 제작 규칙을 `umg-authoring` Skill로 분리하고 UI를 다음 구조로 다시 만들었습니다.
+
+```text
+Flat Widget Tree
+      ↓ review
+Reusable Widget Blueprint Components
++ C++ BindWidget Contracts
++ DynamicEntryBox
+      ↓ review
+Theme Data Asset
++ DataTable
++ Art Request Pipeline
++ Capture-based Review
+```
+
+![던전 결과 팝업](Docs/Images/dungeon_result.jpg)
+
+![던전 진행 HUD](Docs/Images/dungeon_hud.jpg)
+
+상세한 제작 과정과 반려된 버전에서 무엇을 고쳤는지는 [Dungeon UI 사례 문서](Docs/Samples/DungeonUi.ko.md)에 기록했습니다.
+
+## 문서 바로가기
 
 - [설치](#설치)
 - [클라이언트 연결](#클라이언트-연결)
@@ -26,8 +79,8 @@ Agent MCP는 언리얼 에디터 안에서 [Model Context Protocol](https://mode
 - [설정](#설정)
 - [도구 만들기](#도구-만들기)
 - [테스트베드와 smoke 테스트](#테스트베드와-smoke-테스트)
-- [UI 샘플](#ui-샘플)
 - [한계](#한계)
+- [배경](#배경)
 - [라이선스](#라이선스)
 
 ## 설치
@@ -61,8 +114,7 @@ Claude Code에서는 프로젝트 루트에 `.mcp.json` 파일을 추가합니�
 
 `AuthToken`을 설정했다면 서버 항목에 `"headers": { "Authorization": "Bearer <token>" }`를 추가합니다.
 
-Codex에서는 프로젝트 루트에 `.codex/config.toml` 파일을 추가합니다. Codex는 신뢰한 프로젝트에서만 이 파일을 읽습니다. 폴더를
-신뢰하면 `~/.codex/config.toml`에 그 폴더가 `trust_level = "trusted"`로 기록됩니다.
+Codex에서는 프로젝트 루트에 `.codex/config.toml` 파일을 추가합니다. Codex는 신뢰한 프로젝트에서만 이 파일을 읽습니다. 폴더를 신뢰하면 `~/.codex/config.toml`에 그 폴더가 `trust_level = "trusted"`로 기록됩니다.
 
 ```toml
 [mcp_servers.unreal]
@@ -70,21 +122,15 @@ url = "http://127.0.0.1:18765/mcp"
 tool_timeout_sec = 600
 ```
 
-`tool_timeout_sec`는 Codex의 기본 제한시간 60초를 늘립니다. 컴파일, 저장, 플레이 세션은 60초를 넘길 수 있습니다. `AuthToken`을
-설정했다면 `http_headers = { Authorization = "Bearer <token>" }`를 추가하거나, 토큰이 든 환경 변수 이름을 `bearer_token_env_var`에
-적습니다. 파일을 바꾼 뒤에는 Codex 세션을 새로 시작합니다.
+`tool_timeout_sec`는 Codex의 기본 제한시간 60초를 늘립니다. 컴파일, 저장, 플레이 세션은 60초를 넘길 수 있습니다. `AuthToken`을 설정했다면 `http_headers = { Authorization = "Bearer <token>" }`를 추가하거나, 토큰이 든 환경 변수 이름을 `bearer_token_env_var`에 적습니다. 파일을 바꾼 뒤에는 Codex 세션을 새로 시작합니다.
 
 서버는 `initialize` 응답으로 짧은 사용 안내와 스킬 목록을 보냅니다. 에이전트는 `editor_get_state`로 작업을 시작하는 것이 좋습니다.
 
-**에디터마다 포트 하나.** plugin을 켠 에디터는 모두 설정된 포트를 씁니다. 에디터 두 개를 동시에 실행하면 두 번째
-에디터는 포트를 열지 못해 `Agent MCP server failed to start`를 기록하고 도구를 제공하지 않습니다. 동시에 여는 프로젝트에는
-서로 다른 포트를 지정하고, 무언가를 바꾸기 전에 `editor_get_state`의 `project` 값을 확인하세요.
+**에디터마다 포트 하나.** plugin을 켠 에디터는 모두 설정된 포트를 씁니다. 에디터 두 개를 동시에 실행하면 두 번째 에디터는 포트를 열지 못해 `Agent MCP server failed to start`를 기록하고 도구를 제공하지 않습니다. 동시에 여는 프로젝트에는 서로 다른 포트를 지정하고, 무언가를 바꾸기 전에 `editor_get_state`의 `project` 값을 확인하세요.
 
 ## 도구
 
-**Read** 도구는 부작용이 없습니다. **Write** 도구는 되돌릴 수 있는 에디터 트랜잭션 안에서 실행되고, Play In Editor 중에는
-거부됩니다. **Destructive** 도구는 `bConfirm`이 true가 아니면 무엇을 할지 보고만 하는 Write 도구입니다. **Control** 도구는
-플레이 세션, 컴파일, 저장, 에셋 생성과 가져오기처럼 되돌릴 수 없는 에디터 상태를 바꿉니다.
+**Read** 도구는 부작용이 없습니다. **Write** 도구는 되돌릴 수 있는 에디터 트랜잭션 안에서 실행되고, Play In Editor 중에는 거부됩니다. **Destructive** 도구는 `bConfirm`이 true가 아니면 무엇을 할지 보고만 하는 Write 도구입니다. **Control** 도구는 플레이 세션, 컴파일, 저장, 에셋 생성과 가져오기처럼 되돌릴 수 없는 에디터 상태를 바꿉니다.
 
 | 도구 | 접근 | 설명 |
 |---|---|---|
@@ -122,68 +168,42 @@ tool_timeout_sec = 600
 | `skills_list` | Read | 플러그인과 프로젝트의 스킬과 설명, 건너뛴 스킬 파일 |
 | `skills_get` | Read | 스킬의 지침이나 스킬에 딸린 파일 하나 |
 
-일반적인 검증 흐름: `blueprint_compile` → `pie_start` → 반환된 `startLogSequence`부터 `log_get_recent` → `viewport_capture`
-→ `pie_stop`
+일반적인 검증 흐름: `blueprint_compile` → `pie_start` → 반환된 `startLogSequence`부터 `log_get_recent` → `viewport_capture` → `pie_stop`
 
-UI를 만드는 흐름: `umg_create_widget_blueprint`(`BindWidget` 프로퍼티를 선언한 C++ 부모 클래스 지정) → `umg_add_widgets` →
-`blueprint_compile` → 플레이 세션에서 `viewport_capture`로 확인 → `umg_set_widget_properties`로 조정. 값은 JSON입니다.
-프로퍼티 이름은 C++ 이름(`Text`, `Font`, `Padding`, `LayoutData`)을 쓰고, 구조체 값에는 바꿀 필드만 적어도 되며, enum 값은
-이름(`HAlign_Center`, `RoundedBox`)으로 씁니다. 엔트리 클래스로 위젯 블루프린트를 쓸 수 있고, 그 인스턴스 속성도 같은 방식으로
-설정합니다. 편집 도구는 요청한 필드만 되읽어 돌려주고, 전체 값은 `umg_inspect`의 `bIncludeProperties`로 확인합니다.
+UI를 만드는 흐름: `umg_create_widget_blueprint`(`BindWidget` 프로퍼티를 선언한 C++ 부모 클래스 지정) → `umg_add_widgets` → `blueprint_compile` → 플레이 세션에서 `viewport_capture`로 확인 → `umg_set_widget_properties`로 조정. 값은 JSON입니다. 프로퍼티 이름은 C++ 이름(`Text`, `Font`, `Padding`, `LayoutData`)을 쓰고, 구조체 값에는 바꿀 필드만 적어도 되며, enum 값은 이름(`HAlign_Center`, `RoundedBox`)으로 씁니다. 엔트리 클래스로 위젯 블루프린트를 쓸 수 있고, 그 인스턴스 속성도 같은 방식으로 설정합니다. 편집 도구는 요청한 필드만 되읽어 돌려주고, 전체 값은 `umg_inspect`의 `bIncludeProperties`로 확인합니다.
 
-UI의 모양을 데이터로 두려면: `asset_create`로 테마 데이터 에셋이나 아이템 DataTable을 만들고, `object_set_properties`와
-datatable 도구로 채우고, `asset_import_textures`로 아이콘과 프레임을 UMG용 텍스처 설정으로 가져옵니다.
-
-도구는 받은 트리를 그대로 만듭니다. UI 팀이 만드는 방식(재사용하는 부품 위젯 블루프린트, 한곳에 모은 스타일 값, 데이터로 채우는
-목록, 캡처 검토)은 플러그인 스킬 `umg-authoring`에 있습니다. 이미지 모델이나 다른 에이전트, 아티스트에게 이미지를 요청하고 리뷰
-시트로 확인해 연결하는 방법은 `ui-art-requests`에 있습니다. 위젯 블루프린트나 목업에서 프로젝트 스타일을 추출해 디자인 토큰과 키트
-갤러리로 두고 캡처 비교로 확인하는 방법은 `ui-style-system`에 있습니다. [스킬](#스킬)을 참고하세요.
+UI의 모양을 데이터로 두려면 `asset_create`로 테마 데이터 에셋이나 아이템 DataTable을 만들고, `object_set_properties`와 datatable 도구로 채우고, `asset_import_textures`로 아이콘과 프레임을 UMG용 텍스처 설정으로 가져옵니다.
 
 ## 스킬
 
-스킬은 에이전트용 작업 지침입니다. `SKILL.md` 파일이 있는 폴더이고, 파일 앞머리(front matter)에 `name`과 `description`이 있습니다.
-Claude Code와 Codex가 자기 스킬에 쓰는 형식과 같습니다. 스킬은 에디터가 제공하므로 연결된 모든 에이전트가 같은 버전을 읽고,
-플러그인을 옮기면 스킬도 따라갑니다.
+스킬은 에이전트용 작업 지침입니다. `SKILL.md` 파일이 있는 폴더이고, 파일 앞머리(front matter)에 `name`과 `description`이 있습니다. Claude Code와 Codex가 자기 스킬에 쓰는 형식과 같습니다. 스킬은 에디터가 제공하므로 연결된 모든 에이전트가 같은 버전을 읽고, 플러그인을 옮기면 스킬도 따라갑니다.
 
 - `initialize`가 돌려주는 서버 안내에 스킬마다 이름과 설명이 들어 있습니다.
 - `skills_list`는 스킬과 그 폴더, 그리고 건너뛴 스킬 파일과 이유를 돌려줍니다.
-- `skills_get`은 스킬의 지침과 폴더를 돌려주고, 요청하면 참고 자료나 예제 같은 딸린 파일도 돌려줍니다. `ui-art-requests`의 리뷰
-  시트 같은 스킬 스크립트는 그 폴더에서 실행합니다.
+- `skills_get`은 스킬의 지침과 폴더를 돌려주고, 요청하면 참고 자료나 예제 같은 딸린 파일도 돌려줍니다.
 
-스킬은 다음 폴더에서 이 순서로 읽습니다. 뒤 폴더의 스킬이 앞 폴더의 같은 이름 스킬을 대신하므로, 프로젝트가 플러그인 스킬을 고쳐 쓸
-수 있습니다.
+스킬은 다음 폴더에서 이 순서로 읽습니다. 뒤 폴더의 스킬이 앞 폴더의 같은 이름 스킬을 대신하므로, 프로젝트가 플러그인 스킬을 고쳐 쓸 수 있습니다.
 
 1. `Plugins/AgentMcp/Skills`: 플러그인 스킬. 지금은 `umg-authoring`, `ui-art-requests`, `ui-style-system`
 2. 프로젝트 폴더의 `AgentMcp/Skills`
 3. `SkillDirectories` 설정의 폴더
 
-파일은 호출할 때마다 새로 읽으므로 스킬을 고치면 에디터를 다시 시작하지 않아도 반영됩니다. 서버 안내에 들어가는 목록만 서버가 시작할
-때 만들어집니다.
+파일은 호출할 때마다 새로 읽으므로 스킬을 고치면 에디터를 다시 시작하지 않아도 반영됩니다. 서버 안내에 들어가는 목록만 서버가 시작할 때 만들어집니다.
 
-Claude Code와 Codex는 설명을 보고 스킬을 고릅니다. 서버 스킬도 스스로 시작하게 하려면, 같은 이름과 설명에 `skills_get`을 호출하라는
-내용만 적은 짧은 `SKILL.md`를 Claude Code는 `.claude/skills/<이름>/`, Codex는 `.agents/skills/<이름>/`에 둡니다. 이 저장소에는
-플러그인 스킬 모두 양쪽에 있습니다.
+Claude Code와 Codex는 설명을 보고 스킬을 고릅니다. 서버 스킬도 스스로 시작하게 하려면, 같은 이름과 설명에 `skills_get`을 호출하라는 내용만 적은 짧은 `SKILL.md`를 Claude Code는 `.claude/skills/<이름>/`, Codex는 `.agents/skills/<이름>/`에 둡니다. 이 저장소에는 플러그인 스킬 모두 양쪽에 있습니다.
 
-Unreal Engine 5.8도 같은 방식으로 스킬을 제공합니다. 스킬은 C++, Python, 블루프린트로 정의한 `UAgentSkill` 클래스이고
-`ListSkills`, `GetSkills` 도구로 읽습니다. Agent MCP는 대신 Markdown 파일을 읽으므로 스킬을 텍스트로 고치고, Claude Code·Codex
-스킬과 형식이 같습니다.
+Unreal Engine 5.8도 Agent Skill 개념을 제공합니다. UE 5.8 쪽은 C++, Python, Blueprint로 정의한 `UAgentSkill`을 사용하고 Agent MCP는 Markdown 파일을 읽도록 별도로 구현했습니다. 그래서 Skill을 텍스트로 고칠 수 있고 Claude Code·Codex와 같은 형식을 공유합니다.
 
 ## 안전장치
 
-- **로컬 전용.** 서버는 `127.0.0.1`에서만 연결을 받습니다. 브라우저의 `Origin`이 `localhost`, `127.0.0.1`, `[::1]`이
-  아니면 요청을 거부하므로 웹 페이지가 에디터에 접근할 수 없습니다. `AuthToken`을 설정하면 bearer 토큰도 요구합니다.
-- **되돌릴 수 있고 전부 아니면 전무인 쓰기.** Write 도구는 무언가를 바꾸기 전에 모든 값을 검사하고, 에디터 트랜잭션
-  안에서 실행됩니다. 일부를 바꾼 뒤 실패하면 트랜잭션을 되돌립니다.
+- **로컬 전용.** 서버는 `127.0.0.1`에서만 연결을 받습니다. 브라우저의 `Origin`이 `localhost`, `127.0.0.1`, `[::1]`이 아니면 요청을 거부합니다. `AuthToken`을 설정하면 bearer 토큰도 요구합니다.
+- **되돌릴 수 있고 전부 아니면 전무인 쓰기.** Write 도구는 무언가를 바꾸기 전에 모든 값을 검사하고, 에디터 트랜잭션 안에서 실행됩니다. 일부를 바꾼 뒤 실패하면 트랜잭션을 되돌립니다.
 - **플레이 중 쓰기 금지.** Play In Editor가 시작 중이거나 실행 중이면 Write 도구와 에셋을 만들거나 가져오는 도구를 거부합니다.
-- **프로젝트 콘텐츠만.** 에셋 생성, 가져오기, 변경, 저장은 `/Game`과 프로젝트 plugin 안에서만 합니다. 엔진 콘텐츠는 읽기
-  전용입니다. `object_set_properties`는 전용 도구가 있는 블루프린트와 DataTable, 열려 있지 않은 레벨도 거부합니다.
+- **프로젝트 콘텐츠만.** 에셋 생성, 가져오기, 변경, 저장은 `/Game`과 프로젝트 plugin 안에서만 합니다. 엔진 콘텐츠는 읽기 전용입니다.
 - **명시적 저장.** 부수 효과로 저장하는 도구는 없습니다. `asset_save`는 로드된 프로젝트 에셋만 저장하고 레벨은 거부합니다.
-- **dry run.** Destructive 도구는 `bConfirm: true`가 있어야 실제로 실행하고, `asset_import_textures`는 무엇이든 가져오기 전에
-  모든 항목을 검사합니다.
-- **허용·차단 목록.** `AllowedTools`와 `BlockedTools`로 도구를 숨기고, `BlockedProperties`로 `object_set_properties`와
-  `umg` 도구가 바꾸지 못할 프로퍼티를 지정합니다.
-- **파일.** `skills_get`은 스킬 폴더 안의 파일만 읽고, 그 밖의 경로와 숨김 파일은 거부합니다. `asset_import_textures`는 받은
-  이미지 파일을 읽으며, 프로젝트 폴더 밖의 파일도 읽습니다.
+- **dry run.** Destructive 도구는 `bConfirm: true`가 있어야 실제로 실행하고, `asset_import_textures`는 무엇이든 가져오기 전에 모든 항목을 검사합니다.
+- **허용·차단 목록.** `AllowedTools`와 `BlockedTools`로 도구를 숨기고, `BlockedProperties`로 `object_set_properties`와 `umg` 도구가 바꾸지 못할 프로퍼티를 지정합니다.
+- **파일.** `skills_get`은 스킬 폴더 안의 파일만 읽고, 그 밖의 경로와 숨김 파일은 거부합니다. `asset_import_textures`는 받은 이미지 파일을 읽으며, 프로젝트 폴더 밖의 파일도 읽습니다.
 - 콘솔 명령이나 스크립트를 실행하는 도구는 없습니다.
 
 ## 설정
@@ -223,26 +243,20 @@ Port=18765
 USTRUCT(BlueprintType)
 struct FMyGreeting
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
-	UPROPERTY()
-	FString Message;
+    UPROPERTY()
+    FString Message;
 };
 
-/** Example tools. */
 UCLASS(meta = (McpToolset = "my"))
 class UMyTools : public UAgentMcpToolset
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
 public:
-	/**
-	 * Greets someone.
-	 * @param Name Who to greet.
-	 * @return The greeting.
-	 */
-	UFUNCTION(BlueprintCallable, Category = "My Tools", meta = (AICallable, McpAccess = "Read", BlueprintInternalUseOnly = "true"))
-	static FMyGreeting Greet(const FString& Name = TEXT("world"));
+    UFUNCTION(BlueprintCallable, Category = "My Tools", meta = (AICallable, McpAccess = "Read", BlueprintInternalUseOnly = "true"))
+    static FMyGreeting Greet(const FString& Name = TEXT("world"));
 };
 ```
 
@@ -250,13 +264,11 @@ public:
 
 - 툴셋 클래스는 자동으로 찾습니다. 도구 이름은 `<McpToolset>_<snake_case 함수 이름>`이고, 주석이 설명이 됩니다.
 - `McpAccess`는 `Read`, `Write`, `Destructive`, `Control` 중 하나입니다. 지정하지 않으면 `Write`로 취급합니다.
-- `BlueprintCallable`을 빼지 마세요. Unreal Engine 5.5는 블루프린트에서 호출 가능한 함수에만 C++ 기본 인자 값을 기록하고,
-  기본값이 없으면 모든 인자가 필수가 됩니다. `BlueprintInternalUseOnly`는 함수가 블루프린트 메뉴에 나오지 않게 합니다.
-- `USTRUCT(BlueprintType)`를 반환하세요. 필드가 JSON 결과가 되고, 빈 문자열·배열·구조체는 결과에서 빠집니다.
-- 실패는 `UE::AgentMcp::RaiseToolError(TEXT("CODE"), TEXT("Message"), TEXT("Hint"))`로 알리고 반환합니다.
+- `BlueprintCallable`을 빼지 마세요. Unreal Engine 5.5는 블루프린트에서 호출 가능한 함수에만 C++ 기본 인자 값을 기록합니다.
+- `USTRUCT(BlueprintType)`를 반환하세요. 필드가 JSON 결과가 됩니다.
+- 실패는 `UE::AgentMcp::RaiseToolError(TEXT("CODE"), TEXT("Message"), TEXT("Hint"))`로 알립니다.
 - 객체 인자(`UObject*`, `AActor*`, `UClass*`)는 오브젝트 경로를 받고, 액터는 레이블도 받습니다.
-- 다음 프레임 이후에 끝나는 작업은 `UAgentMcpAsyncResult::Create(TimeoutSeconds, PollFunction)`를 반환합니다. Read와
-  Control 도구만 가능합니다.
+- 다음 프레임 이후에 끝나는 작업은 `UAgentMcpAsyncResult::Create(TimeoutSeconds, PollFunction)`를 반환합니다. Read와 Control 도구만 가능합니다.
 - 이미지를 반환하려면 결과 구조체에 `FAgentMcpImage` 필드를 추가합니다.
 
 ## 테스트베드와 smoke 테스트
@@ -273,60 +285,39 @@ public:
 | `Docs` | 샘플을 만든 과정과 계획한 실험 |
 | `.mcp.json`, `.codex/config.toml` | Claude Code와 Codex를 포트 18766의 테스트베드 에디터에 연결 |
 | `.claude/skills`, `.agents/skills` | Claude Code와 Codex가 플러그인 스킬을 시작하게 하는 짧은 스킬 파일 |
-| `Config` | 테스트베드는 포트 **18766**을 써서, 기본 포트를 쓰는 다른 프로젝트 대신 응답하는 일이 없음. smoke 테스트용 스킬 폴더를 `SkillDirectories`에 추가. `DefaultGame.ini`가 UI 샘플의 테마를 지정 |
+| `Config` | 테스트베드는 포트 **18766**을 사용하며 UI 샘플의 테마를 지정 |
 | `Tools/mcp_smoke.py` | smoke 테스트(Python 3, 표준 라이브러리만 사용) |
 | `Tools/mcp_call.py` | 명령줄에서 도구 하나 호출 |
 
-1. `AgentMcpTestbedEditor` 타깃을 빌드합니다.
+1. `AgentMcpTestbedEditor` 타깃을 빌드합니다.  
    `<UE>\Engine\Build\BatchFiles\Build.bat AgentMcpTestbedEditor Win64 Development -Project=<path>\AgentMcpTestbed.uproject -WaitMutex`
 2. `AgentMcpTestbed.uproject`를 열고 `Agent MCP server listening on http://127.0.0.1:18766/mcp`가 나올 때까지 기다립니다.
 3. `python Tools/mcp_smoke.py --out Saved/MCP/smoke.json`을 실행합니다.
 
-smoke 테스트는 Play In Editor를 시작하고, 레벨을 바꾸고, 테스트 에셋을 저장합니다. 그래서 먼저 URL에 응답하는 에디터가
-`AgentMcpTestbed` 프로젝트인지 확인하고, 아니면 멈춥니다. MCP 전송과 오류 처리, 모든 도구, undo와 롤백, 요청 취소,
-Play In Editor, 게임 UI를 포함한 뷰포트 캡처, Live Coding, 중첩된 위젯 블루프린트 인스턴스를 포함한 위젯 블루프린트 편집,
-스킬, 데이터 에셋·DataTable 생성, 텍스처 가져오기를 검사합니다.
+smoke 테스트는 MCP 전송과 오류 처리, 모든 도구, undo와 롤백, 요청 취소, Play In Editor, 게임 UI를 포함한 뷰포트 캡처, Live Coding, 중첩된 위젯 블루프린트 인스턴스를 포함한 편집, 스킬, 데이터 에셋·DataTable 생성, 텍스처 가져오기를 검사합니다.
 
 도구 하나만 호출하려면:
 
-```
+```bash
 python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --expect-project AgentMcpTestbed
 ```
 
-## UI 샘플
-
-`Content/Samples/DungeonUi`에는 Claude Code가 도구로 만든 던전 진행 HUD와 던전 결과 팝업이 있습니다. 보상 슬롯, 통계 타일, 목표
-행은 부품 위젯 블루프린트이고, C++ 부모 클래스가 `BindWidget` 규칙과 등장 연출을 맡으며, `DynamicEntryBox`가 보상마다 보상 슬롯을
-하나씩 만듭니다. 색과 프레임은 테마 데이터 에셋에, 아이템은 아이템 테이블에 있고, 아직 모양으로 그리는 아이콘과 프레임은 아트 요청에
-적어 두었습니다. 리뷰에서 반려된 버전을 포함한 제작 과정과 실행 방법은 [Docs/Samples/DungeonUi.ko.md](Docs/Samples/DungeonUi.ko.md)에
-있습니다.
-
-![던전 결과 팝업](Docs/Images/dungeon_result.jpg)
-
 ## 한계
 
-- Windows 64비트의 Unreal Engine 5.5.4에서만 테스트했습니다. 모든 도구는 `Tools`의 Python 클라이언트로 테스트했습니다.
-  Claude Code 2.1.270에서는 데스크톱 앱과 CLI로 `editor_get_state`, `actor_find`, `viewport_capture`를 호출했고, UI 샘플을
-  만들면서 데스크톱 앱으로 `umg_create_widget_blueprint`, `umg_add_widgets`, `umg_set_widget_properties`, `umg_remove_widgets`,
-  `umg_inspect`, `blueprint_compile`, `pie_start`, `pie_stop`, `asset_save`, `livecoding_compile`, `skills_list`, `skills_get`,
-  `asset_create`, `datatable_add_rows`, `object_get_properties`, `object_set_properties`, `editor_undo`도 호출했습니다.
-  나머지 도구는 아직 Claude Code에서 호출해 보지 않았습니다.
+- Windows 64비트의 Unreal Engine 5.5.4에서만 테스트했습니다.
+- Claude Code 2.1.270에서는 주요 조회·UMG·컴파일·PIE·저장·Skill·DataTable·asset 도구를 실제 UI 샘플 제작에 사용했습니다.
 - Codex 설정(`.codex/config.toml`, `.agents/skills`)은 Codex 문서를 따른 것이고, 아직 Codex로 테스트하지 않았습니다.
-- 응답은 일반 JSON입니다. 스트리밍(SSE, 진행 알림)은 없습니다. `pie_start` 같은 도구는 끝날 때까지 요청을 붙잡고 있습니다.
-- 요청은 에디터의 게임 스레드에서 처리됩니다. **Use Less CPU when in Background**가 켜진 채 에디터가 백그라운드에 있으면
-  초당 약 3번만 틱하므로 호출마다 약 0.3초가 걸립니다. 에이전트가 작업하는 동안에는 이 에디터 설정을 끄세요.
-- `livecoding_compile`은 컴파일이 끝날 때까지 에디터를 멈추고, Live Coding은 `UCLASS`, `USTRUCT`, `UPROPERTY`,
-  `UFUNCTION` 선언 변경을 적용하지 못합니다. 이런 변경은 에디터를 닫고 빌드하세요.
-- 도구로 DataTable 행, 위젯 블루프린트의 위젯 트리, 데이터 에셋과 그 밖의 프로젝트 에셋의 프로퍼티를 바꾸고, 데이터 에셋,
-  DataTable, 텍스처를 만들 수 있습니다. 블루프린트 그래프와 클래스 기본값, 위젯 애니메이션, 디자이너 프로퍼티 바인딩은 조회만
-  할 수 있고, 위젯을 다른 부모로 옮기는 기능은 아직 없습니다.
+- 응답은 일반 JSON입니다. 스트리밍(SSE, 진행 알림)은 없습니다.
+- 요청은 에디터의 게임 스레드에서 처리됩니다. **Use Less CPU when in Background**가 켜진 채 에디터가 백그라운드에 있으면 호출이 느려질 수 있습니다.
+- `livecoding_compile`은 컴파일이 끝날 때까지 에디터를 멈추고, Live Coding은 `UCLASS`, `USTRUCT`, `UPROPERTY`, `UFUNCTION` 선언 변경을 적용하지 못합니다.
+- 블루프린트 그래프와 클래스 기본값, 위젯 애니메이션, 디자이너 프로퍼티 바인딩은 조회만 할 수 있고, 위젯을 다른 부모로 옮기는 기능은 아직 없습니다.
 - `ToolSearch` 노출 모드와 저장 시 소스 컨트롤 처리는 아직 테스트하지 않았습니다.
 
 ## 배경
 
-도구 구성과 리플렉션 기반 설계는 Epic Games가 Unreal Engine 5.8에 포함한 실험적 Model Context Protocol·toolset plugin을
-따르며, Unreal Engine 5.5용으로 새로 구현했습니다. 이 저장소에는 해당 plugin의 소스 파일이 들어 있지 않습니다. Unreal과
-Unreal Engine은 Epic Games, Inc.의 상표 또는 등록 상표입니다.
+도구 구성과 리플렉션 기반 설계는 Epic Games가 Unreal Engine 5.8에 포함한 실험적 Model Context Protocol·toolset plugin에서 아이디어를 가져와 Unreal Engine 5.5용으로 새로 구현했습니다. Agent Skill 역시 UE 5.8의 개념을 참고했지만, 이 프로젝트는 `UAgentSkill`을 포팅하지 않고 Claude Code·Codex와 공유할 수 있는 Markdown `SKILL.md` 기반 시스템을 별도로 구현했습니다.
+
+이 저장소에는 Epic plugin의 소스 파일이 들어 있지 않습니다. Unreal과 Unreal Engine은 Epic Games, Inc.의 상표 또는 등록 상표입니다.
 
 ## 라이선스
 
