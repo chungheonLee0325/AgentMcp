@@ -396,7 +396,7 @@ FAgentMcpActorBatchResult UAgentMcpActorTools::Spawn(const TArray<FJsonObjectWra
 		}
 		if (!Plan.Folder.IsEmpty())
 		{
-			Actor->SetFolderPath(FName(*Plan.Folder));
+			Actor->SetFolderPath_Recursively(FName(*Plan.Folder));
 		}
 		if (Plan.Properties.IsValid() && !ApplyProperties(Actor, *Plan.Properties, FString::Printf(TEXT("actors[%d]"), Index)))
 		{

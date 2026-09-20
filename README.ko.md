@@ -40,7 +40,7 @@ Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
 
 도구는 일반 `static UFUNCTION`입니다. 이름, 설명, 인자와 반환 JSON 스키마를 Unreal Reflection에서 생성하므로 Toolset에 함수를 추가하면 MCP 도구가 됩니다.
 
-> **상태: 베타.** Windows 64비트의 Unreal Engine 5.5.4(설치형 빌드)로 빌드하고 테스트했습니다. 이 저장소의 smoke 테스트는 테스트베드 프로젝트에서 213개 검사를 통과합니다. 다른 엔진 버전과 플랫폼은 확인하지 않았습니다.
+> **상태: 베타.** Windows 64비트의 Unreal Engine 5.5.4(설치형 빌드)로 빌드하고 테스트했습니다. 이 저장소의 smoke 테스트는 테스트베드 프로젝트에서 214개 검사를 통과합니다. 다른 엔진 버전과 플랫폼은 확인하지 않았습니다.
 
 ## Dungeon UI — 워크플로 검증 사례
 
@@ -322,6 +322,9 @@ python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --exp
 - 응답은 일반 JSON입니다. 스트리밍(SSE, 진행 알림)은 없습니다.
 - 요청은 에디터의 게임 스레드에서 처리됩니다. **Use Less CPU when in Background**가 켜진 채 에디터가 백그라운드에 있으면 호출이 느려질 수 있습니다.
 - `livecoding_compile`은 컴파일이 끝날 때까지 에디터를 멈추고, Live Coding은 `UCLASS`, `USTRUCT`, `UPROPERTY`, `UFUNCTION` 선언 변경을 적용하지 못합니다.
+- 메시·머티리얼 임포트 도구는 없습니다. Fab이나 DCC에서 온 에셋은 에디터로 들여오고, 레벨 도구는 이미 프로젝트에 있는 것을 배치합니다.
+- 레벨 도구는 레벨 생성·열기와 액터 배치까지입니다. World Partition의 데이터 레이어, 스트리밍 소스, 레벨 인스턴스는 다루지 않으며, 파티션 레벨은 액터를 각자의 패키지에 저장합니다.
+- `level_save`의 소스 컨트롤 동작은 확인하지 않았습니다.
 - 블루프린트 그래프와 클래스 기본값, 위젯 애니메이션, 디자이너 프로퍼티 바인딩은 조회만 할 수 있고, 위젯을 다른 부모로 옮기거나 다른 클래스로 바꾸는 기능은 아직 없습니다. UI 샘플은 대신 하위 트리를 다시 만들었습니다.
 - `ToolSearch` 노출 모드와 저장 시 소스 컨트롤 처리는 아직 테스트하지 않았습니다.
 

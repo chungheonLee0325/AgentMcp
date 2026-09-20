@@ -40,7 +40,7 @@ Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
 
 Tools are plain `static UFUNCTION`s. Names, descriptions, arguments and result JSON schemas are generated from Unreal Reflection, so adding a function to a toolset creates an MCP tool.
 
-> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 213 checks against the testbed project. Other engine versions and platforms have not been tried.
+> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 214 checks against the testbed project. Other engine versions and platforms have not been tried.
 
 ## Dungeon UI — workflow case study
 
@@ -324,6 +324,9 @@ python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --exp
 - Responses are plain JSON. There is no SSE or progress streaming.
 - Requests execute on the editor game thread. **Use Less CPU when in Background** can make calls noticeably slower when the editor is unfocused.
 - `livecoding_compile` blocks until compilation completes, and Live Coding cannot apply reflected declaration changes to `UCLASS`, `USTRUCT`, `UPROPERTY` or `UFUNCTION`.
+- There is no mesh or material import tool, so assets from Fab or a DCC package are brought in through the editor; the level tools then place what is already in the project.
+- The level tools create and open levels and place actors. World Partition data layers, streaming sources and level instances are not covered, and a partitioned level saves its actors in their own packages.
+- Source control handling of `level_save` has not been tested.
 - Blueprint graphs and class defaults, widget animations and designer property bindings can be inspected but not edited, and widgets cannot yet be moved to a different parent or changed to another class; the UI sample rebuilt subtrees instead.
 - `ToolSearch` exposure mode and source-control handling on save have not yet been tested.
 

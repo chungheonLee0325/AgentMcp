@@ -4,6 +4,7 @@
 
 #include "Editor.h"
 #include "Engine/World.h"
+#include "FileHelpers.h"
 #include "LevelEditorSubsystem.h"
 #include "Misc/PackageName.h"
 #include "UObject/Package.h"
@@ -17,6 +18,10 @@ namespace UE::AgentMcp::LevelToolsPrivate
 		return Package->ContainsMap() || Package->GetName().Contains(TEXT("/__External"));
 	}
 
+	/**
+	 * Dirty level packages. An untitled world under /Temp and content outside the project are left out, because no tool here can save
+	 * them: counting them would block every level_new and level_open with no way out.
+	 */
 	TArray<FString> CollectUnsavedLevels()
 	{
 		TArray<FString> Names;
@@ -27,15 +32,33 @@ namespace UE::AgentMcp::LevelToolsPrivate
 			{
 				continue;
 			}
-			// An untitled world under /Temp has never been on disk and no tool can save it, so it never blocks opening a level.
 			const FString PackageName = Package->GetName();
-			if (!PackageName.StartsWith(TEXT("/Script/")) && !PackageName.StartsWith(TEXT("/Temp/")))
+			if (PackageName.StartsWith(TEXT("/Script/")) || PackageName.StartsWith(TEXT("/Temp/")) || !Tools::IsProjectContentPackage(PackageName))
 			{
-				Names.Add(PackageName);
+				continue;
 			}
+			Names.Add(PackageName);
 		}
 		Names.Sort();
 		return Names;
+	}
+
+	/** Loaded packages of the levels to save, with the built data package each level keeps its lighting in. */
+	TArray<UPackage*> FindPackagesToSave(const TArray<FString>& PackageNames)
+	{
+		TArray<UPackage*> Packages;
+		for (const FString& PackageName : PackageNames)
+		{
+			if (UPackage* Package = FindPackage(nullptr, *PackageName))
+			{
+				Packages.AddUnique(Package);
+			}
+			if (UPackage* BuiltData = FindPackage(nullptr, *(PackageName + TEXT("_BuiltData"))); BuiltData && BuiltData->IsDirty())
+			{
+				Packages.AddUnique(BuiltData);
+			}
+		}
+		return Packages;
 	}
 
 	ULevelEditorSubsystem* RequireSubsystem(const TCHAR* ToolName)
@@ -209,7 +232,8 @@ FAgentMcpLevelSaveResult UAgentMcpLevelTools::Save(bool bAllDirty)
 		return Result;
 	}
 	const FString CurrentPackage = World->GetPackage()->GetName();
-	if (!Tools::IsProjectContentPackage(CurrentPackage))
+	// With bAllDirty the current level is only one of the candidates, and the list already holds project content only.
+	if (!bAllDirty && !Tools::IsProjectContentPackage(CurrentPackage))
 	{
 		RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("%s is not project content, so it is not saved."), *CurrentPackage),
 			TEXT("Only levels under /Game or a project plugin can be saved. level_new copies a template into project content."));
@@ -223,7 +247,9 @@ FAgentMcpLevelSaveResult UAgentMcpLevelTools::Save(bool bAllDirty)
 		return Result;
 	}
 
-	const bool bSaved = bAllDirty ? Subsystem->SaveAllDirtyLevels() : Subsystem->SaveCurrentLevel();
+	// SaveAllDirtyLevels would also write levels outside the project, so every level is saved by package instead.
+	const TArray<UPackage*> Packages = bAllDirty ? FindPackagesToSave(Before) : TArray<UPackage*>();
+	const bool bSaved = bAllDirty ? UEditorLoadingAndSavingUtils::SavePackages(Packages, /*bOnlyDirty=*/true) : Subsystem->SaveCurrentLevel();
 	Result.UnsavedLevels = CollectUnsavedLevels();
 	for (const FString& PackageName : Before)
 	{

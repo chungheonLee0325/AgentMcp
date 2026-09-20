@@ -1453,6 +1453,11 @@ def run_p7(client, report, evidence):
     report.check("nothing is left unsaved after level_save", not is_error and (data or {}).get("dirtyPackageCount") == 0,
                  json.dumps((data or {}).get("dirtyPackages"))[:200])
 
+    client.call_tool("actor_spawn", {"actors": [{"class": "PointLight", "label": "SmokeLight2", "location": [500, 0, 400]}]})
+    _, _, is_error, data, _ = client.call_tool("level_save", {"bAllDirty": True})
+    report.check("level_save with bAllDirty writes the level by package", not is_error and SMOKE_LEVEL in ((data or {}).get("levels") or []),
+                 json.dumps(data)[:200])
+
     # --- actor_delete ---------------------------------------------------------------------------------
     _, _, is_error, data, _ = client.call_tool("actor_delete", {"actors": [cube["path"]]})
     report.check("actor_delete is a dry run without bConfirm and names the attached actors",
@@ -1615,6 +1620,7 @@ def main():
     print(f"\n{passed} passed, {len(failed)} failed, {len(report.checks) - passed - len(failed)} info.")
 
     if args.out:
+        os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
         with open(args.out, "w", encoding="utf-8") as handle:
             json.dump(evidence, handle, indent=2, ensure_ascii=False)
         print("Evidence written to " + args.out)
