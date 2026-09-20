@@ -40,7 +40,7 @@ Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
 
 Tools are plain `static UFUNCTION`s. Names, descriptions, arguments and result JSON schemas are generated from Unreal Reflection, so adding a function to a toolset creates an MCP tool.
 
-> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 185 checks against the testbed project. Other engine versions and platforms have not been tried.
+> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 213 checks against the testbed project. Other engine versions and platforms have not been tried.
 
 ## Dungeon UI — workflow case study
 
@@ -142,6 +142,14 @@ The server returns short usage instructions from `initialize`, including the lis
 | `actor_find` | Read | Actors by label or name, class, tag, folder or selection, in the editor or play world |
 | `actor_inspect` | Read | Class, Blueprint, tags, transform, attachment and components of an actor |
 | `actor_set_transform` | Write | Move, rotate or scale an actor |
+| `actor_spawn` | Write | Place actors from mesh or Blueprint assets, or from native classes, with label, transform, folder and properties |
+| `actor_duplicate` | Write | Copy an actor in a row with a fixed offset, or onto given transforms |
+| `actor_attach` | Write | Attach one actor to another, optionally on a socket |
+| `actor_set_folder` | Write | Move actors to a World Outliner folder |
+| `actor_delete` | Destructive | Delete actors together with the actors attached to them |
+| `level_new` | Control | Create a level, empty or from a template, save it and open it |
+| `level_open` | Control | Open a level in the editor |
+| `level_save` | Control | Save the level open in the editor, or every level with unsaved changes |
 | `object_list_properties` | Read | Properties of an object and whether they can be changed |
 | `object_get_properties` | Read | Property values as JSON |
 | `object_set_properties` | Write | Change properties of an actor or component in the editor level, or of a project asset such as a data asset or texture, with readback |
@@ -166,6 +174,7 @@ The server returns short usage instructions from `initialize`, including the lis
 | `umg_set_widget_properties` | Write | Change widget properties, slot values and the variable flag of several widgets |
 | `umg_remove_widgets` | Destructive | Remove widgets with their descendants, property bindings and graph references |
 | `viewport_capture` | Read | PNG of the level viewport or the play session, including the game UI |
+| `viewport_set_camera` | Control | Point the level viewport camera at a place or frame an actor, so the next capture shows it |
 | `livecoding_compile` | Control | Compile changed C++ with Live Coding and wait for the result |
 | `skills_list` | Read | Skills of the plugin and the project with their descriptions, and skill files that were skipped |
 | `skills_get` | Read | Instructions of a skill, or one of its other files |
@@ -175,6 +184,8 @@ A typical verification loop: `blueprint_compile` → `pie_start` → `log_get_re
 To build a user interface: `umg_create_widget_blueprint` (with a C++ parent class that declares `BindWidget` properties) → `umg_add_widgets` → `blueprint_compile` → inspect it in a play session with `viewport_capture` → adjust it with `umg_set_widget_properties`. Values are JSON: property names are the C++ names (`Text`, `Font`, `Padding`, `LayoutData`), struct values may list only the fields to set, and enum values are names (`HAlign_Center`, `RoundedBox`). Widget Blueprint classes can be nested as component instances and their instance properties can be set the same way.
 
 To keep presentation in data, `asset_create` can make a theme data asset or item DataTable, `object_set_properties` and the datatable tools fill them, and `asset_import_textures` brings in icons and frames with UMG texture settings.
+
+To block out a level: `level_new` → `actor_spawn` with meshes or Blueprints → `actor_duplicate` for rows and grids → `actor_attach` and `actor_set_folder` to keep the outliner readable → `viewport_set_camera` and `viewport_capture` to look at it → `level_save`. `actor_set_transform` and `object_set_properties` adjust what is already placed, and `editor_undo` reverts the last call.
 
 ## Skills
 
@@ -202,7 +213,8 @@ Unreal Engine 5.8 also provides an Agent Skill concept. UE 5.8 uses `UAgentSkill
 - **Undoable, all-or-nothing writes.** Write tools validate values before changing anything and run in an editor transaction. If a tool fails after changing state, the transaction is rolled back.
 - **No writes during play.** Write tools and asset creation/import tools are refused while Play In Editor is starting or running.
 - **Project content only.** Assets can be created, imported, changed and saved only under `/Game` and project plugins. Engine content is read-only.
-- **Explicit saving.** No tool saves as a side effect. `asset_save` saves loaded project assets only and refuses levels.
+- **Explicit saving.** No tool saves as a side effect, with one exception: `level_new` writes the level it creates, because a level only exists on disk. `asset_save` saves loaded project assets only and still refuses levels; levels are saved with `level_save`, which writes the level open in the editor.
+- **No level is replaced silently.** `level_new` and `level_open` refuse to run while a level has unsaved changes, because opening a level discards them.
 - **Dry runs.** Destructive tools need `bConfirm: true` to act, and `asset_import_textures` validates every entry before importing anything.
 - **Allow and block lists.** `AllowedTools` and `BlockedTools` hide tools, while `BlockedProperties` protects properties from `object_set_properties` and UMG tools.
 - **Files.** `skills_get` can read only inside a skill folder and refuses outside paths and hidden files.

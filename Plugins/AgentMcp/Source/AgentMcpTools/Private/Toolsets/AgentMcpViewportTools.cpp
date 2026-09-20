@@ -1,7 +1,10 @@
 #include "AgentMcpViewportTools.h"
 
+#include "AgentMcpToolsCommon.h"
+
 #include "Editor.h"
 #include "Engine/GameViewportClient.h"
+#include "GameFramework/Actor.h"
 #include "Engine/World.h"
 #include "Framework/Application/SlateApplication.h"
 #include "HAL/FileManager.h"
@@ -151,5 +154,83 @@ FAgentMcpViewportCapture UAgentMcpViewportTools::Capture(int32 MaxWidth, bool bP
 	Result.Image.Width = Width;
 	Result.Image.Height = Height;
 	Result.Image.Data.Append(Png.GetData(), static_cast<int32>(Png.Num()));
+	return Result;
+}
+
+FAgentMcpViewportCameraResult UAgentMcpViewportTools::SetCamera(const TArray<double>& Location, const TArray<double>& Rotation, AActor* FocusActor)
+{
+	FAgentMcpViewportCameraResult Result;
+	if (!GEditor)
+	{
+		UE::AgentMcp::RaiseToolError(TEXT("EDITOR_UNAVAILABLE"), TEXT("GEditor is not available."));
+		return Result;
+	}
+
+	bool bHasLocation = false;
+	bool bHasRotation = false;
+	FVector NewLocation = FVector::ZeroVector;
+	FVector NewRotation = FVector::ZeroVector;
+	if (!UE::AgentMcp::Tools::ReadOptionalVector(Location, TEXT("location"), bHasLocation, NewLocation)
+		|| !UE::AgentMcp::Tools::ReadOptionalVector(Rotation, TEXT("rotation"), bHasRotation, NewRotation))
+	{
+		return Result;
+	}
+	if (!bHasLocation && !bHasRotation && !FocusActor)
+	{
+		UE::AgentMcp::RaiseToolError(TEXT("INVALID_ARGUMENT"), TEXT("Pass location, rotation or focusActor."));
+		return Result;
+	}
+
+	FLevelEditorViewportClient* Client = GCurrentLevelEditingViewportClient;
+	if (!Client)
+	{
+		for (FLevelEditorViewportClient* Candidate : GEditor->GetLevelViewportClients())
+		{
+			if (Candidate && Candidate->IsPerspective())
+			{
+				Client = Candidate;
+				break;
+			}
+		}
+	}
+	if (!Client)
+	{
+		UE::AgentMcp::RaiseToolError(TEXT("VIEWPORT_UNAVAILABLE"), TEXT("No level editor viewport is available."),
+			TEXT("Open a level editor viewport; a play session in a separate window does not have one."));
+		return Result;
+	}
+
+	if (FocusActor)
+	{
+		const UWorld* World = FocusActor->GetWorld();
+		if (!World || World->IsGameWorld())
+		{
+			UE::AgentMcp::RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("%s is not in the editor level."), *FocusActor->GetPathName()),
+				TEXT("Stop the play session and address the actor in the editor level (actor_find with world Editor)."));
+			return Result;
+		}
+		// The same framing as pressing F on a selected actor.
+		GEditor->MoveViewportCamerasToActor(*FocusActor, /*bActiveViewportOnly=*/true);
+		Result.FocusActor = FocusActor->GetPathName();
+	}
+	else
+	{
+		if (bHasLocation)
+		{
+			Client->SetViewLocation(NewLocation);
+		}
+		if (bHasRotation)
+		{
+			Client->SetViewRotation(FRotator(NewRotation.X, NewRotation.Y, NewRotation.Z));
+		}
+	}
+
+	Client->Invalidate();
+	GEditor->RedrawLevelEditingViewports(/*bInvalidateHitProxies=*/true);
+
+	const FVector ViewLocation = Client->GetViewLocation();
+	const FRotator ViewRotation = Client->GetViewRotation();
+	Result.Location = { ViewLocation.X, ViewLocation.Y, ViewLocation.Z };
+	Result.Rotation = { ViewRotation.Pitch, ViewRotation.Yaw, ViewRotation.Roll };
 	return Result;
 }

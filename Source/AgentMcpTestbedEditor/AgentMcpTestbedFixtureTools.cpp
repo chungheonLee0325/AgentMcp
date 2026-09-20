@@ -13,6 +13,8 @@
 #include "Editor.h"
 #include "Engine/Blueprint.h"
 #include "Engine/DataTable.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/World.h"
 #include "Factories/DataTableFactory.h"
 #include "FileHelpers.h"
 #include "GameFramework/Actor.h"
@@ -23,6 +25,7 @@
 #include "Misc/PackageName.h"
 #include "Modules/ModuleManager.h"
 #include "ObjectTools.h"
+#include "Subsystems/EditorActorSubsystem.h"
 #include "UObject/Package.h"
 #include "WidgetBlueprint.h"
 #include "WidgetBlueprintFactory.h"
@@ -175,6 +178,29 @@ FAgentMcpTestbedFixtures UAgentMcpTestbedFixtureTools::ResetFixtures()
 	{
 		GEditor->ResetTransaction(FText::FromString(TEXT("AgentMcp testbed fixtures reset")));
 	}
+
+	// The smoke test creates levels with level_new. A level that is still open cannot be deleted, and its unsaved changes are
+	// fixture state, so the editor goes back to an empty map without asking.
+	if (GEditor)
+	{
+		const UWorld* EditorWorld = GEditor->GetEditorWorldContext().World();
+		if (EditorWorld && EditorWorld->GetPackage() && EditorWorld->GetPackage()->GetName().StartsWith(FixtureFolder))
+		{
+			TGuardValue<bool> UnattendedScriptGuard(GIsRunningUnattendedScript, true);
+			GEditor->NewMap(/*bIsPartitionedWorld=*/false);
+			// An empty map has no static mesh, which the actor checks expect from the startup map, so the fixture puts a floor back.
+			UEditorActorSubsystem* ActorSubsystem = GEditor->GetEditorSubsystem<UEditorActorSubsystem>();
+			UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"), nullptr, LOAD_NoWarn | LOAD_Quiet);
+			if (AActor* FloorActor = ActorSubsystem && Cube ? ActorSubsystem->SpawnActorFromObject(Cube, FVector::ZeroVector) : nullptr)
+			{
+				FloorActor->SetActorLabel(TEXT("Floor"));
+				FloorActor->SetActorScale3D(FVector(20.0, 20.0, 1.0));
+				Result.Created.Add(FloorActor->GetPathName());
+			}
+		}
+	}
+	DeleteFixtureAsset(TEXT("Maps/L_AgentMcpSmoke"), Result.Deleted);
+	DeleteFixtureAsset(TEXT("Maps/L_AgentMcpSmokeSecond"), Result.Deleted);
 
 	// Without undo history nothing refers to the authored Widget Blueprints any more, so they can be deleted. The part is nested in
 	// the authoring Widget Blueprint, so it goes second.

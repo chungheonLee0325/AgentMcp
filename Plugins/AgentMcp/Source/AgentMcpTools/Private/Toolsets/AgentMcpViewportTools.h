@@ -46,6 +46,24 @@ struct FAgentMcpViewportCapture
 	FAgentMcpImage Image;
 };
 
+USTRUCT(BlueprintType)
+struct FAgentMcpViewportCameraResult
+{
+	GENERATED_BODY()
+
+	/** Camera location [X, Y, Z] after the change. */
+	UPROPERTY()
+	TArray<double> Location;
+
+	/** Camera rotation [Pitch, Yaw, Roll] after the change. */
+	UPROPERTY()
+	TArray<double> Rotation;
+
+	/** Actor the camera was pointed at, when one was named. */
+	UPROPERTY()
+	FString FocusActor;
+};
+
 /** Viewport screenshots of the level editor or the play session, including the game UI. */
 UCLASS(meta = (McpToolset = "viewport"))
 class UAgentMcpViewportTools : public UAgentMcpToolset
@@ -63,4 +81,14 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Viewport", meta = (AICallable, McpAccess = "Read", BlueprintInternalUseOnly = "true"))
 	static FAgentMcpViewportCapture Capture(int32 MaxWidth = 1024, bool bPreferPlay = true, bool bIncludeUI = true);
+
+	/**
+	 * Points the level editor viewport camera somewhere, so that the next capture shows it. Pass a location and rotation, or an actor to frame.
+	 * @param Location Camera location [X, Y, Z] in centimeters.
+	 * @param Rotation Camera rotation [Pitch, Yaw, Roll] in degrees.
+	 * @param FocusActor Actor to frame, as pressing F in the viewport does. It overrides location and rotation.
+	 * @return Where the camera ended up.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Viewport", meta = (AICallable, McpAccess = "Control", AutoCreateRefTerm = "Location,Rotation", BlueprintInternalUseOnly = "true"))
+	static FAgentMcpViewportCameraResult SetCamera(const TArray<double>& Location, const TArray<double>& Rotation, AActor* FocusActor = nullptr);
 };

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "AgentMcpToolset.h"
 #include "AgentMcpToolTypes.h"
+#include "JsonObjectWrapper.h"
 #include "Templates/SubclassOf.h"
 
 #include "AgentMcpActorTools.generated.h"
@@ -164,6 +165,49 @@ struct FAgentMcpSetTransformResult
 	FAgentMcpTransformValue After;
 };
 
+USTRUCT(BlueprintType)
+struct FAgentMcpActorBatchResult
+{
+	GENERATED_BODY()
+
+	/** The actors the call spawned, duplicated, moved or would delete. */
+	UPROPERTY()
+	TArray<FAgentMcpActorSummary> Actors;
+
+	/** Actors attached to those actors; they are deleted with them. */
+	UPROPERTY()
+	TArray<FString> AttachedActors;
+
+	/** False for a dry run, where nothing was changed. */
+	UPROPERTY()
+	bool bApplied = false;
+
+	UPROPERTY()
+	TArray<FString> Warnings;
+};
+
+USTRUCT(BlueprintType)
+struct FAgentMcpActorAttachResult
+{
+	GENERATED_BODY()
+
+	/** Path of the attached actor. */
+	UPROPERTY()
+	FString Child;
+
+	/** Path of the actor it is attached to. */
+	UPROPERTY()
+	FString Parent;
+
+	/** Socket the child hangs on, when one was named. */
+	UPROPERTY()
+	FString Socket;
+
+	/** World transform of the child after the change. */
+	UPROPERTY()
+	FAgentMcpTransformValue Transform;
+};
+
 /** Actors in the editor level or the running play session. */
 UCLASS(meta = (McpToolset = "actor"))
 class UAgentMcpActorTools : public UAgentMcpToolset
@@ -206,4 +250,52 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Actor", meta = (AICallable, McpAccess = "Write", AutoCreateRefTerm = "Location,Rotation,Scale", BlueprintInternalUseOnly = "true"))
 	static FAgentMcpSetTransformResult SetTransform(AActor* Actor, const TArray<double>& Location, const TArray<double>& Rotation, const TArray<double>& Scale);
+
+	/**
+	 * Places actors in the editor level. Every entry is checked before the first actor is spawned, and the problems are reported together.
+	 * @param Actors Entries of {"asset" or "class", "label", "location", "rotation", "scale", "folder", "properties"}. asset places a mesh or a Blueprint, class places a native class; location, rotation and scale are [X, Y, Z] arrays and properties is an object of property values.
+	 * @return The spawned actors.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Actor", meta = (AICallable, McpAccess = "Write", BlueprintInternalUseOnly = "true"))
+	static FAgentMcpActorBatchResult Spawn(const TArray<FJsonObjectWrapper>& Actors);
+
+	/**
+	 * Copies an actor of the editor level, either in a row with a fixed offset or onto given transforms.
+	 * @param Actor The actor to copy.
+	 * @param Count Number of copies when transforms are not given (1-100). Copy n is offset n times.
+	 * @param Offset Distance [X, Y, Z] between one copy and the next.
+	 * @param Transforms Entries of {"location", "rotation", "scale"}; one copy per entry, instead of count and offset.
+	 * @return The copies.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Actor", meta = (AICallable, McpAccess = "Write", AutoCreateRefTerm = "Offset,Transforms", BlueprintInternalUseOnly = "true"))
+	static FAgentMcpActorBatchResult Duplicate(AActor* Actor, const TArray<double>& Offset, const TArray<FJsonObjectWrapper>& Transforms, int32 Count = 1);
+
+	/**
+	 * Deletes actors of the editor level, together with the actors attached to them. Without bConfirm it only reports what it would delete.
+	 * @param Actors Object paths or labels of the actors to delete.
+	 * @param bConfirm Delete them; without it the call is a dry run.
+	 * @return The actors that were deleted, or would be deleted.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Actor", meta = (AICallable, McpAccess = "Destructive", BlueprintInternalUseOnly = "true"))
+	static FAgentMcpActorBatchResult Delete(const TArray<FString>& Actors, bool bConfirm = false);
+
+	/**
+	 * Attaches one actor to another, as dragging it onto the parent in the World Outliner does.
+	 * @param Child The actor that is attached.
+	 * @param Parent The actor it is attached to.
+	 * @param Socket Socket of the parent mesh to hang the child on; empty attaches to the parent's root.
+	 * @param bKeepWorldTransform Leave the child where it is. False reads its current relative transform against the new parent, which moves it.
+	 * @return The attachment and where the child ended up.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Actor", meta = (AICallable, McpAccess = "Write", BlueprintInternalUseOnly = "true"))
+	static FAgentMcpActorAttachResult Attach(AActor* Child, AActor* Parent, const FString& Socket = TEXT(""), bool bKeepWorldTransform = true);
+
+	/**
+	 * Moves actors to a World Outliner folder.
+	 * @param Actors Object paths or labels of the actors to move.
+	 * @param Folder Folder path, for example Greybox/Walls. Empty moves them to the root.
+	 * @return The actors that were moved.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Actor", meta = (AICallable, McpAccess = "Write", BlueprintInternalUseOnly = "true"))
+	static FAgentMcpActorBatchResult SetFolder(const TArray<FString>& Actors, const FString& Folder);
 };

@@ -193,6 +193,10 @@ def run_p0(client, report, evidence, expected_tools):
 def run_slice1(client, report, evidence, run_pie, pie_cycles):
     slice1 = evidence.setdefault("slice1", {})
 
+    # An earlier run leaves the fixture Widget Blueprint with the missing BindWidget on disk. Its compile errors would refuse
+    # every play session here; p3 resets the fixtures, which turns the warning back on for its own refusal check.
+    client.call_tool("testbed_set_pie_warning", {"blueprint": object_path(FIXTURE_FOLDER + "/WBP_AgentMcpMissingBinding"), "bEnabled": False})
+
     # --- actor_find -------------------------------------------------------------------------------
     _, _, is_error, data, size = client.call_tool("actor_find", {"limit": 500})
     actors = (data or {}).get("actors") or []
@@ -807,9 +811,11 @@ def run_p3(client, report, evidence):
 
     # --- dispatcher rollback of a failed write ------------------------------------------------------
     undoable = get_undo_state(client).get("undoableCount") or 0
-    tags_before = read_property(client, "Floor", "Tags")
-    _, _, is_error, data, _ = client.call_tool("testbed_write_then_fail", {"actor": "Floor"})
-    tags_after = read_property(client, "Floor", "Tags")
+    # Any actor of the open level; the level checks open other levels, so no actor name is guaranteed.
+    probe_actor = next((actor.get("path") for actor in find_actors(client, limit=5)), "Floor")
+    tags_before = read_property(client, probe_actor, "Tags")
+    _, _, is_error, data, _ = client.call_tool("testbed_write_then_fail", {"actor": probe_actor})
+    tags_after = read_property(client, probe_actor, "Tags")
     report.check("a failing Write tool rolls back its partial change",
                  is_error and error_code(data) == "TESTBED_FAILURE" and tags_after == tags_before and (get_undo_state(client).get("undoableCount") or 0) == undoable,
                  f"code={error_code(data)}, tags before={tags_before}, after={tags_after}")
@@ -1327,6 +1333,159 @@ def run_p6(client, report, evidence):
         shutil.rmtree(import_folder, ignore_errors=True)
 
 
+P7_TOOLS = {
+    "level_new", "level_open", "level_save",
+    "actor_spawn", "actor_duplicate", "actor_delete", "actor_attach", "actor_set_folder",
+    "viewport_set_camera",
+}
+SMOKE_LEVEL = FIXTURE_FOLDER + "/Maps/L_AgentMcpSmoke"
+SMOKE_CUBE = "/Engine/BasicShapes/Cube"
+
+
+def find_actors(client, **arguments):
+    _, _, is_error, data, _ = client.call_tool("actor_find", arguments)
+    return [] if is_error else ((data or {}).get("actors") or [])
+
+
+def actors_labelled(client, label):
+    """actor_find matches labels as a substring, so SmokeCube would also return SmokeCube2."""
+    return [actor for actor in find_actors(client, name=label) if actor.get("label") == label]
+
+
+def run_p7(client, report, evidence):
+    p7 = evidence.setdefault("p7", {})
+    client.call_tool("testbed_reset_fixtures")
+
+    # --- level_new ------------------------------------------------------------------------------------
+    _, _, is_error, data, _ = client.call_tool("level_new", {"assetPath": SMOKE_LEVEL, "bPartitioned": False})
+    report.check("level_new creates a level and opens it",
+                 not is_error and (data or {}).get("level") == SMOKE_LEVEL and (data or {}).get("bPartitioned") is not True,
+                 json.dumps(data)[:200])
+    p7["levelNew"] = data
+
+    _, _, is_error, data, _ = client.call_tool("editor_get_state", {"maxListedItems": 0})
+    report.check("the new level is the level open in the editor", not is_error and (data or {}).get("editorWorld") == SMOKE_LEVEL,
+                 str((data or {}).get("editorWorld")))
+
+    _, _, is_error, data, _ = client.call_tool("level_new", {"assetPath": SMOKE_LEVEL})
+    report.check("level_new refuses a path that already has an asset", is_error and error_code(data) == "ASSET_EXISTS", error_message(data)[:200])
+
+    # --- actor_spawn ----------------------------------------------------------------------------------
+    _, _, is_error, data, _ = client.call_tool("actor_spawn", {"actors": [
+        {"asset": SMOKE_CUBE, "label": "SmokeCube", "location": [0, 0, 100], "scale": [2, 2, 2], "folder": "Greybox/Walls"},
+        {"class": "PointLight", "label": "SmokeLight", "location": [0, 0, 400], "folder": "Greybox/Lights"},
+    ]})
+    spawned = (data or {}).get("actors") or []
+    report.check("actor_spawn places a mesh asset and a native class in one call",
+                 not is_error and len(spawned) == 2 and spawned[0].get("label") == "SmokeCube"
+                 and spawned[0].get("folder") == "Greybox/Walls" and spawned[1].get("className") == "PointLight",
+                 json.dumps(spawned)[:300])
+    p7["spawn"] = data
+
+    _, _, is_error, data, _ = client.call_tool("actor_spawn", {"actors": [
+        {"asset": SMOKE_CUBE, "wrongField": 1},
+        {"asset": "/Game/AgentMcpFixtures/DoesNotExist"},
+        {},
+    ]})
+    message = error_message(data)
+    report.check("actor_spawn reports every bad entry together and spawns nothing",
+                 is_error and "actors[0]" in message and "actors[1]" in message and "actors[2]" in message,
+                 message[:300])
+
+    cube = next(iter(actors_labelled(client, "SmokeCube")), None)
+    report.check("actor_find finds the spawned actor in its folder",
+                 cube is not None and cube.get("folder") == "Greybox/Walls", json.dumps(cube))
+
+    # --- actor_duplicate ------------------------------------------------------------------------------
+    _, _, is_error, data, _ = client.call_tool("actor_duplicate", {"actor": cube["path"], "count": 3, "offset": [300, 0, 0]})
+    copies = (data or {}).get("actors") or []
+    report.check("actor_duplicate makes a row of copies", not is_error and len(copies) == 3 and (data or {}).get("bApplied") is True,
+                 json.dumps(copies)[:300])
+    p7["duplicate"] = data
+
+    _, _, is_error, data, _ = client.call_tool("actor_inspect", {"actor": copies[2]["path"], "bIncludeComponents": False})
+    location = ((data or {}).get("transform") or {}).get("location") or [0, 0, 0]
+    report.check("the third copy sits three offsets away", not is_error and close_enough(location, [900, 0, 100], 1.0), json.dumps(location))
+
+    # --- actor_attach ---------------------------------------------------------------------------------
+    _, _, is_error, data, _ = client.call_tool("actor_attach", {"child": copies[0]["path"], "parent": cube["path"]})
+    report.check("actor_attach attaches one actor to another", not is_error and (data or {}).get("parent") == cube["path"],
+                 json.dumps(data)[:200])
+
+    _, _, is_error, data, _ = client.call_tool("actor_inspect", {"actor": copies[0]["path"], "bIncludeComponents": False})
+    report.check("actor_inspect reports the new attachment", not is_error and (data or {}).get("attachParent") == cube["path"],
+                 str((data or {}).get("attachParent")))
+
+    _, _, is_error, data, _ = client.call_tool("actor_attach", {"child": cube["path"], "parent": cube["path"]})
+    report.check("actor_attach refuses attaching an actor to itself", is_error and error_code(data) == "ATTACH_REFUSED", error_message(data)[:200])
+
+    # --- actor_set_folder -----------------------------------------------------------------------------
+    _, _, is_error, data, _ = client.call_tool("actor_set_folder", {"actors": [copies[1]["path"], "SmokeLight"], "folder": "Greybox/Props"})
+    report.check("actor_set_folder moves actors named by path and by label",
+                 not is_error and len((data or {}).get("actors") or []) == 2, json.dumps(data)[:200])
+    report.check("the moved actors are in the new folder", len(find_actors(client, folder="Greybox/Props")) == 2,
+                 json.dumps(find_actors(client, folder="Greybox/Props"))[:200])
+
+    _, _, is_error, data, _ = client.call_tool("actor_set_folder", {"actors": ["NoSuchActor"], "folder": "Greybox"})
+    report.check("actor_set_folder reports an actor it cannot find", is_error and error_code(data) == "NOT_FOUND", error_message(data)[:200])
+
+    # --- viewport_set_camera --------------------------------------------------------------------------
+    _, _, is_error, data, _ = client.call_tool("viewport_set_camera", {"focusActor": cube["path"]})
+    report.check("viewport_set_camera frames an actor", not is_error and len((data or {}).get("location") or []) == 3
+                 and (data or {}).get("focusActor") == cube["path"], json.dumps(data)[:200])
+
+    _, _, is_error, data, _ = client.call_tool("viewport_set_camera", {"location": [1000, 1000, 800], "rotation": [-30, 180, 0]})
+    report.check("viewport_set_camera takes a location and a rotation",
+                 not is_error and close_enough((data or {}).get("location") or [], [1000, 1000, 800], 1.0), json.dumps(data)[:200])
+
+    # --- level_new refuses to discard unsaved level changes -------------------------------------------
+    _, _, is_error, data, _ = client.call_tool("level_new", {"assetPath": FIXTURE_FOLDER + "/Maps/L_AgentMcpSmokeSecond"})
+    report.check("level_new refuses while the level has unsaved changes", is_error and error_code(data) == "UNSAVED_CHANGES",
+                 error_message(data)[:200])
+
+    # --- level_save -----------------------------------------------------------------------------------
+    _, _, is_error, data, _ = client.call_tool("level_save")
+    report.check("level_save writes the current level", not is_error and SMOKE_LEVEL in ((data or {}).get("levels") or []),
+                 json.dumps(data)[:200])
+    p7["levelSave"] = data
+
+    _, _, is_error, data, _ = client.call_tool("editor_get_state", {"maxListedItems": 10})
+    report.check("nothing is left unsaved after level_save", not is_error and (data or {}).get("dirtyPackageCount") == 0,
+                 json.dumps((data or {}).get("dirtyPackages"))[:200])
+
+    # --- actor_delete ---------------------------------------------------------------------------------
+    _, _, is_error, data, _ = client.call_tool("actor_delete", {"actors": [cube["path"]]})
+    report.check("actor_delete is a dry run without bConfirm and names the attached actors",
+                 not is_error and (data or {}).get("bApplied") is not True
+                 and copies[0]["path"] in ((data or {}).get("attachedActors") or []), json.dumps(data)[:300])
+    report.check("the dry run left the actor alone", len(actors_labelled(client, "SmokeCube")) == 1, "")
+
+    _, _, is_error, data, _ = client.call_tool("actor_delete", {"actors": [cube["path"]], "bConfirm": True})
+    report.check("actor_delete deletes with bConfirm", not is_error and (data or {}).get("bApplied") is True, json.dumps(data)[:200])
+    report.check("the deleted actor and the actor attached to it are gone",
+                 not actors_labelled(client, "SmokeCube") and not actors_labelled(client, copies[0]["label"]), "")
+
+    # --- level_open -----------------------------------------------------------------------------------
+    _, _, is_error, data, _ = client.call_tool("level_open", {"assetPath": SMOKE_LEVEL})
+    report.check("level_open refuses while the level has unsaved changes", is_error and error_code(data) == "UNSAVED_CHANGES",
+                 error_message(data)[:200])
+
+    client.call_tool("editor_undo")
+    report.check("editor_undo brings the deleted actors back",
+                 len(actors_labelled(client, "SmokeCube")) == 1 and len(actors_labelled(client, copies[0]["label"])) == 1, "")
+
+    # Undoing the delete also restores the package's saved state, so the level is clean again.
+    _, _, is_error, data, _ = client.call_tool("editor_get_state", {"maxListedItems": 10})
+    report.check("undo leaves the level with no unsaved changes", not is_error and (data or {}).get("dirtyPackageCount") == 0,
+                 json.dumps((data or {}).get("dirtyPackages"))[:200])
+
+    _, _, is_error, data, _ = client.call_tool("level_open", {"assetPath": SMOKE_LEVEL})
+    report.check("level_open opens a saved level", not is_error and (data or {}).get("level") == SMOKE_LEVEL, json.dumps(data)[:200])
+
+    _, _, is_error, data, _ = client.call_tool("level_open", {"assetPath": "/Game/AgentMcpFixtures/DoesNotExist"})
+    report.check("level_open reports a level that does not exist", is_error and error_code(data) == "NOT_FOUND", error_message(data)[:200])
+
+
 def run_protocol_errors(client, report):
     status, _, payload, _ = client.request("tools/call", {"name": "no_such_tool", "arguments": {}})
     report.check("unknown tool returns JSON-RPC -32602", ((payload or {}).get("error") or {}).get("code") == -32602, str((payload or {}).get("error")))
@@ -1392,6 +1551,7 @@ def main():
     parser.add_argument("--skip-p4", action="store_true", help="skip Widget Blueprint authoring (needs the testbed toolset)")
     parser.add_argument("--skip-p5", action="store_true", help="skip skills (the project skill checks need the testbed configuration)")
     parser.add_argument("--skip-p6", action="store_true", help="skip creating data assets and importing textures (needs the testbed toolset)")
+    parser.add_argument("--skip-p7", action="store_true", help="skip level and actor authoring (creates a fixture level and writes it to disk)")
     args = parser.parse_args()
 
     # Every editor with the plugin serves the same default port, so make sure the smoke test talks to the intended project.
@@ -1424,6 +1584,8 @@ def main():
         expected_tools |= P5_TOOLS
     if not args.skip_p6:
         expected_tools |= P6_TOOLS
+    if not args.skip_p7:
+        expected_tools |= P7_TOOLS
     try:
         run_p0(client, report, evidence, expected_tools)
         if not args.skip_slice1:
@@ -1440,6 +1602,8 @@ def main():
             run_p5(client, report, evidence)
         if not args.skip_p6:
             run_p6(client, report, evidence)
+        if not args.skip_p7:
+            run_p7(client, report, evidence)
         run_protocol_errors(client, report)
     except Exception as error:  # Keep the evidence of the checks that did run.
         report.check("smoke test ran to completion", False, f"{type(error).__name__}: {error}")

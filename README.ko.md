@@ -40,7 +40,7 @@ Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
 
 도구는 일반 `static UFUNCTION`입니다. 이름, 설명, 인자와 반환 JSON 스키마를 Unreal Reflection에서 생성하므로 Toolset에 함수를 추가하면 MCP 도구가 됩니다.
 
-> **상태: 베타.** Windows 64비트의 Unreal Engine 5.5.4(설치형 빌드)로 빌드하고 테스트했습니다. 이 저장소의 smoke 테스트는 테스트베드 프로젝트에서 185개 검사를 통과합니다. 다른 엔진 버전과 플랫폼은 확인하지 않았습니다.
+> **상태: 베타.** Windows 64비트의 Unreal Engine 5.5.4(설치형 빌드)로 빌드하고 테스트했습니다. 이 저장소의 smoke 테스트는 테스트베드 프로젝트에서 213개 검사를 통과합니다. 다른 엔진 버전과 플랫폼은 확인하지 않았습니다.
 
 ## Dungeon UI — 워크플로 검증 사례
 
@@ -142,6 +142,14 @@ tool_timeout_sec = 600
 | `actor_find` | Read | 레이블이나 이름, 클래스, 태그, 폴더, 선택으로 액터 찾기(에디터 또는 플레이 월드) |
 | `actor_inspect` | Read | 액터의 클래스, 블루프린트, 태그, 트랜스폼, 부착 관계, 컴포넌트 |
 | `actor_set_transform` | Write | 액터 이동, 회전, 크기 조절 |
+| `actor_spawn` | Write | 메시·블루프린트 에셋이나 네이티브 클래스로 액터를 배치. 레이블, 트랜스폼, 폴더, 프로퍼티 지정 |
+| `actor_duplicate` | Write | 고정 간격으로 줄지어 복제하거나, 주어진 트랜스폼마다 복제 |
+| `actor_attach` | Write | 액터를 다른 액터에, 필요하면 소켓에 부착 |
+| `actor_set_folder` | Write | 액터를 World Outliner 폴더로 이동 |
+| `actor_delete` | Destructive | 액터와 거기 붙어 있는 액터를 함께 삭제 |
+| `level_new` | Control | 빈 레벨이나 템플릿으로 레벨을 만들어 저장하고 연다 |
+| `level_open` | Control | 에디터에서 레벨을 연다 |
+| `level_save` | Control | 에디터에 열린 레벨, 또는 저장 안 된 모든 레벨을 저장 |
 | `object_list_properties` | Read | 객체의 프로퍼티와 변경 가능 여부 |
 | `object_get_properties` | Read | 프로퍼티 값을 JSON으로 읽기 |
 | `object_set_properties` | Write | 에디터 레벨의 액터·컴포넌트나, 데이터 에셋·텍스처 같은 프로젝트 에셋의 프로퍼티 변경과 변경 후 값 확인 |
@@ -166,6 +174,7 @@ tool_timeout_sec = 600
 | `umg_set_widget_properties` | Write | 여러 위젯의 프로퍼티, 슬롯 값, 변수 여부 변경 |
 | `umg_remove_widgets` | Destructive | 위젯과 하위 위젯, 프로퍼티 바인딩, 그래프 참조 삭제 |
 | `viewport_capture` | Read | 레벨 뷰포트나 플레이 세션의 PNG 캡처(게임 UI 포함) |
+| `viewport_set_camera` | Control | 레벨 뷰포트 카메라를 특정 위치로 옮기거나 액터를 비춰, 다음 캡처에 나오게 함 |
 | `livecoding_compile` | Control | 바뀐 C++를 Live Coding으로 컴파일하고 결과까지 대기 |
 | `skills_list` | Read | 플러그인과 프로젝트의 스킬과 설명, 건너뛴 스킬 파일 |
 | `skills_get` | Read | 스킬의 지침이나 스킬에 딸린 파일 하나 |
@@ -202,7 +211,8 @@ Unreal Engine 5.8도 Agent Skill 개념을 제공합니다. UE 5.8 쪽은 C++, P
 - **되돌릴 수 있고 전부 아니면 전무인 쓰기.** Write 도구는 무언가를 바꾸기 전에 모든 값을 검사하고, 에디터 트랜잭션 안에서 실행됩니다. 일부를 바꾼 뒤 실패하면 트랜잭션을 되돌립니다.
 - **플레이 중 쓰기 금지.** Play In Editor가 시작 중이거나 실행 중이면 Write 도구와 에셋을 만들거나 가져오는 도구를 거부합니다.
 - **프로젝트 콘텐츠만.** 에셋 생성, 가져오기, 변경, 저장은 `/Game`과 프로젝트 plugin 안에서만 합니다. 엔진 콘텐츠는 읽기 전용입니다.
-- **명시적 저장.** 부수 효과로 저장하는 도구는 없습니다. `asset_save`는 로드된 프로젝트 에셋만 저장하고 레벨은 거부합니다.
+- **명시적 저장.** 부수 효과로 저장하는 도구는 없습니다. 예외는 `level_new` 하나로, 레벨은 디스크에만 존재하므로 만든 레벨을 바로 씁니다. `asset_save`는 로드된 프로젝트 에셋만 저장하고 레벨은 여전히 거부합니다. 레벨은 `level_save`가 저장하며, 대상은 에디터에 열린 레벨입니다.
+- **레벨을 말없이 교체하지 않음.** 레벨을 여는 순간 저장 안 된 변경이 사라지므로, `level_new`와 `level_open`은 저장 안 된 레벨 변경이 있으면 거부합니다.
 - **dry run.** Destructive 도구는 `bConfirm: true`가 있어야 실제로 실행하고, `asset_import_textures`는 무엇이든 가져오기 전에 모든 항목을 검사합니다.
 - **허용·차단 목록.** `AllowedTools`와 `BlockedTools`로 도구를 숨기고, `BlockedProperties`로 `object_set_properties`와 `umg` 도구가 바꾸지 못할 프로퍼티를 지정합니다.
 - **파일.** `skills_get`은 스킬 폴더 안의 파일만 읽고, 그 밖의 경로와 숨김 파일은 거부합니다. `asset_import_textures`는 받은 이미지 파일을 읽으며, 프로젝트 폴더 밖의 파일도 읽습니다.
