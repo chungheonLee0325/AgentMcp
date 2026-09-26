@@ -420,8 +420,8 @@ FAgentMcpMeshImportResult UAgentMcpAssetTools::ImportMeshes(const TArray<FJsonOb
 		TStrongObjectPtr<UAssetImportTask> Task(NewObject<UAssetImportTask>());
 		RunImportTask(Task.Get(), Plan);
 
-		// One file can bring several objects: the mesh, and the materials and textures it refers to.
-		UStaticMesh* Mesh = nullptr;
+		// One file can bring several objects: its meshes, and the materials and textures they refer to.
+		TArray<UStaticMesh*> FileMeshes;
 		TArray<FString> Created;
 		for (UObject* Object : Task->GetObjects())
 		{
@@ -429,15 +429,15 @@ FAgentMcpMeshImportResult UAgentMcpAssetTools::ImportMeshes(const TArray<FJsonOb
 			{
 				continue;
 			}
-			if (UStaticMesh* Candidate = Cast<UStaticMesh>(Object); Candidate && !Mesh)
+			if (UStaticMesh* Candidate = Cast<UStaticMesh>(Object))
 			{
-				Mesh = Candidate;
+				FileMeshes.Add(Candidate);
 				continue;
 			}
 			Object->MarkPackageDirty();
 			Created.Add(Object->GetPathName());
 		}
-		if (!Mesh)
+		if (FileMeshes.IsEmpty())
 		{
 			TArray<FString> ImportedBefore;
 			for (const FAgentMcpImportedMesh& Done : Result.Meshes)
@@ -449,21 +449,41 @@ FAgentMcpMeshImportResult UAgentMcpAssetTools::ImportMeshes(const TArray<FJsonOb
 				TEXT("A skeletal mesh or an empty file produces no static mesh; log_get_recent may show the reason."));
 			return Result;
 		}
-		Mesh->MarkPackageDirty();
-		if (!Mesh->GetPackage()->GetName().Equals(Plan.PackageName, ESearchCase::IgnoreCase))
+		// A file of several parts (a chest and its lid, a doorway and its door) gets one mesh per part, named after the parts, and
+		// the parts share their origin, so placing them on the same transform puts the piece back together. None of them is "the"
+		// mesh of the file, so every part is reported.
+		if (FileMeshes.Num() > 1)
 		{
-			Result.Warnings.Add(FString::Printf(TEXT("%s was imported as %s, not %s."), *Plan.File, *Mesh->GetPackage()->GetName(), *Plan.PackageName));
+			TArray<FString> Parts;
+			for (const UStaticMesh* Part : FileMeshes)
+			{
+				Parts.Add(Part->GetPackage()->GetName());
+			}
+			Result.Warnings.Add(FString::Printf(TEXT("%s holds %d meshes, so each part was imported under its own name instead of %s: %s."),
+				*Plan.File, FileMeshes.Num(), *Plan.PackageName, *FString::Join(Parts, TEXT(", "))));
+		}
+		else if (!FileMeshes[0]->GetPackage()->GetName().Equals(Plan.PackageName, ESearchCase::IgnoreCase))
+		{
+			Result.Warnings.Add(FString::Printf(TEXT("%s was imported as %s, not %s."), *Plan.File, *FileMeshes[0]->GetPackage()->GetName(), *Plan.PackageName));
 		}
 
-		FAgentMcpImportedMesh& Info = Result.Meshes.AddDefaulted_GetRef();
-		Info.Asset = Mesh->GetPathName();
-		Info.File = Plan.File;
-		const FVector Size = Mesh->GetBoundingBox().GetSize();
-		Info.Size = { Size.X, Size.Y, Size.Z };
-		const UBodySetup* BodySetup = Mesh->GetBodySetup();
-		Info.CollisionShapes = BodySetup ? BodySetup->AggGeom.GetElementCount() : 0;
-		Info.CreatedAssets = MoveTemp(Created);
-		Info.bReplaced = Plan.bReplace;
+		for (int32 Index = 0; Index < FileMeshes.Num(); ++Index)
+		{
+			UStaticMesh* Mesh = FileMeshes[Index];
+			Mesh->MarkPackageDirty();
+			FAgentMcpImportedMesh& Info = Result.Meshes.AddDefaulted_GetRef();
+			Info.Asset = Mesh->GetPathName();
+			Info.File = Plan.File;
+			const FVector Size = Mesh->GetBoundingBox().GetSize();
+			Info.Size = { Size.X, Size.Y, Size.Z };
+			const UBodySetup* BodySetup = Mesh->GetBodySetup();
+			Info.CollisionShapes = BodySetup ? BodySetup->AggGeom.GetElementCount() : 0;
+			Info.bReplaced = Plan.bReplace && Mesh->GetPackage()->GetName().Equals(Plan.PackageName, ESearchCase::IgnoreCase);
+			if (Index == 0)
+			{
+				Info.CreatedAssets = Created;
+			}
+		}
 	}
 	return Result;
 }

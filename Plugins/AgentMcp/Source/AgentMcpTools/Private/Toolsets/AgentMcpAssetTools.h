@@ -262,7 +262,7 @@ struct FAgentMcpImportedMesh
 	UPROPERTY()
 	int32 CollisionShapes = 0;
 
-	/** Materials and textures the file created next to the mesh. */
+	/** Materials and textures the file created next to the mesh; listed on the first part of a file only. */
 	UPROPERTY()
 	TArray<FString> CreatedAssets;
 
@@ -377,7 +377,7 @@ public:
 	 * saved (use asset_save), importing cannot be undone with editor_undo, and the tool is blocked during a play session.
 	 * @param Meshes Entries {"file": mesh file, "asset": package path of the static mesh}; a relative file starts at the project folder. For example [{"file": "Art/Kit/wall.gltf", "asset": "/Game/Kit/SM_Wall"}].
 	 * @param bReplaceExisting Replace static meshes that exist at the asset paths; without it an existing asset is an error.
-	 * @return The imported meshes with their size, their collision and the other assets each file created.
+	 * @return Every static mesh the files produced, with its size and collision; a file of several parts gives one entry per part, named after the part.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Asset", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))
 	static FAgentMcpMeshImportResult ImportMeshes(const TArray<FJsonObjectWrapper>& Meshes, bool bReplaceExisting = false);

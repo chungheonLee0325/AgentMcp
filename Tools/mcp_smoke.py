@@ -1166,6 +1166,18 @@ CUBE_OBJ = "".join(f"v {x} {y} {z}\n" for x, y, z in [(0, 0, 0), (1, 0, 0), (1, 
     f"f {a} {b} {c}\n" for a, b, c in [(1, 3, 2), (1, 4, 3), (5, 6, 7), (5, 7, 8), (1, 2, 6), (1, 6, 5), (2, 3, 7), (2, 7, 6), (3, 4, 8), (3, 8, 7), (4, 1, 5), (4, 5, 8)])
 
 
+def two_part_gltf():
+    """A glTF with two mesh nodes, which an importer brings in as two static meshes."""
+    triangles = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (0, 1, 1)]
+    data = base64.b64encode(struct.pack("<18f", *[value for point in triangles for value in point])).decode()
+    accessors = [{"bufferView": index, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0, 0, index], "max": [1, 1, index]} for index in (0, 1)]
+    return json.dumps({"asset": {"version": "2.0"}, "scene": 0, "scenes": [{"nodes": [0, 1]}],
+                       "nodes": [{"name": "PartA", "mesh": 0}, {"name": "PartB", "mesh": 1}],
+                       "meshes": [{"name": name, "primitives": [{"attributes": {"POSITION": index}}]} for index, name in enumerate(("PartA", "PartB"))],
+                       "accessors": accessors, "bufferViews": [{"buffer": 0, "byteOffset": 36 * index, "byteLength": 36} for index in (0, 1)],
+                       "buffers": [{"byteLength": 72, "uri": "data:application/octet-stream;base64," + data}]})
+
+
 def object_path(package_name):
     return f"{package_name}.{package_name.rsplit('/', 1)[-1]}"
 
@@ -1271,6 +1283,8 @@ def run_p6(client, report, evidence):
     write_text(os.path.join(import_folder, "notes.txt"), "not an image\n")
     cube_obj = os.path.join(import_folder, "smoke_cube.obj")
     write_text(cube_obj, CUBE_OBJ)
+    parts_gltf = os.path.join(import_folder, "smoke_parts.gltf")
+    write_text(parts_gltf, two_part_gltf())
     relative_icon = "Saved/MCP/SmokeImport/smoke_icon.png"
 
     try:
@@ -1328,6 +1342,13 @@ def run_p6(client, report, evidence):
         report.check("asset_import_meshes imports a mesh and reports its size",
                      not is_error and len(size) == 3 and size[0] > 0 and close_enough(size, [size[0]] * 3), json.dumps(data)[:300])
         p6["importMesh"] = data
+
+        # A file of several parts once reported one part as the file's mesh; every part must be listed.
+        _, _, is_error, data, _ = client.call_tool("asset_import_meshes", {"meshes": [{"file": parts_gltf, "asset": FIXTURE_FOLDER + "/Kit/SM_AgentMcpParts"}]})
+        parts = [mesh.get("asset", "") for mesh in (data or {}).get("meshes") or []]
+        report.check("asset_import_meshes lists every part of a file that holds several meshes",
+                     not is_error and len(parts) == 2 and any("holds 2 meshes" in warning for warning in (data or {}).get("warnings") or []),
+                     json.dumps(data)[:300])
 
         _, _, is_error, data, _ = client.call_tool("object_set_properties", {"object": data_asset, "values": {
             "Icon": texture, "Brush": {"ResourceObject": texture, "ImageSize": {"X": 128, "Y": 64}}}})
