@@ -40,7 +40,7 @@ Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
 
 Tools are plain `static UFUNCTION`s. Names, descriptions, arguments and result JSON schemas are generated from Unreal Reflection, so adding a function to a toolset creates an MCP tool.
 
-> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 214 checks against the testbed project. Other engine versions and platforms have not been tried.
+> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 216 checks against the testbed project. Other engine versions and platforms have not been tried.
 
 ## Dungeon UI — workflow case study
 
@@ -161,6 +161,7 @@ The server returns short usage instructions from `initialize`, including the lis
 | `asset_save` | Control | Save loaded project assets without dialogs |
 | `asset_create` | Control | Create a data asset or a DataTable |
 | `asset_import_textures` | Control | Import PNG, JPEG, TGA or BMP files as textures, with the settings for UMG |
+| `asset_import_meshes` | Control | Import FBX, glTF, GLB or OBJ files as static meshes, with their size and collision |
 | `class_find_derived` | Read | C++ and Blueprint classes that derive from a class, with headers and assets |
 | `datatable_get_schema` | Read | Row struct, C++ header, columns, C++ types and JSON schemas |
 | `datatable_list_rows`, `datatable_get_rows` | Read | Row names, and values keyed by row and column |
@@ -324,7 +325,7 @@ python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --exp
 - Responses are plain JSON. There is no SSE or progress streaming.
 - Requests execute on the editor game thread. **Use Less CPU when in Background** can make calls noticeably slower when the editor is unfocused.
 - `livecoding_compile` blocks until compilation completes, and Live Coding cannot apply reflected declaration changes to `UCLASS`, `USTRUCT`, `UPROPERTY` or `UFUNCTION`.
-- There is no mesh or material import tool, so assets from Fab or a DCC package are brought in through the editor; the level tools then place what is already in the project.
+- Meshes are imported with the materials and textures their file carries, and there is no tool to author materials. Fab content is added through the Fab plugin, which needs the user's Epic account.
 - The level tools create and open levels and place actors. World Partition data layers, streaming sources and level instances are not covered, and a partitioned level saves its actors in their own packages.
 - Source control handling of `level_save` has not been tested.
 - Blueprint graphs and class defaults, widget animations and designer property bindings can be inspected but not edited, and widgets cannot yet be moved to a different parent or changed to another class; the UI sample rebuilt subtrees instead.

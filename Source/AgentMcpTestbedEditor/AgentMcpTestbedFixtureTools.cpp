@@ -211,6 +211,27 @@ FAgentMcpTestbedFixtures UAgentMcpTestbedFixtureTools::ResetFixtures()
 	DeleteFixtureAsset(TEXT("DA_AgentMcpSmoke"), Result.Deleted);
 	DeleteFixtureAsset(TEXT("DT_AgentMcpCreated"), Result.Deleted);
 	DeleteFixtureAsset(TEXT("T_AgentMcpSmokeIcon"), Result.Deleted);
+	// asset_import_meshes brings the materials and textures of a file along, so the whole Kit folder goes, not a list of names.
+	{
+		const FString KitFolder = FString(FixtureFolder) + TEXT("/Kit/");
+		TArray<UObject*> KitAssets;
+		for (TObjectIterator<UObject> It; It; ++It)
+		{
+			if (It->IsAsset() && It->GetPackage()->GetName().StartsWith(KitFolder))
+			{
+				KitAssets.Add(*It);
+			}
+		}
+		TArray<FString> KitPaths;
+		for (const UObject* Asset : KitAssets)
+		{
+			KitPaths.Add(Asset->GetPathName());
+		}
+		if (!KitAssets.IsEmpty() && ObjectTools::ForceDeleteObjects(KitAssets, /*ShowConfirmation=*/false) > 0)
+		{
+			Result.Deleted.Append(KitPaths);
+		}
+	}
 
 	UDataTable* DataTable = ResetDataTable(Result.Created);
 	UWidgetBlueprint* BoundWidget = ResetWidgetBlueprint(BoundWidgetName, /*bWithTitle=*/true, Result.Created);

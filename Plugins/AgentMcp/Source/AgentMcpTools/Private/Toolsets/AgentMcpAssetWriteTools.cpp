@@ -9,6 +9,7 @@
 #include "Dom/JsonObject.h"
 #include "Engine/DataAsset.h"
 #include "Engine/DataTable.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/Texture2D.h"
 #include "Factories/DataAssetFactory.h"
 #include "Factories/DataTableFactory.h"
@@ -17,6 +18,7 @@
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "UObject/StrongObjectPtr.h"
 
 namespace UE::AgentMcp::AssetWriteToolsPrivate
@@ -83,6 +85,19 @@ namespace UE::AgentMcp::AssetWriteToolsPrivate
 		return false;
 	}
 
+	bool IsMeshFile(const FString& File)
+	{
+		const FString Extension = FPaths::GetExtension(File);
+		for (const TCHAR* Supported : { TEXT("fbx"), TEXT("gltf"), TEXT("glb"), TEXT("obj") })
+		{
+			if (Extension.Equals(Supported, ESearchCase::IgnoreCase))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	struct FPlannedImport
 	{
 		FString File;
@@ -90,6 +105,125 @@ namespace UE::AgentMcp::AssetWriteToolsPrivate
 		FString AssetName;
 		bool bReplace = false;
 	};
+
+	/**
+	 * Checks import entries {"file", "asset"} before anything is imported, because imports cannot be undone. Raises every problem in one
+	 * error and returns false. An existing asset is only replaced when it is a ReplaceableClass and bReplaceExisting is set.
+	 */
+	bool PlanImports(const TArray<FJsonObjectWrapper>& Entries, const TCHAR* ArgumentName, bool bReplaceExisting, bool (*IsSupportedFile)(const FString&),
+		const TCHAR* FileKinds, const UClass* ReplaceableClass, const FString& EntryHint, TArray<FPlannedImport>& OutPlanned)
+	{
+		if (Entries.IsEmpty() || Entries.Num() > MaxImportEntries)
+		{
+			RaiseToolError(TEXT("INVALID_ARGUMENT"), FString::Printf(TEXT("'%s' must list 1-%d entries, not %d."), ArgumentName, MaxImportEntries, Entries.Num()), EntryHint);
+			return false;
+		}
+
+		const IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
+		TArray<FString> Problems;
+		TSet<FString> ProblemCodes;
+		TSet<FString> PlannedPackages;
+		auto AddProblem = [&Problems, &ProblemCodes](const FString& Message, const FString& Code)
+		{
+			Problems.Add(Message);
+			ProblemCodes.Add(Code);
+		};
+
+		for (int32 Index = 0; Index < Entries.Num(); ++Index)
+		{
+			const FString Label = FString::Printf(TEXT("%s[%d]"), ArgumentName, Index);
+			const TSharedPtr<FJsonObject>& Entry = Entries[Index].JsonObject;
+			if (!Entry.IsValid())
+			{
+				AddProblem(FString::Printf(TEXT("%s is not an object"), *Label), TEXT("INVALID_ARGUMENT"));
+				continue;
+			}
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : Entry->Values)
+			{
+				if (!Pair.Key.Equals(TEXT("file"), ESearchCase::CaseSensitive) && !Pair.Key.Equals(TEXT("asset"), ESearchCase::CaseSensitive))
+				{
+					AddProblem(FString::Printf(TEXT("%s has the unknown field '%s' (expected file, asset)"), *Label, *Pair.Key.Left(64)), TEXT("INVALID_ARGUMENT"));
+				}
+			}
+			FString File;
+			FString Asset;
+			Entry->TryGetStringField(TEXT("file"), File);
+			Entry->TryGetStringField(TEXT("asset"), Asset);
+			if (File.TrimStartAndEnd().IsEmpty() || Asset.TrimStartAndEnd().IsEmpty())
+			{
+				AddProblem(FString::Printf(TEXT("%s needs the strings file and asset"), *Label), TEXT("INVALID_ARGUMENT"));
+				continue;
+			}
+
+			FPlannedImport Plan;
+			Plan.File = MakeAbsoluteFile(File);
+			FString Code;
+			const FString PathProblem = Tools::GetNewAssetPathProblem(Asset, Plan.PackageName, Plan.AssetName, Code);
+			if (!PathProblem.IsEmpty())
+			{
+				AddProblem(FString::Printf(TEXT("%s: %s"), *Label, *PathProblem), Code);
+				continue;
+			}
+			if (!IsSupportedFile(Plan.File))
+			{
+				AddProblem(FString::Printf(TEXT("%s: %s is not a %s file"), *Label, *Plan.File, FileKinds), TEXT("INVALID_ARGUMENT"));
+				continue;
+			}
+			if (!IFileManager::Get().FileExists(*Plan.File))
+			{
+				AddProblem(FString::Printf(TEXT("%s: the file %s does not exist"), *Label, *Plan.File), TEXT("NOT_FOUND"));
+				continue;
+			}
+			if (PlannedPackages.Contains(Plan.PackageName))
+			{
+				AddProblem(FString::Printf(TEXT("%s: another entry already imports to %s"), *Label, *Plan.PackageName), TEXT("INVALID_ARGUMENT"));
+				continue;
+			}
+			PlannedPackages.Add(Plan.PackageName);
+
+			if (Tools::DoesAssetExist(Plan.PackageName, Plan.AssetName))
+			{
+				if (!bReplaceExisting)
+				{
+					AddProblem(FString::Printf(TEXT("%s: an asset already exists at %s; pass bReplaceExisting true to replace it"), *Label, *Plan.PackageName), TEXT("ASSET_EXISTS"));
+					continue;
+				}
+				TArray<FAssetData> Existing;
+				AssetRegistry.GetAssetsByPackageName(FName(*Plan.PackageName), Existing);
+				const bool bReplaceable = Existing.ContainsByPredicate([ReplaceableClass](const FAssetData& AssetData)
+				{
+					return AssetData.AssetClassPath == ReplaceableClass->GetClassPathName();
+				});
+				if (!bReplaceable)
+				{
+					AddProblem(FString::Printf(TEXT("%s: the asset at %s is not a %s, so it is not replaced"), *Label, *Plan.PackageName, *ReplaceableClass->GetName()), TEXT("ASSET_EXISTS"));
+					continue;
+				}
+				Plan.bReplace = true;
+			}
+			OutPlanned.Add(MoveTemp(Plan));
+		}
+		if (!Problems.IsEmpty())
+		{
+			Tools::RaiseProblems(TEXT("Nothing was imported"), Problems, ProblemCodes, EntryHint);
+			return false;
+		}
+		return true;
+	}
+
+	/** Runs one import task synchronously and without dialogs; the task keeps the created objects. */
+	void RunImportTask(UAssetImportTask* Task, const FPlannedImport& Plan)
+	{
+		Task->Filename = Plan.File;
+		Task->DestinationPath = FPackageName::GetLongPackagePath(Plan.PackageName);
+		Task->DestinationName = Plan.AssetName;
+		Task->bReplaceExisting = Plan.bReplace;
+		Task->bReplaceExistingSettings = false;
+		Task->bAutomated = true;
+		Task->bSave = false;
+		Task->bAsync = false;
+		GetAssetTools().ImportAssetTasks({ Task });
+	}
 }
 
 FAgentMcpAssetCreateResult UAgentMcpAssetTools::Create(const FString& AssetPath, UClass* AssetClass, const FString& RowStruct)
@@ -208,116 +342,16 @@ FAgentMcpTextureImportResult UAgentMcpAssetTools::ImportTextures(const TArray<FJ
 		return Result;
 	}
 	const FString EntryHint = TEXT("Each entry is {\"file\": image file, \"asset\": package path}, for example {\"file\": \"Art/Incoming/icon.png\", \"asset\": \"/Game/UI/Textures/T_Icon\"}.");
-	if (Textures.IsEmpty() || Textures.Num() > MaxImportEntries)
-	{
-		RaiseToolError(TEXT("INVALID_ARGUMENT"), FString::Printf(TEXT("'textures' must list 1-%d entries, not %d."), MaxImportEntries, Textures.Num()), EntryHint);
-		return Result;
-	}
-
-	// Check every entry before importing anything, because imports cannot be undone.
-	const IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
 	TArray<FPlannedImport> Planned;
-	TArray<FString> Problems;
-	TSet<FString> ProblemCodes;
-	TSet<FString> PlannedPackages;
-	auto AddProblem = [&Problems, &ProblemCodes](const FString& Message, const FString& Code)
+	if (!PlanImports(Textures, TEXT("textures"), bReplaceExisting, &IsImageFile, TEXT("PNG, JPEG, TGA or BMP"), UTexture2D::StaticClass(), EntryHint, Planned))
 	{
-		Problems.Add(Message);
-		ProblemCodes.Add(Code);
-	};
-
-	for (int32 Index = 0; Index < Textures.Num(); ++Index)
-	{
-		const FString Label = FString::Printf(TEXT("textures[%d]"), Index);
-		const TSharedPtr<FJsonObject>& Entry = Textures[Index].JsonObject;
-		if (!Entry.IsValid())
-		{
-			AddProblem(FString::Printf(TEXT("%s is not an object"), *Label), TEXT("INVALID_ARGUMENT"));
-			continue;
-		}
-		for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : Entry->Values)
-		{
-			if (!Pair.Key.Equals(TEXT("file"), ESearchCase::CaseSensitive) && !Pair.Key.Equals(TEXT("asset"), ESearchCase::CaseSensitive))
-			{
-				AddProblem(FString::Printf(TEXT("%s has the unknown field '%s' (expected file, asset)"), *Label, *Pair.Key.Left(64)), TEXT("INVALID_ARGUMENT"));
-			}
-		}
-		FString File;
-		FString Asset;
-		Entry->TryGetStringField(TEXT("file"), File);
-		Entry->TryGetStringField(TEXT("asset"), Asset);
-		if (File.TrimStartAndEnd().IsEmpty() || Asset.TrimStartAndEnd().IsEmpty())
-		{
-			AddProblem(FString::Printf(TEXT("%s needs the strings file and asset"), *Label), TEXT("INVALID_ARGUMENT"));
-			continue;
-		}
-
-		FPlannedImport Plan;
-		Plan.File = MakeAbsoluteFile(File);
-		FString Code;
-		const FString PathProblem = Tools::GetNewAssetPathProblem(Asset, Plan.PackageName, Plan.AssetName, Code);
-		if (!PathProblem.IsEmpty())
-		{
-			AddProblem(FString::Printf(TEXT("%s: %s"), *Label, *PathProblem), Code);
-			continue;
-		}
-		if (!IsImageFile(Plan.File))
-		{
-			AddProblem(FString::Printf(TEXT("%s: %s is not a PNG, JPEG, TGA or BMP file"), *Label, *Plan.File), TEXT("INVALID_ARGUMENT"));
-			continue;
-		}
-		if (!IFileManager::Get().FileExists(*Plan.File))
-		{
-			AddProblem(FString::Printf(TEXT("%s: the file %s does not exist"), *Label, *Plan.File), TEXT("NOT_FOUND"));
-			continue;
-		}
-		if (PlannedPackages.Contains(Plan.PackageName))
-		{
-			AddProblem(FString::Printf(TEXT("%s: another entry already imports to %s"), *Label, *Plan.PackageName), TEXT("INVALID_ARGUMENT"));
-			continue;
-		}
-		PlannedPackages.Add(Plan.PackageName);
-
-		if (Tools::DoesAssetExist(Plan.PackageName, Plan.AssetName))
-		{
-			if (!bReplaceExisting)
-			{
-				AddProblem(FString::Printf(TEXT("%s: an asset already exists at %s; pass bReplaceExisting true to replace a texture"), *Label, *Plan.PackageName), TEXT("ASSET_EXISTS"));
-				continue;
-			}
-			TArray<FAssetData> Existing;
-			AssetRegistry.GetAssetsByPackageName(FName(*Plan.PackageName), Existing);
-			const bool bTexture = Existing.ContainsByPredicate([](const FAssetData& AssetData)
-			{
-				return AssetData.AssetClassPath == UTexture2D::StaticClass()->GetClassPathName();
-			});
-			if (!bTexture)
-			{
-				AddProblem(FString::Printf(TEXT("%s: the asset at %s is not a texture, so it is not replaced"), *Label, *Plan.PackageName), TEXT("ASSET_EXISTS"));
-				continue;
-			}
-			Plan.bReplace = true;
-		}
-		Planned.Add(MoveTemp(Plan));
-	}
-	if (!Problems.IsEmpty())
-	{
-		Tools::RaiseProblems(TEXT("Nothing was imported"), Problems, ProblemCodes, EntryHint);
 		return Result;
 	}
 
 	for (const FPlannedImport& Plan : Planned)
 	{
 		TStrongObjectPtr<UAssetImportTask> Task(NewObject<UAssetImportTask>());
-		Task->Filename = Plan.File;
-		Task->DestinationPath = FPackageName::GetLongPackagePath(Plan.PackageName);
-		Task->DestinationName = Plan.AssetName;
-		Task->bReplaceExisting = Plan.bReplace;
-		Task->bReplaceExistingSettings = false;
-		Task->bAutomated = true;
-		Task->bSave = false;
-		Task->bAsync = false;
-		GetAssetTools().ImportAssetTasks({ Task.Get() });
+		RunImportTask(Task.Get(), Plan);
 
 		UTexture2D* Texture = nullptr;
 		for (UObject* Object : Task->GetObjects())
@@ -357,6 +391,78 @@ FAgentMcpTextureImportResult UAgentMcpAssetTools::ImportTextures(const TArray<FJ
 		Info.File = Plan.File;
 		Info.Width = static_cast<int32>(Texture->Source.GetSizeX());
 		Info.Height = static_cast<int32>(Texture->Source.GetSizeY());
+		Info.bReplaced = Plan.bReplace;
+	}
+	return Result;
+}
+
+FAgentMcpMeshImportResult UAgentMcpAssetTools::ImportMeshes(const TArray<FJsonObjectWrapper>& Meshes, bool bReplaceExisting)
+{
+	using namespace UE::AgentMcp;
+	using namespace UE::AgentMcp::AssetWriteToolsPrivate;
+
+	FAgentMcpMeshImportResult Result;
+	if (Tools::IsPlaySessionActive())
+	{
+		RaiseToolError(TEXT("PIE_ACTIVE"), TEXT("asset_import_meshes creates assets and is blocked while a play session is running."),
+			TEXT("Stop the play session first (pie_stop)."));
+		return Result;
+	}
+	const FString EntryHint = TEXT("Each entry is {\"file\": mesh file, \"asset\": package path}, for example {\"file\": \"Art/Kit/wall.gltf\", \"asset\": \"/Game/Kit/SM_Wall\"}.");
+	TArray<FPlannedImport> Planned;
+	if (!PlanImports(Meshes, TEXT("meshes"), bReplaceExisting, &IsMeshFile, TEXT("FBX, glTF, GLB or OBJ"), UStaticMesh::StaticClass(), EntryHint, Planned))
+	{
+		return Result;
+	}
+
+	for (const FPlannedImport& Plan : Planned)
+	{
+		TStrongObjectPtr<UAssetImportTask> Task(NewObject<UAssetImportTask>());
+		RunImportTask(Task.Get(), Plan);
+
+		// One file can bring several objects: the mesh, and the materials and textures it refers to.
+		UStaticMesh* Mesh = nullptr;
+		TArray<FString> Created;
+		for (UObject* Object : Task->GetObjects())
+		{
+			if (!Object)
+			{
+				continue;
+			}
+			if (UStaticMesh* Candidate = Cast<UStaticMesh>(Object); Candidate && !Mesh)
+			{
+				Mesh = Candidate;
+				continue;
+			}
+			Object->MarkPackageDirty();
+			Created.Add(Object->GetPathName());
+		}
+		if (!Mesh)
+		{
+			TArray<FString> ImportedBefore;
+			for (const FAgentMcpImportedMesh& Done : Result.Meshes)
+			{
+				ImportedBefore.Add(Done.Asset);
+			}
+			const FString Before = ImportedBefore.IsEmpty() ? FString() : FString::Printf(TEXT(" Imported before the failure: %s."), *FString::Join(ImportedBefore, TEXT(", ")));
+			RaiseToolError(TEXT("IMPORT_FAILED"), FString::Printf(TEXT("%s did not produce a static mesh at %s.%s"), *Plan.File, *Plan.PackageName, *Before),
+				TEXT("A skeletal mesh or an empty file produces no static mesh; log_get_recent may show the reason."));
+			return Result;
+		}
+		Mesh->MarkPackageDirty();
+		if (!Mesh->GetPackage()->GetName().Equals(Plan.PackageName, ESearchCase::IgnoreCase))
+		{
+			Result.Warnings.Add(FString::Printf(TEXT("%s was imported as %s, not %s."), *Plan.File, *Mesh->GetPackage()->GetName(), *Plan.PackageName));
+		}
+
+		FAgentMcpImportedMesh& Info = Result.Meshes.AddDefaulted_GetRef();
+		Info.Asset = Mesh->GetPathName();
+		Info.File = Plan.File;
+		const FVector Size = Mesh->GetBoundingBox().GetSize();
+		Info.Size = { Size.X, Size.Y, Size.Z };
+		const UBodySetup* BodySetup = Mesh->GetBodySetup();
+		Info.CollisionShapes = BodySetup ? BodySetup->AggGeom.GetElementCount() : 0;
+		Info.CreatedAssets = MoveTemp(Created);
 		Info.bReplaced = Plan.bReplace;
 	}
 	return Result;

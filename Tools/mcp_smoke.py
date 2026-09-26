@@ -1155,11 +1155,15 @@ def run_p5(client, report, evidence):
                  json.dumps(sorted(skills))[:200])
 
 
-P6_TOOLS = {"asset_create", "asset_import_textures"}
+P6_TOOLS = {"asset_create", "asset_import_textures", "asset_import_meshes"}
 FIXTURE_FOLDER = "/Game/AgentMcpFixtures"
 SMOKE_DATA_ASSET = FIXTURE_FOLDER + "/DA_AgentMcpSmoke"
 SMOKE_CREATED_TABLE = FIXTURE_FOLDER + "/DT_AgentMcpCreated"
 SMOKE_TEXTURE = FIXTURE_FOLDER + "/T_AgentMcpSmokeIcon"
+SMOKE_MESH = FIXTURE_FOLDER + "/Kit/SM_AgentMcpSmokeCube"
+# A unit cube; whatever unit the importer assumes, the three sides stay equal.
+CUBE_OBJ = "".join(f"v {x} {y} {z}\n" for x, y, z in [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)]) + "".join(
+    f"f {a} {b} {c}\n" for a, b, c in [(1, 3, 2), (1, 4, 3), (5, 6, 7), (5, 7, 8), (1, 2, 6), (1, 6, 5), (2, 3, 7), (2, 7, 6), (3, 4, 8), (3, 8, 7), (4, 1, 5), (4, 5, 8)])
 
 
 def object_path(package_name):
@@ -1265,6 +1269,8 @@ def run_p6(client, report, evidence):
     large_icon = os.path.join(import_folder, "smoke_icon_large.png")
     write_png(large_icon, 128, 64, (0, 128, 255, 255))
     write_text(os.path.join(import_folder, "notes.txt"), "not an image\n")
+    cube_obj = os.path.join(import_folder, "smoke_cube.obj")
+    write_text(cube_obj, CUBE_OBJ)
     relative_icon = "Saved/MCP/SmokeImport/smoke_icon.png"
 
     try:
@@ -1309,6 +1315,19 @@ def run_p6(client, report, evidence):
 
         _, _, is_error, data, _ = client.call_tool("asset_import_textures", {"textures": [{"file": large_icon, "asset": SMOKE_DATA_ASSET}], "bReplaceExisting": True})
         report.check("asset_import_textures does not replace assets that are not textures", is_error and error_code(data) == "ASSET_EXISTS", error_message(data)[:200])
+
+        # --- asset_import_meshes ------------------------------------------------------------------------
+        _, _, is_error, data, _ = client.call_tool("asset_import_meshes", {"meshes": [
+            {"file": cube_obj, "asset": SMOKE_MESH}, {"file": cube_obj + ".missing.obj", "asset": FIXTURE_FOLDER + "/Kit/SM_AgentMcpMissing"}]})
+        _, _, inspect_error, _, _ = client.call_tool("asset_inspect", {"asset": SMOKE_MESH})
+        report.check("asset_import_meshes checks every entry first and imports nothing when one is invalid",
+                     is_error and error_code(data) == "NOT_FOUND" and inspect_error, error_message(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("asset_import_meshes", {"meshes": [{"file": cube_obj, "asset": SMOKE_MESH}]})
+        size = (((data or {}).get("meshes") or [{}])[0]).get("size") or []
+        report.check("asset_import_meshes imports a mesh and reports its size",
+                     not is_error and len(size) == 3 and size[0] > 0 and close_enough(size, [size[0]] * 3), json.dumps(data)[:300])
+        p6["importMesh"] = data
 
         _, _, is_error, data, _ = client.call_tool("object_set_properties", {"object": data_asset, "values": {
             "Icon": texture, "Brush": {"ResourceObject": texture, "ImageSize": {"X": 128, "Y": 64}}}})
