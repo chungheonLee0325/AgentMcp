@@ -26,6 +26,10 @@ struct FAgentMcpTestbedFixtures
 	UPROPERTY()
 	TArray<FString> WidgetBlueprints;
 
+	/** Animation fixtures of /Engine/EngineMeshes/SkeletalCube_Skeleton: AS_AgentMcpIdle and AS_AgentMcpMove, one frame each. */
+	UPROPERTY()
+	TArray<FString> Animations;
+
 	/** Assets created by this call. */
 	UPROPERTY()
 	TArray<FString> Created;
@@ -58,7 +62,8 @@ public:
 	/**
 	 * Creates or resets the smoke test fixtures and clears the undo history: /Game/AgentMcpFixtures/DT_AgentMcpSmoke with the rows
 	 * Alpha, Beta and Gamma, and the Widget Blueprints WBP_AgentMcpBound and WBP_AgentMcpMissingBinding, compiled and saved. Deletes
-	 * /Game/AgentMcpFixtures/WBP_AgentMcpAuthoring and WBP_AgentMcpAuthoringPart, which the smoke test creates with the umg tools.
+	 * /Game/AgentMcpFixtures/WBP_AgentMcpAuthoring and WBP_AgentMcpAuthoringPart, which the smoke test creates with the umg tools. Keeps
+	 * the animation fixtures Anim/AS_AgentMcpIdle and Anim/AS_AgentMcpMove and deletes what the anim tools built from them.
 	 * @return Fixture paths.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Testbed", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))

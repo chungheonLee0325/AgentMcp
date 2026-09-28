@@ -169,6 +169,9 @@ The server returns short usage instructions from `initialize`, including the lis
 | `datatable_remove_rows` | Destructive | Remove rows of a project DataTable |
 | `blueprint_inspect` | Read | Parent chain, interfaces, components, variables, functions and graphs |
 | `blueprint_compile` | Control | Compile a Blueprint or Widget Blueprint and return its errors and warnings |
+| `anim_build_blend_space` | Control | Create or rebuild a 1D blend space from animations placed on one axis |
+| `anim_build_montage` | Control | Create or rebuild a montage whose segments start named sections, with loops and jumps between sections |
+| `anim_build_anim_blueprint` | Control | Create an Animation Blueprint, or rebuild its anim graph, from a tree of slot, blend space and sequence nodes, and compile it |
 | `umg_inspect` | Read | Widget tree with slots, BindWidget properties, animations and property bindings |
 | `umg_create_widget_blueprint` | Control | Create a Widget Blueprint with a parent class and a root panel |
 | `umg_add_widgets` | Write | Add widgets, whole subtrees or Widget Blueprint instances, with widget and slot properties, in one call |
@@ -187,6 +190,8 @@ To build a user interface: `umg_create_widget_blueprint` (with a C++ parent clas
 To keep presentation in data, `asset_create` can make a theme data asset or item DataTable, `object_set_properties` and the datatable tools fill them, and `asset_import_textures` brings in icons and frames with UMG texture settings.
 
 To block out a level: `level_new` → `actor_spawn` with meshes or Blueprints → `actor_duplicate` for rows and grids → `actor_attach` and `actor_set_folder` to keep the outliner readable → `viewport_set_camera` and `viewport_capture` to look at it → `level_save`. `actor_set_transform` and `object_set_properties` adjust what is already placed, and `editor_undo` reverts the last call.
+
+To animate a character: `anim_build_blend_space` for locomotion → `anim_build_montage` for each attack, with a looping section where the game decides when to go on → `anim_build_anim_blueprint` with a Slot node over the blend space that reads the speed from a variable of the C++ parent class → `asset_save`.
 
 ## Skills
 
@@ -309,7 +314,7 @@ The repository root is a small Unreal Engine 5.5 project that builds and tests t
 2. Open `AgentMcpTestbed.uproject` and wait for `Agent MCP server listening on http://127.0.0.1:18766/mcp`.
 3. Run `python Tools/mcp_smoke.py --out Saved/MCP/smoke.json`.
 
-The smoke test covers MCP transport and errors, every tool, undo and rollback, request cancellation, Play In Editor, viewport capture with game UI, Live Coding, nested Widget Blueprint editing, skills, data-asset/DataTable creation and texture import.
+The smoke test covers MCP transport and errors, every tool, undo and rollback, request cancellation, Play In Editor, viewport capture with game UI, Live Coding, nested Widget Blueprint editing, skills, data-asset/DataTable creation, texture and mesh import, level authoring and animation assets.
 
 To call a single tool:
 

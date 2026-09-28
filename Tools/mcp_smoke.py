@@ -10,6 +10,7 @@ Checks the MCP transport contract and the tools against a running editor:
   P4       umg_create_widget_blueprint, umg_add_widgets, umg_set_widget_properties, umg_remove_widgets: checks, undo, redo, PIE refusal
   P5       skills_list, skills_get: the plugin skill, project skill folders, replacing a skill, skill files, refusals
   P6       asset_create, asset_import_textures, object_set_properties on assets: checks, undo, replacing, saving, PIE refusal
+  P8       anim_build_blend_space, anim_build_montage, anim_build_anim_blueprint on the testbed animation fixtures
 
 Level writes are undone again. P2, P3, P4 and P6 need the AgentMcpTestbed "testbed" toolset, which resets and saves its fixture assets.
 P5 writes temporary skills to Saved/MCP/SmokeSkills, which the testbed configuration adds to SkillDirectories. P6 writes images to
@@ -18,7 +19,7 @@ Saved/MCP/SmokeImport of the project.
 Usage:
   python mcp_smoke.py [--url http://127.0.0.1:18766/mcp] [--expect-project AgentMcpTestbed] [--token TOKEN] [--out evidence.json]
                       [--skip-slice1] [--skip-pie] [--pie-cycles 3] [--skip-p1] [--skip-p2] [--skip-p3] [--skip-p4] [--skip-p5]
-                      [--skip-p6]
+                      [--skip-p6] [--skip-p7] [--skip-p8]
 
 Before any check, the script asks the editor at --url for its project and stops unless it is --expect-project: the checks
 start and stop Play In Editor, change the level and save assets.
@@ -1531,6 +1532,90 @@ def run_p7(client, report, evidence):
     report.check("level_open reports a level that does not exist", is_error and error_code(data) == "NOT_FOUND", error_message(data)[:200])
 
 
+P8_TOOLS = {"anim_build_blend_space", "anim_build_montage", "anim_build_anim_blueprint"}
+ANIM_FOLDER = FIXTURE_FOLDER + "/Anim"
+ANIM_SKELETON = "/Engine/EngineMeshes/SkeletalCube_Skeleton.SkeletalCube_Skeleton"
+
+
+def run_p8(client, report, evidence):
+    """A blend space, a montage whose middle section loops, and an Animation Blueprint that plays the blend space under a slot, read from
+    a variable. The fixtures are two one-frame animations of an engine skeleton."""
+    p8 = evidence.setdefault("p8", {})
+    _, _, is_error, data, _ = client.call_tool("testbed_reset_fixtures")
+    animations = [] if is_error else (data or {}).get("animations") or []
+    report.check("testbed_reset_fixtures prepares two animations for the anim checks", not is_error and len(animations) == 2, json.dumps(animations))
+    if len(animations) != 2:
+        return
+    idle, move = animations
+
+    # --- anim_build_blend_space -----------------------------------------------------------------------
+    blend_space = ANIM_FOLDER + "/BS_AgentMcpAuthoring"
+    arguments = {"assetPath": blend_space, "skeleton": ANIM_SKELETON, "axisName": "Speed", "axisMin": 0, "axisMax": 600,
+                 "samples": [{"animation": idle, "value": 0}, {"animation": move, "value": 300}]}
+    _, _, is_error, data, _ = client.call_tool("anim_build_blend_space", arguments)
+    report.check("anim_build_blend_space creates a 1D blend space with a sample per animation",
+                 not is_error and (data or {}).get("bCreated") is True and (data or {}).get("sampleCount") == 2, json.dumps(data)[:300])
+    p8["blendSpace"] = data
+
+    _, _, is_error, data, _ = client.call_tool("anim_build_blend_space", arguments)
+    report.check("anim_build_blend_space refuses an existing asset without bReplace", is_error and error_code(data) == "ASSET_EXISTS", error_message(data)[:200])
+
+    bad = dict(arguments, bReplace=True, samples=[{"animation": idle, "value": 900}, {"animation": "/Game/NoSuchAnimation", "value": 0}])
+    _, _, is_error, data, _ = client.call_tool("anim_build_blend_space", bad)
+    message = error_message(data)
+    report.check("anim_build_blend_space reports every bad sample at once",
+                 is_error and error_code(data) == "INVALID_ARGUMENT" and "outside the axis" in message and "NoSuchAnimation" in message, message[:300])
+
+    # --- anim_build_montage ---------------------------------------------------------------------------
+    montage = ANIM_FOLDER + "/AM_AgentMcpAuthoring"
+    segments = [{"animation": idle, "section": "Start"}, {"animation": move, "section": "Loop", "nextSection": "Loop"},
+                {"animation": idle, "section": "End"}]
+    _, _, is_error, data, _ = client.call_tool("anim_build_montage", {"assetPath": montage, "skeleton": ANIM_SKELETON, "segments": segments})
+    # A section without a next section ends the montage, so the tool links each one to the one that follows unless told otherwise.
+    # The sections are read back from the montage after the build (CompositeSections is not visible to object_get_properties).
+    sections = (data or {}).get("sections") or []
+    links = [[section.get("name"), section.get("nextSection", "")] for section in sections]
+    starts = [section.get("startSeconds", -1) for section in sections]
+    report.check("anim_build_montage creates a section per segment that leads on in order, the looping one to itself and the last one nowhere",
+                 not is_error and links == [["Start", "Loop"], ["Loop", "Loop"], ["End", ""]] and starts == sorted(starts) and starts[0] == 0
+                 and (data or {}).get("playLength", 0) > 0, json.dumps(data)[:400])
+    p8["montage"] = data
+
+    _, _, is_error, data, _ = client.call_tool("anim_build_montage", {"assetPath": montage, "skeleton": ANIM_SKELETON, "bReplace": True,
+                                                                      "segments": [{"animation": idle, "section": "Start", "nextSection": "Missing"}]})
+    report.check("anim_build_montage refuses a next section the montage does not have",
+                 is_error and error_code(data) == "INVALID_ARGUMENT" and "Missing" in error_message(data), error_message(data)[:200])
+
+    # --- anim_build_anim_blueprint --------------------------------------------------------------------
+    anim_blueprint = ANIM_FOLDER + "/ABP_AgentMcpAuthoring"
+    graph = {"node": "Slot", "slot": "DefaultSlot", "source": {"node": "BlendSpacePlayer", "blendSpace": blend_space, "x": "Speed"}}
+    _, _, is_error, data, _ = client.call_tool("anim_build_anim_blueprint", {"assetPath": anim_blueprint, "skeleton": ANIM_SKELETON, "graph": graph,
+                                                                             "variables": [{"name": "Speed", "type": "Float"}]})
+    built = data or {}
+    compiled = built.get("compile") or {}
+    nodes = " | ".join(built.get("nodes") or [])
+    report.check("anim_build_anim_blueprint builds a slot over a blend space that reads a variable, and it compiles",
+                 not is_error and built.get("bCreated") is True and built.get("addedVariables") == ["Speed"]
+                 and compiled.get("errorCount") == 0 and compiled.get("status") in ("UpToDate", "UpToDateWithWarnings")
+                 and "Output Pose" in nodes and "Slot" in nodes and "BS_AgentMcpAuthoring" in nodes and "Speed" in nodes, json.dumps(data)[:500])
+    p8["animBlueprint"] = data
+
+    rebuilt_graph = {"node": "Slot", "source": {"node": "SequencePlayer", "sequence": idle}}
+    _, _, is_error, data, _ = client.call_tool("anim_build_anim_blueprint", {"assetPath": anim_blueprint, "skeleton": ANIM_SKELETON,
+                                                                             "graph": rebuilt_graph, "bReplace": True})
+    nodes = " | ".join((data or {}).get("nodes") or [])
+    report.check("anim_build_anim_blueprint rebuilds the graph of an existing Animation Blueprint",
+                 not is_error and (data or {}).get("bCreated") is False and ((data or {}).get("compile") or {}).get("errorCount") == 0
+                 and "AS_AgentMcpIdle" in nodes and "BS_AgentMcpAuthoring" not in nodes, nodes[:300])
+
+    wrong = {"node": "Slot", "source": {"node": "BlendSpacePlayer", "blendSpace": blend_space, "x": "NoSuchVariable"}}
+    _, _, is_error, data, _ = client.call_tool("anim_build_anim_blueprint", {"assetPath": anim_blueprint, "skeleton": ANIM_SKELETON,
+                                                                             "graph": wrong, "bReplace": True})
+    message = error_message(data)
+    report.check("anim_build_anim_blueprint refuses a variable that neither the parent class nor the Blueprint has",
+                 is_error and error_code(data) == "INVALID_ARGUMENT" and "NoSuchVariable" in message, message[:200])
+
+
 def run_protocol_errors(client, report):
     status, _, payload, _ = client.request("tools/call", {"name": "no_such_tool", "arguments": {}})
     report.check("unknown tool returns JSON-RPC -32602", ((payload or {}).get("error") or {}).get("code") == -32602, str((payload or {}).get("error")))
@@ -1597,6 +1682,7 @@ def main():
     parser.add_argument("--skip-p5", action="store_true", help="skip skills (the project skill checks need the testbed configuration)")
     parser.add_argument("--skip-p6", action="store_true", help="skip creating data assets and importing textures (needs the testbed toolset)")
     parser.add_argument("--skip-p7", action="store_true", help="skip level and actor authoring (creates a fixture level and writes it to disk)")
+    parser.add_argument("--skip-p8", action="store_true", help="skip animation authoring (needs the testbed animation fixtures)")
     args = parser.parse_args()
 
     # Every editor with the plugin serves the same default port, so make sure the smoke test talks to the intended project.
@@ -1631,6 +1717,8 @@ def main():
         expected_tools |= P6_TOOLS
     if not args.skip_p7:
         expected_tools |= P7_TOOLS
+    if not args.skip_p8:
+        expected_tools |= P8_TOOLS
     try:
         run_p0(client, report, evidence, expected_tools)
         if not args.skip_slice1:
@@ -1649,6 +1737,8 @@ def main():
             run_p6(client, report, evidence)
         if not args.skip_p7:
             run_p7(client, report, evidence)
+        if not args.skip_p8:
+            run_p8(client, report, evidence)
         run_protocol_errors(client, report)
     except Exception as error:  # Keep the evidence of the checks that did run.
         report.check("smoke test ran to completion", False, f"{type(error).__name__}: {error}")

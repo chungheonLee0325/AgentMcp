@@ -169,6 +169,9 @@ tool_timeout_sec = 600
 | `datatable_remove_rows` | Destructive | 프로젝트 DataTable 행 삭제 |
 | `blueprint_inspect` | Read | 부모 클래스 체인, 인터페이스, 컴포넌트, 변수, 함수, 그래프 |
 | `blueprint_compile` | Control | 블루프린트나 위젯 블루프린트를 컴파일하고 오류와 경고 반환 |
+| `anim_build_blend_space` | Control | 한 축에 애니메이션을 배치한 1D 블렌드 스페이스를 만들거나 다시 구성 |
+| `anim_build_montage` | Control | 세그먼트마다 이름 붙은 섹션을 두고 섹션 반복과 이동을 지정한 몽타주를 만들거나 다시 구성 |
+| `anim_build_anim_blueprint` | Control | 슬롯, 블렌드 스페이스, 시퀀스 노드 트리로 애니메이션 블루프린트를 만들거나 애님 그래프를 다시 구성하고 컴파일 |
 | `umg_inspect` | Read | 슬롯을 포함한 위젯 트리, BindWidget 프로퍼티, 애니메이션, 프로퍼티 바인딩 |
 | `umg_create_widget_blueprint` | Control | 부모 클래스와 루트 패널을 지정해 위젯 블루프린트 생성 |
 | `umg_add_widgets` | Write | 위젯, 하위 트리 전체, 위젯 블루프린트 인스턴스를 위젯·슬롯 프로퍼티와 함께 한 번에 추가 |
@@ -185,6 +188,8 @@ tool_timeout_sec = 600
 UI를 만드는 흐름: `umg_create_widget_blueprint`(`BindWidget` 프로퍼티를 선언한 C++ 부모 클래스 지정) → `umg_add_widgets` → `blueprint_compile` → 플레이 세션에서 `viewport_capture`로 확인 → `umg_set_widget_properties`로 조정. 값은 JSON입니다. 프로퍼티 이름은 C++ 이름(`Text`, `Font`, `Padding`, `LayoutData`)을 쓰고, 구조체 값에는 바꿀 필드만 적어도 되며, enum 값은 이름(`HAlign_Center`, `RoundedBox`)으로 씁니다. 엔트리 클래스로 위젯 블루프린트를 쓸 수 있고, 그 인스턴스 속성도 같은 방식으로 설정합니다. 편집 도구는 요청한 필드만 되읽어 돌려주고, 전체 값은 `umg_inspect`의 `bIncludeProperties`로 확인합니다.
 
 UI의 모양을 데이터로 두려면 `asset_create`로 테마 데이터 에셋이나 아이템 DataTable을 만들고, `object_set_properties`와 datatable 도구로 채우고, `asset_import_textures`로 아이콘과 프레임을 UMG용 텍스처 설정으로 가져옵니다.
+
+캐릭터 애니메이션 흐름: 이동은 `anim_build_blend_space` → 공격마다 `anim_build_montage`(게임이 다음 단계를 정할 때까지 반복하는 섹션 포함) → `anim_build_anim_blueprint`로 블렌드 스페이스 위에 Slot 노드를 두고 속도는 C++ 부모 클래스 변수에서 읽음 → `asset_save`
 
 ## 스킬
 
@@ -307,7 +312,7 @@ public:
 2. `AgentMcpTestbed.uproject`를 열고 `Agent MCP server listening on http://127.0.0.1:18766/mcp`가 나올 때까지 기다립니다.
 3. `python Tools/mcp_smoke.py --out Saved/MCP/smoke.json`을 실행합니다.
 
-smoke 테스트는 MCP 전송과 오류 처리, 모든 도구, undo와 롤백, 요청 취소, Play In Editor, 게임 UI를 포함한 뷰포트 캡처, Live Coding, 중첩된 위젯 블루프린트 인스턴스를 포함한 편집, 스킬, 데이터 에셋·DataTable 생성, 텍스처 가져오기를 검사합니다.
+smoke 테스트는 MCP 전송과 오류 처리, 모든 도구, undo와 롤백, 요청 취소, Play In Editor, 게임 UI를 포함한 뷰포트 캡처, Live Coding, 중첩된 위젯 블루프린트 인스턴스를 포함한 편집, 스킬, 데이터 에셋·DataTable 생성, 텍스처와 메시 가져오기, 레벨 제작, 애니메이션 에셋을 검사합니다.
 
 도구 하나만 호출하려면:
 

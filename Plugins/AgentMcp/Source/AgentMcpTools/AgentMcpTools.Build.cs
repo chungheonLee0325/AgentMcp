@@ -26,6 +26,9 @@ public class AgentMcpTools : ModuleRules
 			"BlueprintGraph",
 			"UMG",
 			"UMGEditor",
+			// The anim tools build anim graphs (AnimGraph editor nodes) around runtime pose nodes (AnimGraphRuntime).
+			"AnimGraph",
+			"AnimGraphRuntime",
 			"AssetTools",
 			// Save warnings for packages under source control.
 			"SourceControl",

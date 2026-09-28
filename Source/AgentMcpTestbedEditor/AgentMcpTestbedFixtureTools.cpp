@@ -3,6 +3,7 @@
 #include "AgentMcpTestbedTypes.h"
 #include "AgentMcpTestbedWidget.h"
 
+#include "AssetRegistry/IAssetRegistry.h"
 #include "AssetToolsModule.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -15,6 +16,9 @@
 #include "Engine/DataTable.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "Animation/AnimSequence.h"
+#include "Animation/Skeleton.h"
+#include "Factories/AnimSequenceFactory.h"
 #include "Factories/DataTableFactory.h"
 #include "FileHelpers.h"
 #include "GameFramework/Actor.h"
@@ -23,6 +27,7 @@
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Misc/PackageName.h"
+#include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
 #include "ObjectTools.h"
 #include "Subsystems/EditorActorSubsystem.h"
@@ -36,6 +41,9 @@ namespace AgentMcpTestbedPrivate
 	const TCHAR* const DataTableName = TEXT("DT_AgentMcpSmoke");
 	const TCHAR* const BoundWidgetName = TEXT("WBP_AgentMcpBound");
 	const TCHAR* const MissingBindingWidgetName = TEXT("WBP_AgentMcpMissingBinding");
+	/** Skeleton of the animation fixtures: an engine asset, so the testbed carries no skeletal mesh of its own. */
+	const TCHAR* const FixtureSkeletonPath = TEXT("/Engine/EngineMeshes/SkeletalCube_Skeleton.SkeletalCube_Skeleton");
+
 	/** Created by the smoke test with umg_create_widget_blueprint; every reset deletes it again. */
 	const TCHAR* const AuthoringWidgetName = TEXT("WBP_AgentMcpAuthoring");
 
@@ -76,6 +84,29 @@ namespace AgentMcpTestbedPrivate
 		Row.Offset = Offset;
 		Row.Keywords = Keywords;
 		DataTable->AddRow(FName(RowName), Row);
+	}
+
+	/** A one-frame animation of the fixture skeleton, created when it is missing. */
+	UAnimSequence* ResetAnimation(const TCHAR* AssetName, TArray<FString>& OutCreated)
+	{
+		if (UAnimSequence* Existing = LoadObject<UAnimSequence>(nullptr, *MakeObjectPath(AssetName), nullptr, LOAD_NoWarn | LOAD_Quiet))
+		{
+			return Existing;
+		}
+		USkeleton* Skeleton = LoadObject<USkeleton>(nullptr, FixtureSkeletonPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+		if (!Skeleton)
+		{
+			return nullptr;
+		}
+		UAnimSequenceFactory* Factory = NewObject<UAnimSequenceFactory>();
+		Factory->TargetSkeleton = Skeleton;
+		const FString Folder = FString::Printf(TEXT("%s/%s"), FixtureFolder, *FPaths::GetPath(AssetName));
+		UAnimSequence* Animation = Cast<UAnimSequence>(GetAssetTools().CreateAsset(FPaths::GetCleanFilename(AssetName), Folder, UAnimSequence::StaticClass(), Factory));
+		if (Animation)
+		{
+			OutCreated.Add(Animation->GetPathName());
+		}
+		return Animation;
 	}
 
 	UDataTable* ResetDataTable(TArray<FString>& OutCreated)
@@ -212,14 +243,16 @@ FAgentMcpTestbedFixtures UAgentMcpTestbedFixtureTools::ResetFixtures()
 	DeleteFixtureAsset(TEXT("DT_AgentMcpCreated"), Result.Deleted);
 	DeleteFixtureAsset(TEXT("T_AgentMcpSmokeIcon"), Result.Deleted);
 	// asset_import_meshes brings the materials and textures of a file along, so the whole Kit folder goes, not a list of names.
+	// The registry also lists what is only on disk: a mesh saved by an earlier session once survived the reset of loaded assets.
 	{
-		const FString KitFolder = FString(FixtureFolder) + TEXT("/Kit/");
+		TArray<FAssetData> KitAssetData;
+		IAssetRegistry::GetChecked().GetAssetsByPath(FName(FString(FixtureFolder) + TEXT("/Kit")), KitAssetData, /*bRecursive=*/true);
 		TArray<UObject*> KitAssets;
-		for (TObjectIterator<UObject> It; It; ++It)
+		for (const FAssetData& AssetData : KitAssetData)
 		{
-			if (It->IsAsset() && It->GetPackage()->GetName().StartsWith(KitFolder))
+			if (UObject* Asset = AssetData.GetAsset())
 			{
-				KitAssets.Add(*It);
+				KitAssets.Add(Asset);
 			}
 		}
 		TArray<FString> KitPaths;
@@ -233,10 +266,17 @@ FAgentMcpTestbedFixtures UAgentMcpTestbedFixtureTools::ResetFixtures()
 		}
 	}
 
+	// Built by the anim tools from the animation fixtures. The Animation Blueprint refers to the blend space, so it goes first.
+	DeleteFixtureAsset(TEXT("Anim/ABP_AgentMcpAuthoring"), Result.Deleted);
+	DeleteFixtureAsset(TEXT("Anim/BS_AgentMcpAuthoring"), Result.Deleted);
+	DeleteFixtureAsset(TEXT("Anim/AM_AgentMcpAuthoring"), Result.Deleted);
+
 	UDataTable* DataTable = ResetDataTable(Result.Created);
+	UAnimSequence* IdleAnimation = ResetAnimation(TEXT("Anim/AS_AgentMcpIdle"), Result.Created);
+	UAnimSequence* MoveAnimation = ResetAnimation(TEXT("Anim/AS_AgentMcpMove"), Result.Created);
 	UWidgetBlueprint* BoundWidget = ResetWidgetBlueprint(BoundWidgetName, /*bWithTitle=*/true, Result.Created);
 	UWidgetBlueprint* MissingBindingWidget = ResetWidgetBlueprint(MissingBindingWidgetName, /*bWithTitle=*/false, Result.Created);
-	if (!DataTable || !BoundWidget || !MissingBindingWidget)
+	if (!DataTable || !BoundWidget || !MissingBindingWidget || !IdleAnimation || !MoveAnimation)
 	{
 		UE::AgentMcp::RaiseToolError(TEXT("FIXTURE_FAILED"), TEXT("Could not create the testbed fixtures."));
 		return Result;
@@ -246,6 +286,8 @@ FAgentMcpTestbedFixtures UAgentMcpTestbedFixtureTools::ResetFixtures()
 	Packages.Add(DataTable->GetPackage());
 	Packages.Add(BoundWidget->GetPackage());
 	Packages.Add(MissingBindingWidget->GetPackage());
+	Packages.Add(IdleAnimation->GetPackage());
+	Packages.Add(MoveAnimation->GetPackage());
 	Result.bSaved = UEditorLoadingAndSavingUtils::SavePackages(Packages, /*bOnlyDirty=*/false);
 
 	Result.DataTable = DataTable->GetPathName();
@@ -255,6 +297,8 @@ FAgentMcpTestbedFixtures UAgentMcpTestbedFixtureTools::ResetFixtures()
 	}
 	Result.WidgetBlueprints.Add(BoundWidget->GetPathName());
 	Result.WidgetBlueprints.Add(MissingBindingWidget->GetPathName());
+	Result.Animations.Add(IdleAnimation->GetPathName());
+	Result.Animations.Add(MoveAnimation->GetPathName());
 	return Result;
 }
 
