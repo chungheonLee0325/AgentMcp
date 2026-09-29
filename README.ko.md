@@ -169,9 +169,9 @@ tool_timeout_sec = 600
 | `datatable_remove_rows` | Destructive | 프로젝트 DataTable 행 삭제 |
 | `blueprint_inspect` | Read | 부모 클래스 체인, 인터페이스, 컴포넌트, 변수, 함수, 그래프 |
 | `blueprint_compile` | Control | 블루프린트나 위젯 블루프린트를 컴파일하고 오류와 경고 반환 |
-| `anim_build_blend_space` | Control | 한 축에 애니메이션을 배치한 1D 블렌드 스페이스를 만들거나 다시 구성 |
+| `anim_build_blend_space` | Control | 한 축에 애니메이션을 배치한 1D 블렌드 스페이스를 만들거나 다시 구성, 축 입력 스무딩 선택 |
 | `anim_build_montage` | Control | 세그먼트마다 이름 붙은 섹션을 두고 섹션 반복과 이동을 지정한 몽타주를 만들거나 다시 구성 |
-| `anim_build_anim_blueprint` | Control | 슬롯, 블렌드 스페이스, 시퀀스 노드 트리로 애니메이션 블루프린트를 만들거나 애님 그래프를 다시 구성하고 컴파일 |
+| `anim_build_anim_blueprint` | Control | 관성 블렌드(Inertialization), 슬롯, 블렌드 스페이스, 시퀀스 노드 트리로 애니메이션 블루프린트를 만들거나 애님 그래프를 다시 구성하고 컴파일 |
 | `umg_inspect` | Read | 슬롯을 포함한 위젯 트리, BindWidget 프로퍼티, 애니메이션, 프로퍼티 바인딩 |
 | `umg_create_widget_blueprint` | Control | 부모 클래스와 루트 패널을 지정해 위젯 블루프린트 생성 |
 | `umg_add_widgets` | Write | 위젯, 하위 트리 전체, 위젯 블루프린트 인스턴스를 위젯·슬롯 프로퍼티와 함께 한 번에 추가 |

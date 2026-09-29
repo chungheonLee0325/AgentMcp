@@ -169,9 +169,9 @@ The server returns short usage instructions from `initialize`, including the lis
 | `datatable_remove_rows` | Destructive | Remove rows of a project DataTable |
 | `blueprint_inspect` | Read | Parent chain, interfaces, components, variables, functions and graphs |
 | `blueprint_compile` | Control | Compile a Blueprint or Widget Blueprint and return its errors and warnings |
-| `anim_build_blend_space` | Control | Create or rebuild a 1D blend space from animations placed on one axis |
+| `anim_build_blend_space` | Control | Create or rebuild a 1D blend space from animations placed on one axis, with optional smoothing of the axis |
 | `anim_build_montage` | Control | Create or rebuild a montage whose segments start named sections, with loops and jumps between sections |
-| `anim_build_anim_blueprint` | Control | Create an Animation Blueprint, or rebuild its anim graph, from a tree of slot, blend space and sequence nodes, and compile it |
+| `anim_build_anim_blueprint` | Control | Create an Animation Blueprint, or rebuild its anim graph, from a tree of inertialization, slot, blend space and sequence nodes, and compile it |
 | `umg_inspect` | Read | Widget tree with slots, BindWidget properties, animations and property bindings |
 | `umg_create_widget_blueprint` | Control | Create a Widget Blueprint with a parent class and a root panel |
 | `umg_add_widgets` | Write | Add widgets, whole subtrees or Widget Blueprint instances, with widget and slot properties, in one call |

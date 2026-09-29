@@ -159,11 +159,12 @@ public:
 	 * @param Samples Animation sequences of the skeleton and their values, each within the axis.
 	 * @param GridDivisions Grid divisions of the axis (1-64).
 	 * @param bReplace Rebuild an existing blend space at the path. Without it an existing asset is refused.
+	 * @param SmoothingSeconds Time the pose takes to follow a new axis value, so a sudden change of speed eases in; 0 follows at once.
 	 * @return The blend space and its sample count.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Animation", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))
 	static FAgentMcpAnimAssetResult BuildBlendSpace(const FString& AssetPath, USkeleton* Skeleton, const FString& AxisName, double AxisMin, double AxisMax,
-		const TArray<FAgentMcpBlendSample>& Samples, int32 GridDivisions = 4, bool bReplace = false);
+		const TArray<FAgentMcpBlendSample>& Samples, int32 GridDivisions = 4, bool bReplace = false, double SmoothingSeconds = 0.0);
 
 	/**
 	 * Creates an animation montage for a skeleton, or rebuilds an existing one: one slot track whose segments play the animations in the
@@ -186,6 +187,8 @@ public:
 	 * Creates an Animation Blueprint for a skeleton, or rebuilds the anim graph of an existing one, from a tree of pose nodes that ends in
 	 * the output pose, then compiles it. A node is an object with "node" set to one of:
 	 *   Slot             "slot" (default DefaultSlot), "source" (a node): plays montages of the slot over its source pose.
+	 *   Inertialization  "source" (a node): blends its source pose by inertialization where a montage or the game asks for it, such as
+	 *                    a montage whose blend mode is Inertialization or a section jump after UAnimInstance::RequestSlotGroupInertialization.
 	 *   BlendSpacePlayer "blendSpace" (asset path), "x" and optionally "y": a number, or the name of a variable to read each frame.
 	 *   SequencePlayer   "sequence" (asset path), "loop" (default true).
 	 * A variable is a property of the parent class or a variable of the Blueprint; Variables adds missing Blueprint variables first.

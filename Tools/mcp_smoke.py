@@ -1551,11 +1551,14 @@ def run_p8(client, report, evidence):
     # --- anim_build_blend_space -----------------------------------------------------------------------
     blend_space = ANIM_FOLDER + "/BS_AgentMcpAuthoring"
     arguments = {"assetPath": blend_space, "skeleton": ANIM_SKELETON, "axisName": "Speed", "axisMin": 0, "axisMax": 600,
-                 "samples": [{"animation": idle, "value": 0}, {"animation": move, "value": 300}]}
+                 "samples": [{"animation": idle, "value": 0}, {"animation": move, "value": 300}], "smoothingSeconds": 0.2}
     _, _, is_error, data, _ = client.call_tool("anim_build_blend_space", arguments)
-    report.check("anim_build_blend_space creates a 1D blend space with a sample per animation",
-                 not is_error and (data or {}).get("bCreated") is True and (data or {}).get("sampleCount") == 2, json.dumps(data)[:300])
     p8["blendSpace"] = data
+    _, _, _, smoothing, _ = client.call_tool("object_get_properties", {"object": blend_space + "." + blend_space.rsplit("/", 1)[-1],
+                                                                        "propertyNames": ["InterpolationParam"]})
+    report.check("anim_build_blend_space creates a 1D blend space with a sample per animation, its axis smoothed",
+                 not is_error and (data or {}).get("bCreated") is True and (data or {}).get("sampleCount") == 2
+                 and "0.2" in json.dumps(smoothing), json.dumps([data, smoothing])[:400])
 
     _, _, is_error, data, _ = client.call_tool("anim_build_blend_space", arguments)
     report.check("anim_build_blend_space refuses an existing asset without bReplace", is_error and error_code(data) == "ASSET_EXISTS", error_message(data)[:200])
@@ -1588,16 +1591,18 @@ def run_p8(client, report, evidence):
 
     # --- anim_build_anim_blueprint --------------------------------------------------------------------
     anim_blueprint = ANIM_FOLDER + "/ABP_AgentMcpAuthoring"
-    graph = {"node": "Slot", "slot": "DefaultSlot", "source": {"node": "BlendSpacePlayer", "blendSpace": blend_space, "x": "Speed"}}
+    graph = {"node": "Inertialization", "source": {"node": "Slot", "slot": "DefaultSlot",
+                                                   "source": {"node": "BlendSpacePlayer", "blendSpace": blend_space, "x": "Speed"}}}
     _, _, is_error, data, _ = client.call_tool("anim_build_anim_blueprint", {"assetPath": anim_blueprint, "skeleton": ANIM_SKELETON, "graph": graph,
                                                                              "variables": [{"name": "Speed", "type": "Float"}]})
     built = data or {}
     compiled = built.get("compile") or {}
     nodes = " | ".join(built.get("nodes") or [])
-    report.check("anim_build_anim_blueprint builds a slot over a blend space that reads a variable, and it compiles",
+    report.check("anim_build_anim_blueprint builds an inertialization over a slot over a blend space that reads a variable, and it compiles",
                  not is_error and built.get("bCreated") is True and built.get("addedVariables") == ["Speed"]
                  and compiled.get("errorCount") == 0 and compiled.get("status") in ("UpToDate", "UpToDateWithWarnings")
-                 and "Output Pose" in nodes and "Slot" in nodes and "BS_AgentMcpAuthoring" in nodes and "Speed" in nodes, json.dumps(data)[:500])
+                 and "Output Pose" in nodes and "Inertialization" in nodes and "Slot" in nodes and "BS_AgentMcpAuthoring" in nodes
+                 and "Speed" in nodes, json.dumps(data)[:500])
     p8["animBlueprint"] = data
 
     rebuilt_graph = {"node": "Slot", "source": {"node": "SequencePlayer", "sequence": idle}}

@@ -2,6 +2,7 @@
 
 #include "AgentMcpToolsCommon.h"
 #include "AnimGraphNode_BlendSpacePlayer.h"
+#include "AnimGraphNode_Inertialization.h"
 #include "AnimGraphNode_Root.h"
 #include "AnimGraphNode_SequencePlayer.h"
 #include "AnimGraphNode_Slot.h"
@@ -179,6 +180,18 @@ namespace UE::AgentMcp::AnimationToolsPrivate
 				Problems.Add(Path + TEXT(".source is missing: a Slot plays montages over a source pose"));
 			}
 		}
+		else if (Plan->Type == TEXT("Inertialization"))
+		{
+			const TSharedPtr<FJsonObject>* Source = nullptr;
+			if (Json->TryGetObjectField(TEXT("source"), Source) && Source)
+			{
+				Plan->Source = PlanNode(*Source, Path + TEXT(".source"), Skeleton, Problems);
+			}
+			else
+			{
+				Problems.Add(Path + TEXT(".source is missing: Inertialization blends the pose of its source"));
+			}
+		}
 		else if (Plan->Type == TEXT("BlendSpacePlayer"))
 		{
 			FString AssetPath;
@@ -212,7 +225,7 @@ namespace UE::AgentMcp::AnimationToolsPrivate
 		}
 		else
 		{
-			Problems.Add(FString::Printf(TEXT("%s.node '%s' is not Slot, BlendSpacePlayer or SequencePlayer"), *Path, *Plan->Type));
+			Problems.Add(FString::Printf(TEXT("%s.node '%s' is not Slot, Inertialization, BlendSpacePlayer or SequencePlayer"), *Path, *Plan->Type));
 		}
 		return Plan;
 	}
@@ -239,7 +252,7 @@ namespace UE::AgentMcp::AnimationToolsPrivate
 }
 
 FAgentMcpAnimAssetResult UAgentMcpAnimationTools::BuildBlendSpace(const FString& AssetPath, USkeleton* Skeleton, const FString& AxisName, double AxisMin, double AxisMax,
-	const TArray<FAgentMcpBlendSample>& Samples, int32 GridDivisions, bool bReplace)
+	const TArray<FAgentMcpBlendSample>& Samples, int32 GridDivisions, bool bReplace, double SmoothingSeconds)
 {
 	using namespace UE::AgentMcp;
 	using namespace UE::AgentMcp::AnimationToolsPrivate;
@@ -258,6 +271,10 @@ FAgentMcpAnimAssetResult UAgentMcpAnimationTools::BuildBlendSpace(const FString&
 	}
 
 	TArray<FString> Problems;
+	if (SmoothingSeconds < 0.0)
+	{
+		Problems.Add(TEXT("smoothingSeconds cannot be negative"));
+	}
 	if (AxisName.TrimStartAndEnd().IsEmpty())
 	{
 		Problems.Add(TEXT("axisName is empty"));
@@ -336,6 +353,12 @@ FAgentMcpAnimAssetResult UAgentMcpAnimationTools::BuildBlendSpace(const FString&
 	Parameters[0].Min = float(AxisMin);
 	Parameters[0].Max = float(AxisMax);
 	Parameters[0].GridNum = GridDivisions;
+	// The smoothing of the axis is protected the same way.
+	const FProperty* InterpolationProperty = UBlendSpace::StaticClass()->FindPropertyByName(TEXT("InterpolationParam"));
+	if (FInterpolationParameter* Interpolation = InterpolationProperty ? InterpolationProperty->ContainerPtrToValuePtr<FInterpolationParameter>(BlendSpace) : nullptr)
+	{
+		Interpolation[0].InterpolationTime = float(SmoothingSeconds);
+	}
 	for (int32 Index = BlendSpace->GetNumberOfBlendSamples() - 1; Index >= 0; --Index)
 	{
 		BlendSpace->DeleteSample(Index);
@@ -680,6 +703,19 @@ FAgentMcpAnimBlueprintResult UAgentMcpAnimationTools::BuildAnimBlueprint(const F
 				Schema->TryCreateConnection(SourcePose, Slot->FindPin(TEXT("Source")));
 			}
 			return Slot->FindPin(TEXT("Pose"));
+		}
+		if (Node.Type == TEXT("Inertialization"))
+		{
+			FGraphNodeCreator<UAnimGraphNode_Inertialization> Creator(*AnimGraph);
+			UAnimGraphNode_Inertialization* Inertialization = Creator.CreateNode();
+			Inertialization->NodePosX = PosX;
+			Inertialization->NodePosY = PosY;
+			Creator.Finalize();
+			if (UEdGraphPin* SourcePose = Node.Source.IsValid() ? Build(*Node.Source, Depth + 1) : nullptr)
+			{
+				Schema->TryCreateConnection(SourcePose, Inertialization->FindPin(TEXT("Source")));
+			}
+			return Inertialization->FindPin(TEXT("Pose"));
 		}
 		if (Node.Type == TEXT("BlendSpacePlayer"))
 		{
