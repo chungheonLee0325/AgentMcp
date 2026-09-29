@@ -339,7 +339,7 @@ def render_item(item, image, problems):
     item_id = html.escape(str(item.get("id") or "(no id)"))
     status = html.escape(str(item.get("status") or ""))
     rows = []
-    for field in ("usage", "subject", "size", "transparent", "padding", "nineSlice", "inset", "target", "usedBy"):
+    for field in ("usage", "subject", "size", "transparent", "padding", "nineSlice", "inset", "mipmaps", "target", "usedBy"):
         if field in item:
             value = item[field]
             if field == "size" and isinstance(value, list):

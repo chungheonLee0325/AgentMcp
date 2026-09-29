@@ -38,6 +38,7 @@ are relative to the project folder. Each item has:
 | `padding` | Empty pixels around an icon, so that icons line up. Frames and panels have none |
 | `nineSlice` | `[left, top, right, bottom]` border in pixels of a frame or panel that stretches |
 | `inset` | `[left, top, right, bottom]` content padding, in Slate units, of the widget that draws a 9-slice item |
+| `mipmaps` | The texture keeps mipmaps, because the image is drawn smaller than `size` or at several sizes |
 | `target` | Package path of the texture, for example `/Game/UI/Textures/T_Icon_Sword` |
 | `usedBy` | Where the texture is connected: a table row and column, a data asset property or a widget property |
 | `status` | `requested`, `delivered`, `imported`, `approved` or `revise` |
@@ -120,7 +121,11 @@ only a text style each look fine and do not belong together.
   `inset`.
 - A `Border` with a texture brush draws only that texture. When a frame goes over a fill, the widget needs a fill layer and a frame
   layer (see the `umg-authoring` skill).
-- Choose the size of other images for the largest size on screen at 1080p; UI textures have no mipmaps.
+- Choose the size of other images for the largest size on screen at 1080p. Without mipmaps, an image drawn at less than half of its
+  size skips pixels: thin lines break and a small symbol can read as another shape. At 720p the default DPI scale draws everything at
+  two thirds of its 1080p size. For an image drawn smaller than its size at 1080p or at several sizes, icons in particular (an 18 unit
+  objective row and a 30 unit toast), request one image per size, which stays sharpest, or one image for the largest size with
+  `mipmaps` true.
 - Write `usedBy` precisely, so that connecting the texture needs no guessing.
 - Write the review sheet, fix its errors, and end the run at decision 1.
 
@@ -144,8 +149,12 @@ only a text style each look fine and do not belong together.
    `feedback`.
 2. Capture the screen before connecting anything: `pie_start` with `windowWidth` and `windowHeight` (for example 1280 and 720), show
    the screen, `viewport_capture`, `pie_stop`.
-3. `asset_import_textures` with the delivered files and the `target` paths, `bUserInterface` true. Replace revised images with
-   `bReplaceExisting`.
+3. `asset_import_textures` with the delivered files and the `target` paths, `bUserInterface` true, and `bMipmaps` true for items with
+   `mipmaps`. Replace revised images with `bReplaceExisting` and the same `bMipmaps`: every import sets the texture settings again.
+   `bMipmaps` also sets `Filter` to trilinear and `NeverStream`, because Slate samples with the texture's `Filter` and the default of
+   the UI texture group does not blend mipmaps. A texture imported without `bMipmaps` gets the same settings from
+   `object_set_properties`:
+   `{"object": "<texture object path>", "values": {"MipGenSettings": "TMGS_SimpleAverage", "Filter": "TF_Trilinear", "NeverStream": true}}`
 4. Connect each texture where `usedBy` says:
    - a table cell with `datatable_set_rows`, for example
      `{"dataTable": "/Game/UI/Data/DT_Items.DT_Items", "rows": {"IronSword": {"Icon": "/Game/UI/Textures/Items/T_Icon_IronSword.T_Icon_IronSword"}}}`

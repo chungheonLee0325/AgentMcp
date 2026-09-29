@@ -361,15 +361,16 @@ public:
 	/**
 	 * Imports image files (PNG, JPEG, TGA, BMP) as textures under /Game or in a project plugin, without dialogs. Every entry is checked
 	 * before anything is imported. With bUserInterface the textures get the settings for UMG: texture group UI, no mipmaps and
-	 * UserInterface2D compression. The textures are not saved (use asset_save), importing cannot be undone with editor_undo, and the tool
-	 * is blocked during a play session.
+	 * UserInterface2D compression; bMipmaps keeps mipmaps. Every import sets these settings again, also when it replaces a texture. The
+	 * textures are not saved (use asset_save), importing cannot be undone with editor_undo, and the tool is blocked during a play session.
 	 * @param Textures Entries {"file": image file, "asset": package path of the texture}; a relative file starts at the project folder. For example [{"file": "Art/Incoming/icon_core.png", "asset": "/Game/UI/Textures/T_Icon_Core"}].
 	 * @param bReplaceExisting Replace textures that exist at the asset paths; without it an existing asset is an error.
 	 * @param bUserInterface Apply the texture settings for UMG.
+	 * @param bMipmaps With bUserInterface, keep mipmaps with trilinear filtering and NeverStream, for images drawn smaller than their size or at several sizes (icons).
 	 * @return The imported textures with their size.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Asset", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))
-	static FAgentMcpTextureImportResult ImportTextures(const TArray<FJsonObjectWrapper>& Textures, bool bReplaceExisting = false, bool bUserInterface = true);
+	static FAgentMcpTextureImportResult ImportTextures(const TArray<FJsonObjectWrapper>& Textures, bool bReplaceExisting = false, bool bUserInterface = true, bool bMipmaps = false);
 
 	/**
 	 * Imports mesh files (FBX, glTF, GLB, OBJ) as static meshes under /Game or in a project plugin, without dialogs. Materials and

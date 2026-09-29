@@ -160,7 +160,7 @@ The server returns short usage instructions from `initialize`, including the lis
 | `asset_referencers`, `asset_dependencies` | Read | Packages that reference an asset, or that it depends on |
 | `asset_save` | Control | Save loaded project assets without dialogs |
 | `asset_create` | Control | Create a data asset or a DataTable |
-| `asset_import_textures` | Control | Import PNG, JPEG, TGA or BMP files as textures, with the settings for UMG |
+| `asset_import_textures` | Control | Import PNG, JPEG, TGA or BMP files as textures, with the settings for UMG. `bMipmaps` keeps mipmaps for images drawn smaller than their size or at several sizes |
 | `asset_import_meshes` | Control | Import FBX, glTF, GLB or OBJ files as static meshes, with their size and collision |
 | `class_find_derived` | Read | C++ and Blueprint classes that derive from a class, with headers and assets |
 | `datatable_get_schema` | Read | Row struct, C++ header, columns, C++ types and JSON schemas |

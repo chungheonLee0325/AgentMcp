@@ -329,7 +329,7 @@ FAgentMcpAssetCreateResult UAgentMcpAssetTools::Create(const FString& AssetPath,
 	return Result;
 }
 
-FAgentMcpTextureImportResult UAgentMcpAssetTools::ImportTextures(const TArray<FJsonObjectWrapper>& Textures, bool bReplaceExisting, bool bUserInterface)
+FAgentMcpTextureImportResult UAgentMcpAssetTools::ImportTextures(const TArray<FJsonObjectWrapper>& Textures, bool bReplaceExisting, bool bUserInterface, bool bMipmaps)
 {
 	using namespace UE::AgentMcp;
 	using namespace UE::AgentMcp::AssetWriteToolsPrivate;
@@ -379,9 +379,15 @@ FAgentMcpTextureImportResult UAgentMcpAssetTools::ImportTextures(const TArray<FJ
 		{
 			Texture->Modify();
 			Texture->LODGroup = TEXTUREGROUP_UI;
-			Texture->MipGenSettings = TMGS_NoMipmaps;
+			Texture->MipGenSettings = bMipmaps ? TMGS_SimpleAverage : TMGS_NoMipmaps;
 			Texture->CompressionSettings = TC_EditorIcon;
 			Texture->SRGB = true;
+			if (bMipmaps)
+			{
+				// Slate samples with the texture's Filter, and the UI group's default does not blend mips (MipFilter=point in BaseDeviceProfiles.ini).
+				Texture->Filter = TF_Trilinear;
+				Texture->NeverStream = true;
+			}
 			Texture->PostEditChange();
 		}
 		Texture->MarkPackageDirty();

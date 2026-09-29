@@ -1323,10 +1323,23 @@ def run_p6(client, report, evidence):
         _, _, is_error, data, _ = client.call_tool("asset_import_textures", {"textures": [{"file": relative_icon, "asset": SMOKE_TEXTURE}]})
         report.check("asset_import_textures refuses an existing asset without bReplaceExisting", is_error and error_code(data) == "ASSET_EXISTS", error_message(data)[:200])
 
-        _, _, is_error, data, _ = client.call_tool("asset_import_textures", {"textures": [{"file": large_icon, "asset": SMOKE_TEXTURE}], "bReplaceExisting": True})
+        _, _, is_error, data, _ = client.call_tool("asset_import_textures", {"textures": [{"file": large_icon, "asset": SMOKE_TEXTURE}], "bReplaceExisting": True, "bMipmaps": True})
         replaced = ((data or {}).get("textures") or [{}])[0]
         report.check("asset_import_textures replaces a texture from an absolute path",
                      not is_error and replaced.get("bReplaced") is True and replaced.get("width") == 128 and replaced.get("height") == 64, json.dumps(data)[:300])
+
+        _, _, is_error, data, _ = client.call_tool("object_get_properties", {"object": texture, "propertyNames": ["LODGroup", "MipGenSettings", "CompressionSettings", "Filter", "NeverStream"]})
+        values = (data or {}).get("values") or {}
+        report.check("bMipmaps keeps mipmaps with the UI settings, trilinear filtering and NeverStream",
+                     not is_error and "UI" in str(values.get("LODGroup")) and "SimpleAverage" in str(values.get("MipGenSettings"))
+                     and "EditorIcon" in str(values.get("CompressionSettings")) and "Trilinear" in str(values.get("Filter")) and values.get("NeverStream") is True,
+                     json.dumps(values))
+
+        # Replacing keeps the old texture's settings in the factory, so every import must set the mipmap settings again.
+        client.call_tool("asset_import_textures", {"textures": [{"file": large_icon, "asset": SMOKE_TEXTURE}], "bReplaceExisting": True})
+        _, _, is_error, data, _ = client.call_tool("object_get_properties", {"object": texture, "propertyNames": ["MipGenSettings"]})
+        values = (data or {}).get("values") or {}
+        report.check("replacing a texture without bMipmaps removes its mipmaps", not is_error and "NoMipmaps" in str(values.get("MipGenSettings")), json.dumps(values))
 
         _, _, is_error, data, _ = client.call_tool("asset_import_textures", {"textures": [{"file": large_icon, "asset": SMOKE_DATA_ASSET}], "bReplaceExisting": True})
         report.check("asset_import_textures does not replace assets that are not textures", is_error and error_code(data) == "ASSET_EXISTS", error_message(data)[:200])

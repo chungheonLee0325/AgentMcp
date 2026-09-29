@@ -160,7 +160,7 @@ tool_timeout_sec = 600
 | `asset_referencers`, `asset_dependencies` | Read | 에셋을 참조하는 패키지, 에셋이 의존하는 패키지 |
 | `asset_save` | Control | 로드된 프로젝트 에셋을 대화상자 없이 저장 |
 | `asset_create` | Control | 데이터 에셋이나 DataTable 생성 |
-| `asset_import_textures` | Control | PNG, JPEG, TGA, BMP 파일을 UMG용 설정의 텍스처로 가져오기 |
+| `asset_import_textures` | Control | PNG, JPEG, TGA, BMP 파일을 UMG용 설정의 텍스처로 가져오기. `bMipmaps`를 주면 제 크기보다 작게 또는 여러 크기로 그리는 이미지를 위해 밉맵을 유지 |
 | `asset_import_meshes` | Control | FBX, glTF, GLB, OBJ 파일을 스태틱 메시로 임포트. 크기와 콜리전을 함께 보고 |
 | `class_find_derived` | Read | 클래스를 상속하는 C++·블루프린트 클래스와 헤더, 에셋 |
 | `datatable_get_schema` | Read | 행 구조체, C++ 헤더, 열, C++ 타입, JSON 스키마 |
