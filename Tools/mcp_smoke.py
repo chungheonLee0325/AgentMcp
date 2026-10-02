@@ -1418,8 +1418,9 @@ def check_client_config(client, report, evidence):
                  json.dumps(data)[:300])
     evidence.setdefault("p6", {})["clientConfig"] = data
 
-    _, _, is_error, data, _ = client.call_tool("editor_write_client_config", {"bUserCodexConfig": False})
-    report.check("writing the client configuration again changes nothing",
+    # Called with the defaults: the user's ~/.codex/config.toml would show up as a third file.
+    _, _, is_error, data, _ = client.call_tool("editor_write_client_config", {})
+    report.check("writing the client configuration again changes nothing and leaves the user's Codex configuration alone",
                  not is_error and not (data or {}).get("written") and len((data or {}).get("unchanged") or []) == 2,
                  json.dumps(data)[:300])
 

@@ -183,10 +183,11 @@ public:
 
 	/**
 	 * Writes the client configuration that points an agent at this editor: .mcp.json and .codex/config.toml in the project folder.
-	 * The editor writes the project files itself when the server starts; this tool also reaches the user's Codex configuration.
-	 * @param bUserCodexConfig Point the entry of the user's ~/.codex/config.toml at this editor, which Codex reads in every folder, including folders it does not trust. The file is copied once before the first change.
+	 * The editor writes the project files itself when the server starts; only when asked does this tool also reach the user's Codex
+	 * configuration, a file outside the project.
+	 * @param bUserCodexConfig Also point the entry of the user's ~/.codex/config.toml at this editor, which Codex reads in every folder, including folders it does not trust. The file is copied once before the first change.
 	 * @return The files that were written, the files that were already correct, and the failures.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Editor", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))
-	static FAgentMcpClientConfigResult WriteClientConfig(bool bUserCodexConfig = true);
+	static FAgentMcpClientConfigResult WriteClientConfig(bool bUserCodexConfig = false);
 };

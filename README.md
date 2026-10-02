@@ -102,7 +102,7 @@ LogAgentMcpProtocol: Agent MCP server listening on http://127.0.0.1:18765/mcp (3
 
 The editor then writes `.mcp.json` and `.codex/config.toml` into the project folder with that endpoint, so Claude Code finds the
 editor with no further setup. Codex reads a project file only in a folder it trusts; to reach every folder instead, turn on
-**Write User Codex Config** in Project Settings or call `editor_write_client_config`, which points the entry of the user's
+**Write User Codex Config** in Project Settings or call `editor_write_client_config` with `bUserCodexConfig`, which points the entry of the user's
 `~/.codex/config.toml` at this editor and keeps a copy of the file before its first change. While `AuthToken` is set the editor
 leaves the project files alone, because they are often committed and would carry the token; add the header by hand as below.
 
