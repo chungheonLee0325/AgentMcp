@@ -1,6 +1,8 @@
 #include "AgentMcpEditorTools.h"
 
+#include "AgentMcpClientConfig.h"
 #include "AgentMcpLogBuffer.h"
+#include "AgentMcpSettings.h"
 #include "AgentMcpToolsCommon.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -203,5 +205,32 @@ FAgentMcpUndoResult UAgentMcpEditorTools::Redo()
 	// After a redo, the redone transaction is back on top of the undo stack.
 	Result.Undo = MakeUndoState();
 	Result.Transaction = Result.Undo.UndoTitle;
+	return Result;
+}
+
+FAgentMcpClientConfigResult UAgentMcpEditorTools::WriteClientConfig(bool bUserCodexConfig)
+{
+	FAgentMcpClientConfigResult Result;
+	const UE::AgentMcp::FAgentMcpRuntimeInfo RuntimeInfo = UE::AgentMcp::GetRuntimeInfo();
+	if (!RuntimeInfo.bServerRunning || RuntimeInfo.EndpointUrl.IsEmpty())
+	{
+		UE::AgentMcp::RaiseToolError(TEXT("SERVER_NOT_RUNNING"), TEXT("The MCP server is not running, so there is no endpoint to write."),
+			TEXT("editor_get_state reports the server state."));
+		return Result;
+	}
+
+	const UAgentMcpSettings* Settings = GetDefault<UAgentMcpSettings>();
+	const FString ServerName = Settings->ClientServerName.IsEmpty() ? FString(TEXT("unreal")) : Settings->ClientServerName;
+	UE::AgentMcp::ClientConfig::FWriteResult Written;
+	UE::AgentMcp::ClientConfig::WriteProjectFiles(RuntimeInfo.EndpointUrl, Settings->AuthToken, ServerName, Written);
+	if (bUserCodexConfig)
+	{
+		UE::AgentMcp::ClientConfig::WriteUserCodexConfig(RuntimeInfo.EndpointUrl, Settings->AuthToken, ServerName, Written);
+	}
+
+	Result.Endpoint = RuntimeInfo.EndpointUrl;
+	Result.Written = MoveTemp(Written.Written);
+	Result.Unchanged = MoveTemp(Written.Unchanged);
+	Result.Failures = MoveTemp(Written.Failures);
 	return Result;
 }

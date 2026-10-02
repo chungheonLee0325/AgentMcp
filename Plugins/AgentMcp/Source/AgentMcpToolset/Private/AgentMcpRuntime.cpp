@@ -3,6 +3,7 @@
 #include "AgentMcpMetaTools.h"
 #include "AgentMcpReflectedTool.h"
 #include "AgentMcpServer.h"
+#include "AgentMcpClientConfig.h"
 #include "AgentMcpSettings.h"
 #include "AgentMcpSkills.h"
 #include "AgentMcpToolsetLog.h"
@@ -220,6 +221,24 @@ namespace UE::AgentMcp
 			return false;
 		}
 		LastError.Reset();
+		if (Settings->bWriteClientConfig)
+		{
+			const FString ServerName = Settings->ClientServerName.IsEmpty() ? FString(TEXT("unreal")) : Settings->ClientServerName;
+			ClientConfig::FWriteResult Written;
+			ClientConfig::WriteProjectFiles(Server->GetEndpointUrl(), Settings->AuthToken, ServerName, Written);
+			if (Settings->bWriteUserCodexConfig)
+			{
+				ClientConfig::WriteUserCodexConfig(Server->GetEndpointUrl(), Settings->AuthToken, ServerName, Written);
+			}
+			for (const FString& File : Written.Written)
+			{
+				UE_LOG(LogAgentMcpToolset, Log, TEXT("Agent MCP wrote the client configuration %s."), *File);
+			}
+			for (const FString& Failure : Written.Failures)
+			{
+				UE_LOG(LogAgentMcpToolset, Warning, TEXT("Agent MCP could not write a client configuration: %s"), *Failure);
+			}
+		}
 		return true;
 	}
 

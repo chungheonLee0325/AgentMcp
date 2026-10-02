@@ -1156,7 +1156,7 @@ def run_p5(client, report, evidence):
                  json.dumps(sorted(skills))[:200])
 
 
-P6_TOOLS = {"asset_create", "asset_import_textures", "asset_import_meshes"}
+P6_TOOLS = {"asset_create", "asset_import_textures", "asset_import_meshes", "editor_write_client_config"}
 FIXTURE_FOLDER = "/Game/AgentMcpFixtures"
 SMOKE_DATA_ASSET = FIXTURE_FOLDER + "/DA_AgentMcpSmoke"
 SMOKE_CREATED_TABLE = FIXTURE_FOLDER + "/DT_AgentMcpCreated"
@@ -1256,6 +1256,8 @@ def run_p6(client, report, evidence):
     count_after_redo = read_property(client, data_asset, "Count")
     report.check("editor_undo and editor_redo restore data asset values", count_after_undo == 0 and count_after_redo == 7,
                  f"after undo {count_after_undo}, after redo {count_after_redo}")
+
+    check_client_config(client, report, evidence)
 
     _, _, is_error, data, _ = client.call_tool("object_set_properties", {"object": data_asset, "values": {"Tokens": {"LineStrong": 1, "ItemID": 2}}})
     tokens = ((data or {}).get("after") or {}).get("Tokens")
@@ -1385,6 +1387,24 @@ def run_p6(client, report, evidence):
                          f"{error_code(create_data)}, {error_code(import_data)}")
     finally:
         shutil.rmtree(import_folder, ignore_errors=True)
+
+
+def check_client_config(client, report, evidence):
+    """The editor writes the files an agent needs to find it, and writing them again changes nothing."""
+    _, _, is_error, data, _ = client.call_tool("editor_write_client_config", {"bUserCodexConfig": False})
+    touched = ((data or {}).get("written") or []) + ((data or {}).get("unchanged") or [])
+    report.check("editor_write_client_config writes the project client configuration",
+                 not is_error and (data or {}).get("endpoint", "").endswith("/mcp")
+                 and any(path.endswith(".mcp.json") for path in touched)
+                 and any(path.endswith("config.toml") for path in touched)
+                 and not (data or {}).get("failures"),
+                 json.dumps(data)[:300])
+    evidence.setdefault("p6", {})["clientConfig"] = data
+
+    _, _, is_error, data, _ = client.call_tool("editor_write_client_config", {"bUserCodexConfig": False})
+    report.check("writing the client configuration again changes nothing",
+                 not is_error and not (data or {}).get("written") and len((data or {}).get("unchanged") or []) == 2,
+                 json.dumps(data)[:300])
 
 
 P7_TOOLS = {

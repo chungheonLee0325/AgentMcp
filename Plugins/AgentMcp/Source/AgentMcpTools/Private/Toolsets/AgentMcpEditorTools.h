@@ -130,6 +130,27 @@ struct FAgentMcpUndoResult
 	FAgentMcpUndoState Undo;
 };
 
+USTRUCT(BlueprintType)
+struct FAgentMcpClientConfigResult
+{
+	GENERATED_BODY()
+
+	/** The endpoint the files now name. */
+	UPROPERTY()
+	FString Endpoint;
+
+	/** Files that were created or changed. */
+	UPROPERTY()
+	TArray<FString> Written;
+
+	/** Files that already named this endpoint. */
+	UPROPERTY()
+	TArray<FString> Unchanged;
+
+	UPROPERTY()
+	TArray<FString> Failures;
+};
+
 /** Editor session state and undo history. */
 UCLASS(meta = (McpToolset = "editor"))
 class UAgentMcpEditorTools : public UAgentMcpToolset
@@ -159,4 +180,13 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Editor", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))
 	static FAgentMcpUndoResult Redo();
+
+	/**
+	 * Writes the client configuration that points an agent at this editor: .mcp.json and .codex/config.toml in the project folder.
+	 * The editor writes the project files itself when the server starts; this tool also reaches the user's Codex configuration.
+	 * @param bUserCodexConfig Point the entry of the user's ~/.codex/config.toml at this editor, which Codex reads in every folder, including folders it does not trust. The file is copied once before the first change.
+	 * @return The files that were written, the files that were already correct, and the failures.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Editor", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))
+	static FAgentMcpClientConfigResult WriteClientConfig(bool bUserCodexConfig = true);
 };

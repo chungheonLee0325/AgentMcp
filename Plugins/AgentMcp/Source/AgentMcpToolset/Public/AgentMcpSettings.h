@@ -40,6 +40,24 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Server")
 	FString AuthToken;
 
+	/**
+	 * Write .mcp.json and .codex/config.toml into the project folder when the server starts, so a fresh clone only needs a build
+	 * before an agent finds the editor. Existing entries for other servers are kept.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Client")
+	bool bWriteClientConfig = true;
+
+	/**
+	 * Also point the entry of the user's ~/.codex/config.toml at this editor. Codex reads a project file only in a folder it trusts,
+	 * so this is what reaches every folder, including new worktrees. The editor that started last owns the entry.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Client")
+	bool bWriteUserCodexConfig = false;
+
+	/** Name of the MCP server in the written client configuration. */
+	UPROPERTY(Config, EditAnywhere, Category = "Client")
+	FString ClientServerName = TEXT("unreal");
+
 	UPROPERTY(Config, EditAnywhere, Category = "Tools")
 	EAgentMcpExposureMode ExposureMode = EAgentMcpExposureMode::Native;
 

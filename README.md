@@ -100,9 +100,17 @@ When the editor has loaded, the output log shows:
 LogAgentMcpProtocol: Agent MCP server listening on http://127.0.0.1:18765/mcp (39 tools).
 ```
 
+The editor then writes `.mcp.json` and `.codex/config.toml` into the project folder with that endpoint, so Claude Code finds the
+editor with no further setup. Codex reads a project file only in a folder it trusts; to reach every folder instead, turn on
+**Write User Codex Config** in Project Settings or call `editor_write_client_config`, which points the entry of the user's
+`~/.codex/config.toml` at this editor and keeps a copy of the file before its first change. While `AuthToken` is set the editor
+leaves the project files alone, because they are often committed and would carry the token; add the header by hand as below.
+
 ## Connecting a client
 
 The server speaks MCP Streamable HTTP with JSON responses at `http://127.0.0.1:18765/mcp`.
+
+The editor writes both files on startup, so this section is what they contain and how to write them by hand.
 
 For Claude Code, add a `.mcp.json` file to the project root:
 
@@ -138,6 +146,7 @@ The server returns short usage instructions from `initialize`, including the lis
 |---|---|---|
 | `editor_get_state` | Read | Open level, play session, unsaved packages, selection, undo history and server state |
 | `editor_undo`, `editor_redo` | Control | Undo or redo the last editor transaction |
+| `editor_write_client_config` | Control | Write the client configuration that points an agent at this editor, optionally including the user's Codex configuration |
 | `log_get_recent` | Read | Editor log lines after a sequence number, filtered by verbosity, category or text |
 | `actor_find` | Read | Actors by label or name, class, tag, folder or selection, in the editor or play world |
 | `actor_inspect` | Read | Class, Blueprint, tags, transform, attachment and components of an actor |

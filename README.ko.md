@@ -100,6 +100,11 @@ Theme Data Asset
 LogAgentMcpProtocol: Agent MCP server listening on http://127.0.0.1:18765/mcp (39 tools).
 ```
 
+에디터는 이어서 그 주소로 프로젝트 폴더에 `.mcp.json`과 `.codex/config.toml`을 씁니다. Claude Code는 추가 설정 없이 에디터를 찾습니다.
+Codex는 신뢰한 폴더에서만 프로젝트 파일을 읽으므로, 모든 폴더에서 쓰려면 프로젝트 설정의 **Write User Codex Config**를 켜거나
+`editor_write_client_config`를 호출합니다. 사용자 `~/.codex/config.toml`의 항목이 이 에디터를 가리키게 되며, 처음 바꾸기 전에 파일 사본을 남깁니다.
+`AuthToken`을 설정하면 프로젝트 파일은 쓰지 않습니다. 저장소에 커밋되는 경우가 많아 토큰이 함께 올라가기 때문이며, 헤더는 아래처럼 직접 넣습니다.
+
 ## 클라이언트 연결
 
 서버는 `http://127.0.0.1:18765/mcp`에서 MCP Streamable HTTP(JSON 응답)로 통신합니다.
@@ -138,6 +143,7 @@ tool_timeout_sec = 600
 |---|---|---|
 | `editor_get_state` | Read | 열린 레벨, 플레이 세션, 저장 안 된 패키지, 선택, undo 기록, 서버 상태 |
 | `editor_undo`, `editor_redo` | Control | 마지막 에디터 트랜잭션 되돌리기와 다시 실행 |
+| `editor_write_client_config` | Control | 이 에디터를 가리키는 클라이언트 설정 파일 작성. 사용자 Codex 설정까지 선택 가능 |
 | `log_get_recent` | Read | 시퀀스 번호 이후의 에디터 로그. 로그 수준, 카테고리, 텍스트로 거르기 |
 | `actor_find` | Read | 레이블이나 이름, 클래스, 태그, 폴더, 선택으로 액터 찾기(에디터 또는 플레이 월드) |
 | `actor_inspect` | Read | 액터의 클래스, 블루프린트, 태그, 트랜스폼, 부착 관계, 컴포넌트 |
