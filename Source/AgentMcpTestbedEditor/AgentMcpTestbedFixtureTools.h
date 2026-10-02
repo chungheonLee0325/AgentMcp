@@ -30,6 +30,10 @@ struct FAgentMcpTestbedFixtures
 	UPROPERTY()
 	TArray<FString> Animations;
 
+	/** Actor Blueprint fixture BP_AgentMcpDefaults, made anew by every reset. */
+	UPROPERTY()
+	FString ActorBlueprint;
+
 	/** Assets created by this call. */
 	UPROPERTY()
 	TArray<FString> Created;

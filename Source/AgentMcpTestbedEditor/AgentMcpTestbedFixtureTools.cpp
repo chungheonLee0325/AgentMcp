@@ -19,6 +19,7 @@
 #include "Animation/AnimSequence.h"
 #include "Animation/Skeleton.h"
 #include "Factories/AnimSequenceFactory.h"
+#include "Factories/BlueprintFactory.h"
 #include "Factories/DataTableFactory.h"
 #include "FileHelpers.h"
 #include "GameFramework/Actor.h"
@@ -46,6 +47,8 @@ namespace AgentMcpTestbedPrivate
 
 	/** Created by the smoke test with umg_create_widget_blueprint; every reset deletes it again. */
 	const TCHAR* const AuthoringWidgetName = TEXT("WBP_AgentMcpAuthoring");
+	/** Actor Blueprint whose class defaults the smoke test changes; every reset makes it anew, so it starts from the native defaults. */
+	const TCHAR* const DefaultsBlueprintName = TEXT("BP_AgentMcpDefaults");
 
 	/** Object path of a fixture asset; AssetName may start with a subfolder, as in Copy/WBP_Name. */
 	FString MakeObjectPath(const TCHAR* AssetName)
@@ -131,6 +134,19 @@ namespace AgentMcpTestbedPrivate
 			DataTable->MarkPackageDirty();
 		}
 		return DataTable;
+	}
+
+	/** Makes the Actor Blueprint fixture; the factory compiles it, so its class has a post-construction list from the start. */
+	UBlueprint* ResetDefaultsBlueprint(TArray<FString>& OutCreated)
+	{
+		UBlueprintFactory* Factory = NewObject<UBlueprintFactory>();
+		Factory->ParentClass = AActor::StaticClass();
+		UBlueprint* Blueprint = Cast<UBlueprint>(GetAssetTools().CreateAsset(DefaultsBlueprintName, FixtureFolder, UBlueprint::StaticClass(), Factory));
+		if (Blueprint)
+		{
+			OutCreated.Add(Blueprint->GetPathName());
+		}
+		return Blueprint;
 	}
 
 	/** Creates the Widget Blueprint if needed, adds or removes the TitleText binding, and compiles it. */
@@ -232,6 +248,7 @@ FAgentMcpTestbedFixtures UAgentMcpTestbedFixtureTools::ResetFixtures()
 	}
 	DeleteFixtureAsset(TEXT("Maps/L_AgentMcpSmoke"), Result.Deleted);
 	DeleteFixtureAsset(TEXT("Maps/L_AgentMcpSmokeSecond"), Result.Deleted);
+	DeleteFixtureAsset(DefaultsBlueprintName, Result.Deleted);
 
 	// Without undo history nothing refers to the authored Widget Blueprints any more, so they can be deleted. The part is nested in
 	// the authoring Widget Blueprint, so it goes second.
@@ -276,7 +293,8 @@ FAgentMcpTestbedFixtures UAgentMcpTestbedFixtureTools::ResetFixtures()
 	UAnimSequence* MoveAnimation = ResetAnimation(TEXT("Anim/AS_AgentMcpMove"), Result.Created);
 	UWidgetBlueprint* BoundWidget = ResetWidgetBlueprint(BoundWidgetName, /*bWithTitle=*/true, Result.Created);
 	UWidgetBlueprint* MissingBindingWidget = ResetWidgetBlueprint(MissingBindingWidgetName, /*bWithTitle=*/false, Result.Created);
-	if (!DataTable || !BoundWidget || !MissingBindingWidget || !IdleAnimation || !MoveAnimation)
+	UBlueprint* DefaultsBlueprint = ResetDefaultsBlueprint(Result.Created);
+	if (!DataTable || !BoundWidget || !MissingBindingWidget || !IdleAnimation || !MoveAnimation || !DefaultsBlueprint)
 	{
 		UE::AgentMcp::RaiseToolError(TEXT("FIXTURE_FAILED"), TEXT("Could not create the testbed fixtures."));
 		return Result;
@@ -288,6 +306,7 @@ FAgentMcpTestbedFixtures UAgentMcpTestbedFixtureTools::ResetFixtures()
 	Packages.Add(MissingBindingWidget->GetPackage());
 	Packages.Add(IdleAnimation->GetPackage());
 	Packages.Add(MoveAnimation->GetPackage());
+	Packages.Add(DefaultsBlueprint->GetPackage());
 	Result.bSaved = UEditorLoadingAndSavingUtils::SavePackages(Packages, /*bOnlyDirty=*/false);
 
 	Result.DataTable = DataTable->GetPathName();
@@ -299,6 +318,7 @@ FAgentMcpTestbedFixtures UAgentMcpTestbedFixtureTools::ResetFixtures()
 	Result.WidgetBlueprints.Add(MissingBindingWidget->GetPathName());
 	Result.Animations.Add(IdleAnimation->GetPathName());
 	Result.Animations.Add(MoveAnimation->GetPathName());
+	Result.ActorBlueprint = DefaultsBlueprint->GetPathName();
 	return Result;
 }
 

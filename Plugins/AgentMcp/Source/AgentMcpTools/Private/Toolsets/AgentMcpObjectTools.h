@@ -109,6 +109,10 @@ struct FAgentMcpSetPropertiesResult
 	/** Properties that already had the requested value. */
 	UPROPERTY()
 	TArray<FString> Unchanged;
+
+	/** The Blueprint whose class defaults changed, marked modified so that instances created from now on get the new values. */
+	UPROPERTY()
+	FString Blueprint;
 };
 
 /** Reflection access to object properties. */
@@ -140,11 +144,13 @@ public:
 	static FAgentMcpPropertyValuesResult GetProperties(UObject* Object, const TArray<FString>& PropertyNames);
 
 	/**
-	 * Changes property values of an actor or component in the editor level, or of a project asset such as a data asset or a texture, with
-	 * editor change notifications (PreEditChange and PostEditChangeProperty). Blueprints, DataTables (use the datatable tools) and engine
-	 * content are refused. Every value is checked before anything changes. A struct value may list only the fields to change; an array
-	 * value replaces the whole array.
-	 * @param Object The actor, component or asset to change.
+	 * Changes property values of an actor or component in the editor level, of a project asset such as a data asset or a texture, or the
+	 * class defaults of a project Blueprint through its default object (/Game/UI/WBP_Hud.Default__WBP_Hud_C), with editor change
+	 * notifications (PreEditChange and PostEditChangeProperty). A class default change marks the Blueprint modified, as the Blueprint
+	 * editor does, so instances created afterwards get the value. Blueprint graphs, native class defaults, DataTables (use the datatable
+	 * tools) and engine content are refused. Every value is checked before anything changes. A struct value may list only the fields to
+	 * change; an array value replaces the whole array.
+	 * @param Object The actor, component, asset or Blueprint default object to change.
 	 * @param Values Property name to new value, for example {"Tags": ["Door"], "bHidden": true}.
 	 * @return Values before and after the call, and which properties changed.
 	 */

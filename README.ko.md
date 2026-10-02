@@ -158,7 +158,7 @@ tool_timeout_sec = 600
 | `level_save` | Control | 에디터에 열린 레벨, 또는 저장 안 된 모든 레벨을 저장 |
 | `object_list_properties` | Read | 객체의 프로퍼티와 변경 가능 여부 |
 | `object_get_properties` | Read | 프로퍼티 값을 JSON으로 읽기 |
-| `object_set_properties` | Write | 에디터 레벨의 액터·컴포넌트나, 데이터 에셋·텍스처 같은 프로젝트 에셋의 프로퍼티 변경과 변경 후 값 확인 |
+| `object_set_properties` | Write | 에디터 레벨의 액터·컴포넌트, 데이터 에셋·텍스처 같은 프로젝트 에셋, 프로젝트 블루프린트 클래스 기본값의 프로퍼티 변경과 변경 후 값 확인 |
 | `pie_start`, `pie_stop` | Control | Play In Editor를 시작하거나 종료하고, 세션이 시작되거나 끝날 때까지 대기. `pie_start`는 레벨 뷰포트에서 실행하고, `windowWidth`와 `windowHeight`를 주면 뷰포트가 그 크기인 새 창에서 실행 |
 | `pie_status` | Read | 플레이 세션이 시작 중인지, 실행 중인지 |
 | `asset_find` | Read | 폴더, 클래스, 이름으로 에셋 찾기(에셋을 로드하지 않음) |

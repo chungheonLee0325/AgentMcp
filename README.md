@@ -161,7 +161,7 @@ The server returns short usage instructions from `initialize`, including the lis
 | `level_save` | Control | Save the level open in the editor, or every level with unsaved changes |
 | `object_list_properties` | Read | Properties of an object and whether they can be changed |
 | `object_get_properties` | Read | Property values as JSON |
-| `object_set_properties` | Write | Change properties of an actor or component in the editor level, or of a project asset such as a data asset or texture, with readback |
+| `object_set_properties` | Write | Change properties of an actor or component in the editor level, of a project asset such as a data asset or texture, or the class defaults of a project Blueprint, with readback |
 | `pie_start`, `pie_stop` | Control | Start or stop Play In Editor and wait until the session has begun or shut down. `pie_start` plays in the level viewport, or with `windowWidth` and `windowHeight` in a new window whose viewport has that size |
 | `pie_status` | Read | Whether a play session is starting or running |
 | `asset_find` | Read | Assets by folder, class and name, without loading them |

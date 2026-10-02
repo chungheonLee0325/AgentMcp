@@ -10,6 +10,7 @@
 #include "Engine/DataTable.h"
 #include "Engine/Level.h"
 #include "Engine/World.h"
+#include "Kismet2/BlueprintEditorUtils.h"
 #include "UObject/Package.h"
 #include "UObject/PropertyAccessUtil.h"
 #include "UObject/UnrealType.h"
@@ -26,17 +27,34 @@ namespace UE::AgentMcp::ObjectToolsPrivate
 	}
 
 	/**
-	 * Tools change objects of the editor level (actors, their components and other level sub-objects) and project assets such as data
-	 * assets and textures. Blueprints and DataTables have their own tools. Sets bOutLevelObject for objects of the editor level.
+	 * Tools change objects of the editor level (actors, their components and other level sub-objects), project assets such as data
+	 * assets and textures, and the class defaults of project Blueprints. Blueprint graphs and DataTables have their own tools. Sets
+	 * bOutLevelObject for objects of the editor level, and OutBlueprint for the default object of a Blueprint's generated class.
 	 */
-	bool RequireEditableObject(const UObject* Object, bool& bOutLevelObject)
+	bool RequireEditableObject(const UObject* Object, bool& bOutLevelObject, UBlueprint*& OutBlueprint)
 	{
 		bOutLevelObject = false;
+		OutBlueprint = nullptr;
 		if (Object->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject))
 		{
-			RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("%s is a class default or archetype object."), *Object->GetPathName()),
-				TEXT("Blueprint and class defaults cannot be changed with object_set_properties."));
-			return false;
+			UBlueprint* Blueprint = Object->HasAnyFlags(RF_ClassDefaultObject) ? UBlueprint::GetBlueprintFromClass(Object->GetClass()) : nullptr;
+			if (!Blueprint || Blueprint->GeneratedClass != Object->GetClass())
+			{
+				RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("%s is a native class default or an archetype object."), *Object->GetPathName()),
+					TEXT("Only the class defaults of a Blueprint can be changed, through its default object, for example /Game/UI/WBP_Hud.Default__WBP_Hud_C."));
+				return false;
+			}
+			if (!Tools::RequireProjectContent(Blueprint))
+			{
+				return false;
+			}
+			if (!Object->CanModify())
+			{
+				RaiseToolError(TEXT("NOT_EDITABLE"), FString::Printf(TEXT("%s cannot be modified."), *Object->GetPathName()));
+				return false;
+			}
+			OutBlueprint = Blueprint;
+			return true;
 		}
 
 		const ULevel* Level = Object->IsA<ULevel>() ? CastChecked<ULevel>(Object) : Object->GetTypedOuter<ULevel>();
@@ -209,7 +227,8 @@ FAgentMcpSetPropertiesResult UAgentMcpObjectTools::SetProperties(UObject* Object
 
 	FAgentMcpSetPropertiesResult Result;
 	bool bLevelObject = false;
-	if (!UE::AgentMcp::Tools::RequireObject(Object, TEXT("object")) || !RequireEditableObject(Object, bLevelObject))
+	UBlueprint* Blueprint = nullptr;
+	if (!UE::AgentMcp::Tools::RequireObject(Object, TEXT("object")) || !RequireEditableObject(Object, bLevelObject, Blueprint))
 	{
 		return Result;
 	}
@@ -285,6 +304,13 @@ FAgentMcpSetPropertiesResult UAgentMcpObjectTools::SetProperties(UObject* Object
 	if (Result.Changed.Num() > 0 && GEditor && bLevelObject)
 	{
 		GEditor->RedrawLevelEditingViewports();
+	}
+	if (Result.Changed.Num() > 0 && Blueprint)
+	{
+		// A new instance copies from the class defaults only the properties on the class's post-construction list, which loading and
+		// compiling build. Marking the Blueprint modified rebuilds it, as a class default edit in the Blueprint editor does.
+		FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
+		Result.Blueprint = Blueprint->GetPathName();
 	}
 
 	Result.Before.JsonObject = Before;

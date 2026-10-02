@@ -90,6 +90,10 @@ Write a short plan first and keep it in the conversation:
   back only the requested fields; `umg_inspect` with `bIncludeProperties` shows complete values.
 - `object_list_properties` on a class default object (`/Script/UMG.Default__TextBlock`, `/Script/UMG.Default__CanvasPanelSlot`)
   lists property names and types.
+- Class defaults of a Widget Blueprint (properties of its C++ parent, such as colors or an entry class) are set with
+  `object_set_properties` on its default object (`/Game/UI/WBP_Hud.Default__WBP_Hud_C`). It marks the Blueprint modified, so
+  widgets created afterwards get the values. A value set another way, such as editor Python `set_editor_property` on the default
+  object, reaches new widgets only after `blueprint_compile`.
 - A `Border` holds one child; use a `SizeBox` for fixed sizes; `RoundedBox` brushes need no texture.
 - A 9-slice brush (`DrawAs` `Box`) draws its margins at the texture's pixel size, whatever `ImageSize` says: size the texture for
   the border that should appear.

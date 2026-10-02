@@ -1445,7 +1445,8 @@ def actors_labelled(client, label):
 
 def run_p7(client, report, evidence):
     p7 = evidence.setdefault("p7", {})
-    client.call_tool("testbed_reset_fixtures")
+    _, _, is_error, fixtures, _ = client.call_tool("testbed_reset_fixtures")
+    fixtures = {} if is_error else (fixtures or {})
 
     # --- level_new ------------------------------------------------------------------------------------
     _, _, is_error, data, _ = client.call_tool("level_new", {"assetPath": SMOKE_LEVEL, "bPartitioned": False})
@@ -1486,6 +1487,26 @@ def run_p7(client, report, evidence):
     cube = next(iter(actors_labelled(client, "SmokeCube")), None)
     report.check("actor_find finds the spawned actor in its folder",
                  cube is not None and cube.get("folder") == "Greybox/Walls", json.dumps(cube))
+
+    # --- class defaults of a Blueprint ----------------------------------------------------------------
+    # A class default set after the Blueprint had compiled once reached no new instance until the next compile: a new instance copies
+    # only the properties on the class's post-construction list. object_set_properties marks the Blueprint modified, which rebuilds it.
+    blueprint = fixtures.get("actorBlueprint") or ""
+    package, _, name = blueprint.rpartition(".")
+    _, _, is_error, data, _ = client.call_tool("object_set_properties", {"object": f"{package}.Default__{name}_C", "values": {"Tags": ["AgentMcpClassDefault"]}})
+    report.check("object_set_properties changes a Blueprint's class defaults and names the Blueprint",
+                 not is_error and (data or {}).get("changed") == ["Tags"] and (data or {}).get("blueprint") == blueprint, json.dumps(data)[:300])
+    _, _, is_error, data, _ = client.call_tool("actor_spawn", {"actors": [{"asset": package, "label": "SmokeDefaults", "location": [0, 400, 100]}]})
+    placed = ((data or {}).get("actors") or [{}])[0].get("path") or ""
+    _, _, _, values, _ = client.call_tool("object_get_properties", {"object": placed, "propertyNames": ["Tags"]})
+    report.check("an actor spawned after the class default change has the new value",
+                 not is_error and ((values or {}).get("values") or {}).get("Tags") == ["AgentMcpClassDefault"], json.dumps(values)[:300])
+    if placed:
+        client.call_tool("actor_delete", {"actors": [placed], "bConfirm": True})
+    # The change left the fixture Blueprint unsaved, and the level checks below expect no unsaved package.
+    client.call_tool("asset_save", {"assets": [package]})
+    _, _, is_error, data, _ = client.call_tool("object_set_properties", {"object": "/Script/Engine.Default__Actor", "values": {"Tags": ["AgentMcpNative"]}})
+    report.check("object_set_properties still refuses native class defaults", is_error and error_code(data) == "NOT_SUPPORTED", error_message(data)[:160])
 
     # --- actor_duplicate ------------------------------------------------------------------------------
     _, _, is_error, data, _ = client.call_tool("actor_duplicate", {"actor": cube["path"], "count": 3, "offset": [300, 0, 0]})
