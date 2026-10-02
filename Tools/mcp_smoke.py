@@ -423,6 +423,13 @@ def run_p1(client, report, evidence):
     _, _, is_error, data, _ = client.call_tool("asset_find", {"path": "/"})
     report.check("asset_find over all content without a filter returns INVALID_ARGUMENT", is_error and error_code(data) == "INVALID_ARGUMENT", error_message(data)[:120])
 
+    # A result past MaxResultBytes once came back cut mid-text, which no client could read; it must stay JSON and say what it cut.
+    _, _, is_error, data, size = client.call_tool("asset_find", {"path": "/Engine", "limit": 500})
+    cut = (data or {}).get("truncated") or {}
+    report.check("a result over the size limit stays JSON and says what it left out",
+                 not is_error and isinstance((data or {}).get("assets"), list) and (cut.get("assets") or {}).get("kept") == len(data["assets"]),
+                 f"{size} bytes, truncated={json.dumps(cut)[:200]}")
+
     _, _, is_error, data, _ = client.call_tool("asset_find", {"assetClass": "NoSuchAssetClass_AgentMcp"})
     report.check("asset_find with an unknown class returns NOT_FOUND", is_error and error_code(data) == "NOT_FOUND", str(error_code(data)))
 

@@ -73,15 +73,83 @@ namespace UE::AgentMcp::ReflectedToolPrivate
 		}
 	}
 
+	/** Characters one field of a result takes when written on its own. */
+	int32 FieldLength(const FString& Name, const TSharedPtr<FJsonValue>& Value)
+	{
+		const TSharedRef<FJsonObject> Single = MakeShared<FJsonObject>();
+		Single->SetField(Name, Value);
+		return UE::AgentMcp::Compat::JsonObjectToString(Single).Len();
+	}
+
 	FAgentMcpToolResult MakeTextResult(const TSharedRef<FJsonObject>& ResultObject)
 	{
 		FString Text = UE::AgentMcp::Compat::JsonObjectToString(ResultObject);
 		const int32 MaxCharacters = FMath::Max(1024, GetDefault<UAgentMcpSettings>()->MaxResultBytes);
-		if (Text.Len() > MaxCharacters)
+		if (Text.Len() <= MaxCharacters)
 		{
-			const int32 FullLength = Text.Len();
-			Text.LeftInline(MaxCharacters);
-			Text += FString::Printf(TEXT("\n[truncated: the result had %d characters; narrow the request with limit, cursor or propertyNames]"), FullLength);
+			return FAgentMcpToolResult::MakeText(Text);
+		}
+
+		// Clients read the result as JSON, and a write tool's change has already happened when its result is too long, so the
+		// result is cut at item boundaries, never mid-text: the longest top-level arrays lose items from the end, then the
+		// largest remaining fields are left out. "truncated" says what went.
+		const TSharedRef<FJsonObject> Trimmed = MakeShared<FJsonObject>(*ResultObject);
+		const TSharedRef<FJsonObject> Truncated = MakeShared<FJsonObject>();
+		Truncated->SetNumberField(TEXT("characters"), Text.Len());
+		Truncated->SetStringField(TEXT("hint"), TEXT("Narrow the request with limit, cursor or propertyNames."));
+		const FString TruncatedField = TEXT("truncated");
+		for (;;)
+		{
+			Trimmed->SetObjectField(TruncatedField, Truncated);
+			Text = UE::AgentMcp::Compat::JsonObjectToString(Trimmed);
+			if (Text.Len() <= MaxCharacters)
+			{
+				break;
+			}
+			FString Longest;
+			int32 LongestItems = 1;
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : Trimmed->Values)
+			{
+				if (Pair.Key != TruncatedField && Pair.Value.IsValid() && Pair.Value->Type == EJson::Array && Pair.Value->AsArray().Num() > LongestItems)
+				{
+					Longest = Pair.Key;
+					LongestItems = Pair.Value->AsArray().Num();
+				}
+			}
+			if (!Longest.IsEmpty())
+			{
+				TArray<TSharedPtr<FJsonValue>> Items = Trimmed->GetArrayField(Longest);
+				const TSharedPtr<FJsonObject>* Earlier = nullptr;
+				const int32 Total = Truncated->TryGetObjectField(Longest, Earlier) ? static_cast<int32>((*Earlier)->GetNumberField(TEXT("total"))) : Items.Num();
+				Items.SetNum(Items.Num() / 2);
+				Trimmed->SetArrayField(Longest, Items);
+				const TSharedRef<FJsonObject> Kept = MakeShared<FJsonObject>();
+				Kept->SetNumberField(TEXT("total"), Total);
+				Kept->SetNumberField(TEXT("kept"), Items.Num());
+				Truncated->SetObjectField(Longest, Kept);
+				continue;
+			}
+			// No array has more than one item left: the largest other field goes whole.
+			FString Largest;
+			int32 LargestLength = 0;
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : Trimmed->Values)
+			{
+				if (Pair.Key != TruncatedField && Pair.Value.IsValid())
+				{
+					const int32 Length = FieldLength(Pair.Key, Pair.Value);
+					if (Length > LargestLength)
+					{
+						Largest = Pair.Key;
+						LargestLength = Length;
+					}
+				}
+			}
+			if (Largest.IsEmpty())
+			{
+				break;
+			}
+			Trimmed->RemoveField(Largest);
+			Truncated->SetStringField(Largest, TEXT("omitted"));
 		}
 		return FAgentMcpToolResult::MakeText(Text);
 	}
