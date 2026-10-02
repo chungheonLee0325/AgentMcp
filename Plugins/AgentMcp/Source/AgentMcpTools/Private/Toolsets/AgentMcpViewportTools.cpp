@@ -16,6 +16,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
+#include "RenderingThread.h"
 #include "UnrealClient.h"
 #include "Widgets/SViewport.h"
 
@@ -47,6 +48,26 @@ namespace UE::AgentMcp::ViewportToolsPrivate
 	}
 }
 
+namespace UE::AgentMcp::ViewportToolsPrivate
+{
+	/** The level viewport the user worked in last, or the first perspective one; the camera tool and the capture use the same. */
+	FLevelEditorViewportClient* FindLevelViewportClient()
+	{
+		if (GCurrentLevelEditingViewportClient)
+		{
+			return GCurrentLevelEditingViewportClient;
+		}
+		for (FLevelEditorViewportClient* Candidate : GEditor->GetLevelViewportClients())
+		{
+			if (Candidate && Candidate->IsPerspective())
+			{
+				return Candidate;
+			}
+		}
+		return nullptr;
+	}
+}
+
 FAgentMcpViewportCapture UAgentMcpViewportTools::Capture(int32 MaxWidth, bool bPreferPlay, bool bIncludeUI)
 {
 	using namespace UE::AgentMcp::ViewportToolsPrivate;
@@ -69,12 +90,12 @@ FAgentMcpViewportCapture UAgentMcpViewportTools::Capture(int32 MaxWidth, bool bP
 		}
 		Result.Source = TEXT("Play");
 	}
+	FLevelEditorViewportClient* LevelClient = nullptr;
 	if (!Viewport)
 	{
-		// The level viewport the user worked in last; any active viewport otherwise.
-		Viewport = (GCurrentLevelEditingViewportClient && GCurrentLevelEditingViewportClient->Viewport)
-			? GCurrentLevelEditingViewportClient->Viewport
-			: GEditor->GetActiveViewport();
+		// The level viewport viewport_set_camera moves; any active viewport otherwise.
+		LevelClient = FindLevelViewportClient();
+		Viewport = LevelClient && LevelClient->Viewport ? LevelClient->Viewport : GEditor->GetActiveViewport();
 		PlayViewportWidget.Reset();
 		Result.Source = TEXT("Editor");
 	}
@@ -89,6 +110,17 @@ FAgentMcpViewportCapture UAgentMcpViewportTools::Capture(int32 MaxWidth, bool bP
 	{
 		UE::AgentMcp::RaiseToolError(TEXT("NOT_AVAILABLE"), TEXT("The viewport has no size."), TEXT("The editor window may be minimized."));
 		return Result;
+	}
+	if (Result.Source == TEXT("Editor"))
+	{
+		// An editor in the background, or one without a window, stops painting its level viewports; reading the pixels then
+		// returns the last frame painted, whatever the camera does since. The capture draws a frame of its own first.
+		if (LevelClient)
+		{
+			LevelClient->Invalidate();
+		}
+		Viewport->Draw(/*bShouldPresent=*/false);
+		FlushRenderingCommands();
 	}
 
 	TArray<FColor> Pixels;
@@ -181,18 +213,7 @@ FAgentMcpViewportCameraResult UAgentMcpViewportTools::SetCamera(const TArray<dou
 		return Result;
 	}
 
-	FLevelEditorViewportClient* Client = GCurrentLevelEditingViewportClient;
-	if (!Client)
-	{
-		for (FLevelEditorViewportClient* Candidate : GEditor->GetLevelViewportClients())
-		{
-			if (Candidate && Candidate->IsPerspective())
-			{
-				Client = Candidate;
-				break;
-			}
-		}
-	}
+	FLevelEditorViewportClient* Client = UE::AgentMcp::ViewportToolsPrivate::FindLevelViewportClient();
 	if (!Client)
 	{
 		UE::AgentMcp::RaiseToolError(TEXT("VIEWPORT_UNAVAILABLE"), TEXT("No level editor viewport is available."),

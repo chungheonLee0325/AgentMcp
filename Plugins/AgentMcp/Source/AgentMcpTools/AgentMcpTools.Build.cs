@@ -13,6 +13,8 @@ public class AgentMcpTools : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
+			// viewport_capture draws a frame of the level viewport before reading it.
+			"RenderCore",
 			"UnrealEd",
 			"AssetRegistry",
 			"Projects",

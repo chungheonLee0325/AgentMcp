@@ -817,6 +817,16 @@ def run_p3(client, report, evidence):
         _, _, is_error, data, _ = client.call_tool("pie_stop")
         report.check("pie_stop ends the session after the capture", not is_error and (data or {}).get("bWasActive") is True, json.dumps(data)[:160])
 
+    # After a play session an editor in the background once stopped painting its viewport, and every capture showed the last
+    # frame painted. Two captures from opposite directions must differ.
+    frames = []
+    for yaw in (0, 180):
+        client.call_tool("viewport_set_camera", {"location": [0, 0, 300], "rotation": [-20, yaw, 0]})
+        _, payload, _, _, _ = client.call_tool("viewport_capture", {"maxWidth": 320, "bPreferPlay": False})
+        frames.append(base64.b64decode((image_items(payload) or [{}])[0].get("data", "")))
+    report.check("viewport_capture after viewport_set_camera shows the new view", all(frames) and frames[0] != frames[1],
+                 f"{[len(frame) for frame in frames]} PNG bytes")
+
     # --- dispatcher rollback of a failed write ------------------------------------------------------
     undoable = get_undo_state(client).get("undoableCount") or 0
     # Any actor of the open level; the level checks open other levels, so no actor name is guaranteed.
