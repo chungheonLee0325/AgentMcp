@@ -255,9 +255,10 @@ FAgentMcpTestbedFixtures UAgentMcpTestbedFixtureTools::ResetFixtures()
 	DeleteFixtureAsset(AuthoringWidgetName, Result.Deleted);
 	DeleteFixtureAsset(TEXT("WBP_AgentMcpAuthoringPart"), Result.Deleted);
 	DeleteFixtureAsset(TEXT("Copy/WBP_AgentMcpAuthoringPart"), Result.Deleted);
-	// Created with asset_create and asset_import_textures. The data asset refers to the texture, so it goes first.
+	// Created with asset_create and asset_import_textures. The data asset refers to the texture and the string table, so it goes first.
 	DeleteFixtureAsset(TEXT("DA_AgentMcpSmoke"), Result.Deleted);
 	DeleteFixtureAsset(TEXT("DT_AgentMcpCreated"), Result.Deleted);
+	DeleteFixtureAsset(TEXT("ST_AgentMcpSmoke"), Result.Deleted);
 	DeleteFixtureAsset(TEXT("T_AgentMcpSmokeIcon"), Result.Deleted);
 	// asset_import_meshes brings the materials and textures of a file along, so the whole Kit folder goes, not a list of names.
 	// The registry also lists what is only on disk: a mesh saved by an earlier session once survived the reset of loaded assets.

@@ -69,4 +69,8 @@ public:
 	/** Named values; the smoke test checks that map keys keep their case in results. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke")
 	TMap<FName, int32> Tokens;
+
+	/** A text; the smoke test points it at a string table entry. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Smoke")
+	FText Label;
 };

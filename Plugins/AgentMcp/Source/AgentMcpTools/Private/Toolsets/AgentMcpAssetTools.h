@@ -347,11 +347,12 @@ public:
 	static FAgentMcpSaveResult Save(const TArray<FString>& Assets, bool bOnlyIfDirty = true, bool bAllowCheckout = false);
 
 	/**
-	 * Creates a data asset (an instance of a DataAsset subclass, for example a UI theme or an item definition) or a DataTable under /Game
-	 * or in a project plugin. Set its values afterwards with object_set_properties or the datatable tools. The asset is not saved (use
-	 * asset_save), its creation cannot be undone with editor_undo, and the tool is blocked during a play session.
+	 * Creates a data asset (an instance of a DataAsset subclass, for example a UI theme or an item definition), a DataTable or a string
+	 * table under /Game or in a project plugin. Set its values afterwards with object_set_properties, the datatable tools or
+	 * stringtable_set_entries. The asset is not saved (use asset_save), its creation cannot be undone with editor_undo, and the tool is
+	 * blocked during a play session.
 	 * @param AssetPath Package path of the new asset, for example /Game/UI/DA_Theme. No asset may exist there yet.
-	 * @param AssetClass DataAsset subclass to create, or DataTable.
+	 * @param AssetClass DataAsset subclass to create, DataTable or StringTable.
 	 * @param RowStruct Row struct of a DataTable: a path such as /Script/MyGame.ItemRow, or the struct name. Leave it empty for data assets.
 	 * @return The new asset.
 	 */

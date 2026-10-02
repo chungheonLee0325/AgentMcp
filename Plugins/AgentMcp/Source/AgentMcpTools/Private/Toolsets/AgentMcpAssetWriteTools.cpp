@@ -13,8 +13,10 @@
 #include "Engine/Texture2D.h"
 #include "Factories/DataAssetFactory.h"
 #include "Factories/DataTableFactory.h"
+#include "Factories/StringTableFactory.h"
 #include "HAL/FileManager.h"
 #include "IAssetTools.h"
+#include "Internationalization/StringTable.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
@@ -255,6 +257,7 @@ FAgentMcpAssetCreateResult UAgentMcpAssetTools::Create(const FString& AssetPath,
 	}
 
 	const bool bDataTable = AssetClass == UDataTable::StaticClass();
+	const bool bStringTable = AssetClass == UStringTable::StaticClass();
 	const FString RowStructName = RowStruct.TrimStartAndEnd();
 	UScriptStruct* Struct = nullptr;
 	if (bDataTable)
@@ -273,9 +276,17 @@ FAgentMcpAssetCreateResult UAgentMcpAssetTools::Create(const FString& AssetPath,
 			return Result;
 		}
 	}
+	else if (bStringTable)
+	{
+		if (!RowStructName.IsEmpty())
+		{
+			RaiseToolError(TEXT("INVALID_ARGUMENT"), TEXT("'rowStruct' only applies to DataTables."), TEXT("Leave rowStruct empty for string tables."));
+			return Result;
+		}
+	}
 	else if (!AssetClass->IsChildOf(UDataAsset::StaticClass()))
 	{
-		RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("asset_create creates data assets and DataTables, not %s assets."), *AssetClass->GetName()),
+		RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("asset_create creates data assets, DataTables and string tables, not %s assets."), *AssetClass->GetName()),
 			TEXT("Create Widget Blueprints with umg_create_widget_blueprint and textures with asset_import_textures."));
 		return Result;
 	}
@@ -305,6 +316,10 @@ FAgentMcpAssetCreateResult UAgentMcpAssetTools::Create(const FString& AssetPath,
 		UDataTableFactory* DataTableFactory = NewObject<UDataTableFactory>();
 		DataTableFactory->Struct = Struct;
 		Factory = DataTableFactory;
+	}
+	else if (bStringTable)
+	{
+		Factory = NewObject<UStringTableFactory>();
 	}
 	else
 	{

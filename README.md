@@ -168,7 +168,7 @@ The server returns short usage instructions from `initialize`, including the lis
 | `asset_inspect` | Read | Class, tags, file size, loaded and dirty state and reference counts of an asset |
 | `asset_referencers`, `asset_dependencies` | Read | Packages that reference an asset, or that it depends on |
 | `asset_save` | Control | Save loaded project assets without dialogs |
-| `asset_create` | Control | Create a data asset or a DataTable |
+| `asset_create` | Control | Create a data asset, a DataTable or a string table |
 | `asset_import_textures` | Control | Import PNG, JPEG, TGA or BMP files as textures, with the settings for UMG. `bMipmaps` keeps mipmaps for images drawn smaller than their size or at several sizes |
 | `asset_import_meshes` | Control | Import FBX, glTF, GLB or OBJ files as static meshes, with their size and collision |
 | `class_find_derived` | Read | C++ and Blueprint classes that derive from a class, with headers and assets |
@@ -176,6 +176,8 @@ The server returns short usage instructions from `initialize`, including the lis
 | `datatable_list_rows`, `datatable_get_rows` | Read | Row names, and values keyed by row and column |
 | `datatable_set_rows`, `datatable_add_rows`, `datatable_rename_rows` | Write | Change, add or rename rows of a project DataTable |
 | `datatable_remove_rows` | Destructive | Remove rows of a project DataTable |
+| `stringtable_get_entries` | Read | Namespace, keys and source strings of a string table |
+| `stringtable_set_entries` | Write | Add entries to a project string table or change their strings, and set its namespace |
 | `blueprint_inspect` | Read | Parent chain, interfaces, components, variables, functions and graphs |
 | `blueprint_compile` | Control | Compile a Blueprint or Widget Blueprint and return its errors and warnings |
 | `anim_build_blend_space` | Control | Create or rebuild a 1D blend space from animations placed on one axis, with optional smoothing of the axis |
@@ -196,7 +198,7 @@ A typical verification loop: `blueprint_compile` → `pie_start` → `log_get_re
 
 To build a user interface: `umg_create_widget_blueprint` (with a C++ parent class that declares `BindWidget` properties) → `umg_add_widgets` → `blueprint_compile` → inspect it in a play session with `viewport_capture` → adjust it with `umg_set_widget_properties`. Values are JSON: property names are the C++ names (`Text`, `Font`, `Padding`, `LayoutData`), struct values may list only the fields to set, and enum values are names (`HAlign_Center`, `RoundedBox`). Widget Blueprint classes can be nested as component instances and their instance properties can be set the same way.
 
-To keep presentation in data, `asset_create` can make a theme data asset or item DataTable, `object_set_properties` and the datatable tools fill them, and `asset_import_textures` brings in icons and frames with UMG texture settings.
+To keep presentation in data, `asset_create` can make a theme data asset or item DataTable, `object_set_properties` and the datatable tools fill them, and `asset_import_textures` brings in icons and frames with UMG texture settings. Visible text goes into a string table (`asset_create` with `StringTable`, then `stringtable_set_entries`), and a text property references an entry when it is set to `LOCTABLE("/Game/Text/ST_Ui.ST_Ui", "Key")`, so the text keeps one key for localization however often a script writes it.
 
 To block out a level: `level_new` → `actor_spawn` with meshes or Blueprints → `actor_duplicate` for rows and grids → `actor_attach` and `actor_set_folder` to keep the outliner readable → `viewport_set_camera` and `viewport_capture` to look at it → `level_save`. `actor_set_transform` and `object_set_properties` adjust what is already placed, and `editor_undo` reverts the last call.
 

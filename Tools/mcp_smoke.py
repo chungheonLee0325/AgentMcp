@@ -9,7 +9,8 @@ Checks the MCP transport contract and the tools against a running editor:
   P3       blueprint_compile, BindWidget checks, PIE refusal, viewport_capture with the game UI, rollback, cancellation, livecoding_compile
   P4       umg_create_widget_blueprint, umg_add_widgets, umg_set_widget_properties, umg_remove_widgets: checks, undo, redo, PIE refusal
   P5       skills_list, skills_get: the plugin skill, project skill folders, replacing a skill, skill files, refusals
-  P6       asset_create, asset_import_textures, object_set_properties on assets: checks, undo, replacing, saving, PIE refusal
+  P6       asset_create, asset_import_textures, object_set_properties on assets, string tables: checks, undo, replacing, saving,
+           PIE refusal
   P8       anim_build_blend_space, anim_build_montage, anim_build_anim_blueprint on the testbed animation fixtures
 
 Level writes are undone again. P2, P3, P4 and P6 need the AgentMcpTestbed "testbed" toolset, which resets and saves its fixture assets.
@@ -1173,10 +1174,12 @@ def run_p5(client, report, evidence):
                  json.dumps(sorted(skills))[:200])
 
 
-P6_TOOLS = {"asset_create", "asset_import_textures", "asset_import_meshes", "editor_write_client_config"}
+P6_TOOLS = {"asset_create", "asset_import_textures", "asset_import_meshes", "editor_write_client_config", "stringtable_get_entries",
+            "stringtable_set_entries"}
 FIXTURE_FOLDER = "/Game/AgentMcpFixtures"
 SMOKE_DATA_ASSET = FIXTURE_FOLDER + "/DA_AgentMcpSmoke"
 SMOKE_CREATED_TABLE = FIXTURE_FOLDER + "/DT_AgentMcpCreated"
+SMOKE_STRING_TABLE = FIXTURE_FOLDER + "/ST_AgentMcpSmoke"
 SMOKE_TEXTURE = FIXTURE_FOLDER + "/T_AgentMcpSmokeIcon"
 SMOKE_MESH = FIXTURE_FOLDER + "/Kit/SM_AgentMcpSmokeCube"
 # A unit cube; whatever unit the importer assumes, the three sides stay equal.
@@ -1257,6 +1260,29 @@ def run_p6(client, report, evidence):
     report.check("asset_create creates an empty DataTable with the row struct",
                  not is_error and ((data or {}).get("rowStruct") or "").endswith(".AgentMcpTestbedRow") and not rows_error and (rows or {}).get("rowCount") == 0,
                  json.dumps(data)[:200])
+
+    # --- string tables --------------------------------------------------------------------------------
+    table = object_path(SMOKE_STRING_TABLE)
+    words = {"Greeting": "Hello", "Farewell": "Bye"}
+    _, _, is_error, data, _ = client.call_tool("asset_create", {"assetPath": SMOKE_STRING_TABLE, "assetClass": "StringTable"})
+    _, _, set_error, edit, _ = client.call_tool("stringtable_set_entries", {"stringTable": table, "entries": words, "namespace": "AgentMcpSmoke"})
+    _, _, get_error, listed, _ = client.call_tool("stringtable_get_entries", {"stringTable": table})
+    report.check("asset_create makes a string table that stringtable_set_entries fills and stringtable_get_entries reads",
+                 not is_error and not set_error and not get_error and (listed or {}).get("namespace") == "AgentMcpSmoke"
+                 and (listed or {}).get("entries") == words, json.dumps([data, edit, listed])[:300])
+
+    _, _, is_error, again, _ = client.call_tool("stringtable_set_entries", {"stringTable": table, "entries": words})
+    report.check("stringtable_set_entries with the strings the table has changes nothing",
+                 not is_error and not (again or {}).get("changed") and sorted((again or {}).get("unchanged") or []) == sorted(words), json.dumps(again)[:300])
+
+    # LOCTABLE in a text value makes the property reference the entry, so it shows a later change of the entry's string.
+    label = {"Label": f'LOCTABLE("{table}", "Greeting")'}
+    _, _, is_error, _, _ = client.call_tool("object_set_properties", {"object": object_path(SMOKE_DATA_ASSET), "values": label})
+    shown = read_property(client, object_path(SMOKE_DATA_ASSET), "Label")
+    client.call_tool("stringtable_set_entries", {"stringTable": table, "entries": {"Greeting": "Hi"}})
+    changed = read_property(client, object_path(SMOKE_DATA_ASSET), "Label")
+    report.check("a text property set to LOCTABLE shows the string table entry, and the entry's later changes",
+                 not is_error and shown == "Hello" and changed == "Hi", f"shown {shown!r}, after the change {changed!r}")
 
     # --- object_set_properties on assets --------------------------------------------------------------
     data_asset = object_path(SMOKE_DATA_ASSET)
@@ -1388,8 +1414,9 @@ def run_p6(client, report, evidence):
         report.check("object_set_properties points a data asset at the imported texture",
                      not is_error and json.dumps((data or {}).get("after")).count(texture) >= 2, json.dumps((data or {}).get("after"))[:300])
 
-        _, _, is_error, data, _ = client.call_tool("asset_save", {"assets": [SMOKE_DATA_ASSET, SMOKE_CREATED_TABLE, SMOKE_TEXTURE]})
-        report.check("asset_save saves the created and imported assets", not is_error and (data or {}).get("savedCount") == 3, json.dumps(data)[:300])
+        # The data asset's label refers to the string table, so both are saved.
+        _, _, is_error, data, _ = client.call_tool("asset_save", {"assets": [SMOKE_DATA_ASSET, SMOKE_CREATED_TABLE, SMOKE_STRING_TABLE, SMOKE_TEXTURE]})
+        report.check("asset_save saves the created and imported assets", not is_error and (data or {}).get("savedCount") == 4, json.dumps(data)[:300])
 
         # --- play session refusal -------------------------------------------------------------------------
         if missing_binding:

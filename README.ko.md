@@ -165,7 +165,7 @@ tool_timeout_sec = 600
 | `asset_inspect` | Read | 에셋의 클래스, 태그, 파일 크기, 로드·변경 상태, 참조 수 |
 | `asset_referencers`, `asset_dependencies` | Read | 에셋을 참조하는 패키지, 에셋이 의존하는 패키지 |
 | `asset_save` | Control | 로드된 프로젝트 에셋을 대화상자 없이 저장 |
-| `asset_create` | Control | 데이터 에셋이나 DataTable 생성 |
+| `asset_create` | Control | 데이터 에셋, DataTable, 스트링 테이블 생성 |
 | `asset_import_textures` | Control | PNG, JPEG, TGA, BMP 파일을 UMG용 설정의 텍스처로 가져오기. `bMipmaps`를 주면 제 크기보다 작게 또는 여러 크기로 그리는 이미지를 위해 밉맵을 유지 |
 | `asset_import_meshes` | Control | FBX, glTF, GLB, OBJ 파일을 스태틱 메시로 임포트. 크기와 콜리전을 함께 보고 |
 | `class_find_derived` | Read | 클래스를 상속하는 C++·블루프린트 클래스와 헤더, 에셋 |
@@ -173,6 +173,8 @@ tool_timeout_sec = 600
 | `datatable_list_rows`, `datatable_get_rows` | Read | 행 이름, 행과 열로 정리한 값 |
 | `datatable_set_rows`, `datatable_add_rows`, `datatable_rename_rows` | Write | 프로젝트 DataTable 행 변경, 추가, 이름 변경 |
 | `datatable_remove_rows` | Destructive | 프로젝트 DataTable 행 삭제 |
+| `stringtable_get_entries` | Read | 스트링 테이블의 네임스페이스, 키, 원문 |
+| `stringtable_set_entries` | Write | 프로젝트 스트링 테이블 항목 추가나 원문 변경, 네임스페이스 설정 |
 | `blueprint_inspect` | Read | 부모 클래스 체인, 인터페이스, 컴포넌트, 변수, 함수, 그래프 |
 | `blueprint_compile` | Control | 블루프린트나 위젯 블루프린트를 컴파일하고 오류와 경고 반환 |
 | `anim_build_blend_space` | Control | 한 축에 애니메이션을 배치한 1D 블렌드 스페이스를 만들거나 다시 구성, 축 입력 스무딩 선택 |
@@ -193,7 +195,7 @@ tool_timeout_sec = 600
 
 UI를 만드는 흐름: `umg_create_widget_blueprint`(`BindWidget` 프로퍼티를 선언한 C++ 부모 클래스 지정) → `umg_add_widgets` → `blueprint_compile` → 플레이 세션에서 `viewport_capture`로 확인 → `umg_set_widget_properties`로 조정. 값은 JSON입니다. 프로퍼티 이름은 C++ 이름(`Text`, `Font`, `Padding`, `LayoutData`)을 쓰고, 구조체 값에는 바꿀 필드만 적어도 되며, enum 값은 이름(`HAlign_Center`, `RoundedBox`)으로 씁니다. 엔트리 클래스로 위젯 블루프린트를 쓸 수 있고, 그 인스턴스 속성도 같은 방식으로 설정합니다. 편집 도구는 요청한 필드만 되읽어 돌려주고, 전체 값은 `umg_inspect`의 `bIncludeProperties`로 확인합니다.
 
-UI의 모양을 데이터로 두려면 `asset_create`로 테마 데이터 에셋이나 아이템 DataTable을 만들고, `object_set_properties`와 datatable 도구로 채우고, `asset_import_textures`로 아이콘과 프레임을 UMG용 텍스처 설정으로 가져옵니다.
+UI의 모양을 데이터로 두려면 `asset_create`로 테마 데이터 에셋이나 아이템 DataTable을 만들고, `object_set_properties`와 datatable 도구로 채우고, `asset_import_textures`로 아이콘과 프레임을 UMG용 텍스처 설정으로 가져옵니다. 화면에 보이는 글은 스트링 테이블에 둡니다(`asset_create`의 `StringTable`, 이어서 `stringtable_set_entries`). 글 속성을 `LOCTABLE("/Game/Text/ST_Ui.ST_Ui", "Key")`로 설정하면 그 항목을 참조하므로, 스크립트가 몇 번을 다시 써도 로컬라이제이션 키가 하나로 유지됩니다.
 
 캐릭터 애니메이션 흐름: 이동은 `anim_build_blend_space` → 공격마다 `anim_build_montage`(게임이 다음 단계를 정할 때까지 반복하는 섹션 포함) → `anim_build_anim_blueprint`로 블렌드 스페이스 위에 Slot 노드를 두고 속도는 C++ 부모 클래스 변수에서 읽음 → `asset_save`
 

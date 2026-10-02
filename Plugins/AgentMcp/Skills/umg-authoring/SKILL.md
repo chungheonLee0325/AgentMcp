@@ -26,6 +26,10 @@ Write a short plan first and keep it in the conversation:
   brushes and fonts on each widget; the `ui-style-system` skill sets such a system up.
 - **Content data.** Values that differ per item (names, icons, rarity) live in a DataTable; components reference a row instead of
   copying its values.
+- **Text.** Words the player reads (headers, labels, messages, formats such as "{0}/{1} done") go into a string table
+  (`asset_create` with `StringTable`, then `stringtable_set_entries`). `Text` values, data assets and C++ defaults reference an entry
+  as `LOCTABLE("/Game/Text/ST_Ui.ST_Ui", "Key")`, so each text keeps one key for localization however often a script writes it.
+  Sample text that code replaces at run time can stay plain.
 - **Decoration.** Panels, section dividers, corner ornaments and title plates come from the project's UI kit in
   `Art/Style/ui_style.md` (see the `ui-art-requests` skill), not from decoration made for one screen. Lines, dividers, outlines and
   small diamonds are brushes with theme colors; only icons, emblems and ornate pieces need textures.
