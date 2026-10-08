@@ -293,6 +293,11 @@ namespace UE::AgentMcp::SourceToolsPrivate
 	{
 		TArray<FString> Lines;
 		Text.Replace(TEXT("\r\n"), TEXT("\n")).ParseIntoArray(Lines, TEXT("\n"), /*InCullEmpty=*/false);
+		// The newline that ends the last line starts no line of its own.
+		if (Lines.Num() > 0 && Lines.Last().IsEmpty())
+		{
+			Lines.Pop();
+		}
 		return Lines;
 	}
 

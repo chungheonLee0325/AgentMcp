@@ -12,15 +12,18 @@ Checks the MCP transport contract and the tools against a running editor:
   P6       asset_create, asset_import_textures, object_set_properties on assets, string tables: checks, undo, replacing, saving,
            PIE refusal
   P8       anim_build_blend_space, anim_build_montage, anim_build_anim_blueprint on the testbed animation fixtures
+  P9       source_find, source_search, source_read, source_replace, source_write: ranges, CP949 and CRLF, refusals;
+           editor_open_assets, editor_show_in_content_browser, actor_select; the approval gate for tagged clients
 
 Level writes are undone again. P2, P3, P4 and P6 need the AgentMcpTestbed "testbed" toolset, which resets and saves its fixture assets.
 P5 writes temporary skills to Saved/MCP/SmokeSkills, which the testbed configuration adds to SkillDirectories. P6 writes images to
-Saved/MCP/SmokeImport of the project.
+Saved/MCP/SmokeImport of the project. P9 writes and removes two text files at the top of a readable source folder (Config by default)
+and needs no testbed content.
 
 Usage:
   python mcp_smoke.py [--url http://127.0.0.1:18766/mcp] [--expect-project AgentMcpTestbed] [--token TOKEN] [--out evidence.json]
                       [--skip-slice1] [--skip-pie] [--pie-cycles 3] [--skip-p1] [--skip-p2] [--skip-p3] [--skip-p4] [--skip-p5]
-                      [--skip-p6] [--skip-p7] [--skip-p8]
+                      [--skip-p6] [--skip-p7] [--skip-p8] [--skip-p9]
 
 Before any check, the script asks the editor at --url for its project and stops unless it is --expect-project: the checks
 start and stop Play In Editor, change the level and save assets.
@@ -1720,6 +1723,258 @@ def run_p8(client, report, evidence):
                  is_error and error_code(data) == "INVALID_ARGUMENT" and "NoSuchVariable" in message, message[:200])
 
 
+P9_TOOLS = {"source_find", "source_search", "source_read", "source_replace", "source_write",
+            "editor_open_assets", "editor_show_in_content_browser", "actor_select", "actor_find"}
+SMOKE_SOURCE_FILE = "AgentMcpSmokeSource.txt"
+SMOKE_CP949_FILE = "AgentMcpSmokeCp949.txt"
+SMOKE_NAVIGATE_ASSET = "/Engine/BasicShapes/Cube.Cube"
+SMOKE_CLIENT_TAG = "mcp-smoke-no-gate"
+
+
+class TaggedClient(McpClient):
+    """Sends X-AgentMcp-Client as the editor's AI chat does; a tagged session asks the gate registered for its tag."""
+
+    def __init__(self, url, token, tag):
+        super().__init__(url, token)
+        self.tag = tag
+
+    def send(self, message=None, raw_body=None, use_session=True, extra_headers=None, method="POST"):
+        headers = dict(extra_headers or {})
+        headers.setdefault("X-AgentMcp-Client", self.tag)
+        return super().send(message, raw_body, use_session, headers, method)
+
+    def send_untagged(self, message):
+        return super().send(message)
+
+    def open(self):
+        _, headers, _, _ = self.request("initialize", {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "mcp_smoke.py tagged", "version": "1.0"},
+        }, use_session=False)
+        self.session_id = headers.get("Mcp-Session-Id") if headers else None
+        self.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        return bool(self.session_id)
+
+
+def run_p9(client, report, evidence):
+    p9 = evidence.setdefault("p9", {})
+    run_p9_source(client, report, p9)
+    run_p9_navigation(client, report, p9)
+    run_p9_approval(client, report)
+
+
+def run_p9_source(client, report, p9):
+    # --- source_find ----------------------------------------------------------------------------------
+    _, _, is_error, data, _ = client.call_tool("source_find", {"pattern": "*.uplugin", "maxResults": 50})
+    folders = (data or {}).get("folders") or []
+    files = [entry.get("path") or "" for entry in (data or {}).get("files") or []]
+    report.check("source_find lists the readable folders and finds the plugin descriptor",
+                 not is_error and bool(folders) and any(path.endswith("AgentMcp.uplugin") for path in files), json.dumps(data)[:300])
+    p9["folders"] = folders
+    if not folders:
+        return
+
+    # A text file at the top of a readable folder: no build, cook or config loader picks it up.
+    folder = "Config" if "Config" in folders else folders[0]
+    relative = f"{folder}/{SMOKE_SOURCE_FILE}"
+    root = project_folder(client)
+    absolute = os.path.join(root, relative) if root else None
+    if absolute and os.path.exists(absolute):
+        os.remove(absolute)
+
+    undoable = get_undo_state(client).get("undoableCount")
+    lines = ["// Agent MCP smoke test file", "first Smoke1Token line", "second Smoke22Token line", "repeat", "repeat"]
+    try:
+        # --- source_write ---------------------------------------------------------------------------------
+        _, _, is_error, data, _ = client.call_tool("source_write", {"path": relative, "content": "\n".join(lines) + "\n"})
+        report.check("source_write creates a new UTF-8 file in a readable folder",
+                     not is_error and (data or {}).get("bCreated") is True and (data or {}).get("encoding") == "utf-8"
+                     and (data or {}).get("totalLines") == len(lines), json.dumps(data)[:240])
+        undo = get_undo_state(client)
+        report.check("source_write is no editor transaction", undo.get("undoableCount") == undoable, json.dumps(undo)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("source_write", {"path": relative, "content": "replaced\n"})
+        report.check("source_write refuses an existing file without bOverwrite", is_error and error_code(data) == "ASSET_EXISTS",
+                     error_message(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("source_write", {"path": "Saved/AgentMcpSmokeOutside.txt", "content": "x"})
+        report.check("source_write refuses a path outside the readable folders", is_error and error_code(data) == "NOT_AVAILABLE",
+                     error_message(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("source_write", {"path": f"{folder}/../AgentMcpSmokeEscape.txt", "content": "x"})
+        report.check("source_write refuses a path that climbs out of a readable folder", is_error and error_code(data) == "NOT_AVAILABLE",
+                     error_message(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("source_write", {"path": f"{folder}/AgentMcpSmoke.uasset", "content": "x"})
+        report.check("source_write refuses a file that is no text file", is_error and error_code(data) == "NOT_SUPPORTED",
+                     error_message(data)[:200])
+
+        # --- source_find / source_search ------------------------------------------------------------------
+        _, _, is_error, data, _ = client.call_tool("source_find", {"pattern": f"{folder}/AgentMcpSmoke*.txt"})
+        found = [entry.get("path") for entry in (data or {}).get("files") or []]
+        report.check("source_find matches a pattern with a slash against the relative path", not is_error and relative in found, json.dumps(found))
+
+        _, _, is_error, data, _ = client.call_tool("source_search", {"query": "smoke22token", "filePattern": SMOKE_SOURCE_FILE})
+        matches = (data or {}).get("matches") or []
+        report.check("source_search finds a line case-insensitively with its file and line number",
+                     not is_error and len(matches) == 1 and matches[0].get("path") == relative and matches[0].get("line") == 3,
+                     json.dumps(data)[:300])
+
+        _, _, is_error, data, _ = client.call_tool("source_search", {"query": "smoke22token", "filePattern": SMOKE_SOURCE_FILE, "bCaseSensitive": True})
+        report.check("source_search with bCaseSensitive skips a line in another case", not is_error and not (data or {}).get("matches"),
+                     json.dumps(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("source_search", {"query": "Smoke[0-9]+Token", "filePattern": SMOKE_SOURCE_FILE, "bRegex": True})
+        report.check("source_search with bRegex matches a regular expression",
+                     not is_error and [match.get("line") for match in (data or {}).get("matches") or []] == [2, 3], json.dumps(data)[:300])
+
+        # --- source_read ----------------------------------------------------------------------------------
+        _, _, is_error, data, _ = client.call_tool("source_read", {"path": relative, "startLine": 2, "lineCount": 2})
+        text = (data or {}).get("text") or ""
+        report.check("source_read returns a numbered range and says that more lines follow",
+                     not is_error and (data or {}).get("startLine") == 2 and (data or {}).get("endLine") == 3
+                     and (data or {}).get("totalLines") == len(lines) and (data or {}).get("bTruncated") is True
+                     and "Smoke1Token" in text and "Smoke22Token" in text and "smoke test file" not in text, json.dumps(data)[:300])
+
+        _, _, is_error, data, _ = client.call_tool("source_read", {"path": f"{folder}/AgentMcpSmokeMissing.txt"})
+        report.check("source_read of a missing file returns NOT_FOUND", is_error and error_code(data) == "NOT_FOUND", error_message(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("source_read", {"path": "Saved/Config/AgentMcpSmoke.ini"})
+        report.check("source_read refuses Saved, which is outside the readable folders", is_error and error_code(data) == "NOT_AVAILABLE",
+                     error_message(data)[:200])
+
+        # --- source_replace -------------------------------------------------------------------------------
+        _, _, is_error, data, _ = client.call_tool("source_replace", {"path": relative, "oldText": "repeat", "newText": "again"})
+        report.check("source_replace refuses text that occurs more than once without bReplaceAll",
+                     is_error and error_code(data) == "INVALID_ARGUMENT", error_message(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("source_replace", {"path": relative, "oldText": "no such text", "newText": "x"})
+        report.check("source_replace of missing text returns NOT_FOUND", is_error and error_code(data) == "NOT_FOUND", error_message(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("source_replace", {"path": relative, "oldText": "repeat", "newText": "again", "bReplaceAll": True})
+        report.check("source_replace with bReplaceAll replaces every occurrence", not is_error and (data or {}).get("replacements") == 2,
+                     json.dumps(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("source_replace", {"path": relative, "oldText": "first Smoke1Token", "newText": "1st Smoke1Token"})
+        _, _, _, read, _ = client.call_tool("source_read", {"path": relative})
+        report.check("source_replace changes one exact occurrence",
+                     not is_error and (data or {}).get("replacements") == 1 and "1st Smoke1Token" in ((read or {}).get("text") or ""),
+                     json.dumps(data)[:200])
+
+        _, _, is_error, data, _ = client.call_tool("source_write", {"path": relative, "content": "overwritten\n", "bOverwrite": True})
+        report.check("source_write with bOverwrite replaces the whole file",
+                     not is_error and (data or {}).get("bCreated") is False and (data or {}).get("totalLines") == 1, json.dumps(data)[:200])
+
+        if root:
+            run_p9_cp949(client, report, folder, root)
+        else:
+            report.info("source tools keep CP949 and CRLF", "skipped: the project folder is unknown, so no CP949 file can be written")
+    finally:
+        if absolute and os.path.exists(absolute):
+            os.remove(absolute)
+
+
+def run_p9_cp949(client, report, folder, root):
+    """Korean projects keep sources in CP949; the source tools decode them and write them back in CP949 with the file's line endings."""
+    relative = f"{folder}/{SMOKE_CP949_FILE}"
+    absolute = os.path.join(root, relative)
+    with open(absolute, "wb") as handle:
+        handle.write("// 한글 주석입니다\r\nint32 Value = 1;\r\n".encode("cp949"))
+    try:
+        _, _, is_error, data, _ = client.call_tool("source_read", {"path": relative})
+        report.check("source_read decodes a CP949 file and reports its encoding",
+                     not is_error and (data or {}).get("encoding") == "cp949" and "한글 주석입니다" in ((data or {}).get("text") or ""),
+                     json.dumps(data, ensure_ascii=False)[:240])
+
+        _, _, is_error, data, _ = client.call_tool("source_replace", {"path": relative, "oldText": "Value = 1;", "newText": "Value = 2; // 수정"})
+        with open(absolute, "rb") as handle:
+            raw = handle.read()
+        try:
+            decoded = raw.decode("cp949")
+        except UnicodeDecodeError:
+            decoded = ""
+        report.check("source_replace writes a CP949 file back in CP949 with its CRLF line endings",
+                     not is_error and (data or {}).get("encoding") == "cp949" and "Value = 2; // 수정\r\n" in decoded
+                     and "한글 주석입니다\r\n" in decoded and b"\n" not in raw.replace(b"\r\n", b""), repr(raw[:80]))
+    finally:
+        if os.path.exists(absolute):
+            os.remove(absolute)
+
+
+def run_p9_navigation(client, report, p9):
+    # --- editor_show_in_content_browser / editor_open_assets ------------------------------------------
+    _, _, is_error, data, _ = client.call_tool("editor_show_in_content_browser", {"assets": [SMOKE_NAVIGATE_ASSET, "/Game/AgentMcpSmoke/NoSuchAsset"]})
+    report.check("editor_show_in_content_browser shows an asset and skips a missing one",
+                 not is_error and (data or {}).get("assets") == [SMOKE_NAVIGATE_ASSET]
+                 and any("no such asset" in entry for entry in (data or {}).get("skipped") or []), json.dumps(data)[:300])
+
+    _, _, is_error, data, _ = client.call_tool("editor_show_in_content_browser", {"assets": []})
+    report.check("editor_show_in_content_browser without assets returns INVALID_ARGUMENT",
+                 is_error and error_code(data) == "INVALID_ARGUMENT", error_message(data)[:200])
+
+    undoable = get_undo_state(client).get("undoableCount")
+    _, _, is_error, data, _ = client.call_tool("editor_open_assets", {"assets": [SMOKE_NAVIGATE_ASSET]})
+    report.check("editor_open_assets opens an asset editor without an editor transaction",
+                 not is_error and (data or {}).get("assets") == [SMOKE_NAVIGATE_ASSET] and get_undo_state(client).get("undoableCount") == undoable,
+                 json.dumps(data)[:300])
+
+    _, _, _, state, _ = client.call_tool("editor_get_state", {"maxListedItems": 0})
+    level = (state or {}).get("editorWorld") or ""
+    if level.startswith("/Game/") or level.startswith("/Engine/"):
+        _, _, is_error, data, _ = client.call_tool("editor_open_assets", {"assets": [level]})
+        report.check("editor_open_assets leaves a level to level_open",
+                     not is_error and not (data or {}).get("assets") and any("level_open" in entry for entry in (data or {}).get("skipped") or []),
+                     json.dumps(data)[:300])
+    else:
+        report.info("editor_open_assets leaves a level to level_open", f"skipped: the open level '{level}' is not saved as an asset")
+
+    # --- actor_select ---------------------------------------------------------------------------------
+    actors = find_actors(client, limit=1)
+    if not report.check("the open level has an actor to select", bool(actors), json.dumps(actors)[:200]):
+        return
+    actor = actors[0]
+    undoable = get_undo_state(client).get("undoableCount")
+    _, _, is_error, data, _ = client.call_tool("actor_select", {"actors": [actor.get("path")], "bFocus": False})
+    _, _, _, state, _ = client.call_tool("editor_get_state", {})
+    selected = (state or {}).get("selectedActors") or []
+    report.check("actor_select selects the actor without an editor transaction",
+                 not is_error and (data or {}).get("bApplied") is True and selected == [actor.get("label")]
+                 and get_undo_state(client).get("undoableCount") == undoable, json.dumps(selected)[:200])
+    p9["selected"] = selected
+
+    _, _, is_error, data, _ = client.call_tool("actor_select", {"actors": [actor.get("path"), "AgentMcpSmokeNoSuchActor"]})
+    _, _, _, state, _ = client.call_tool("editor_get_state", {})
+    report.check("actor_select with an unknown actor selects nothing and keeps the selection",
+                 is_error and (state or {}).get("selectedActors") == selected, error_message(data)[:200])
+
+
+def run_p9_approval(client, report):
+    """A session that sends X-AgentMcp-Client asks the gate registered for its tag before anything but a Read tool."""
+    tagged = TaggedClient(client.url, client.token, SMOKE_CLIENT_TAG)
+    if not report.check("a session with X-AgentMcp-Client opens", tagged.open()):
+        return
+    try:
+        _, _, is_error, data, _ = tagged.call_tool("source_find", {"pattern": "*.uplugin"})
+        report.check("a tagged session runs Read tools without approval", not is_error and bool((data or {}).get("files")), error_message(data)[:200])
+
+        for name, arguments in (("source_write", {"path": "Config/AgentMcpSmokeGate.txt", "content": "x"}),
+                                ("editor_show_in_content_browser", {"assets": [SMOKE_NAVIGATE_ASSET]})):
+            _, _, is_error, data, _ = tagged.call_tool(name, arguments)
+            report.check(f"{name} from a tag without an approval gate returns APPROVAL_UNAVAILABLE",
+                         is_error and error_code(data) == "APPROVAL_UNAVAILABLE", error_message(data)[:200])
+
+        # The tag sticks to the session, so a later request without the header still goes through the gate.
+        _, _, payload, _ = tagged.send_untagged({"jsonrpc": "2.0", "id": tagged.next_id, "method": "tools/call",
+                                                 "params": {"name": "editor_show_in_content_browser", "arguments": {"assets": [SMOKE_NAVIGATE_ASSET]}}})
+        result = (payload or {}).get("result") or {}
+        text = "".join(item.get("text", "") for item in result.get("content", []) if item.get("type") == "text")
+        report.check("the client tag sticks to its session when a later request leaves the header out",
+                     result.get("isError") is True and "APPROVAL_UNAVAILABLE" in text, text[:200])
+    finally:
+        tagged.send(method="DELETE")
+
+
 def run_protocol_errors(client, report):
     status, _, payload, _ = client.request("tools/call", {"name": "no_such_tool", "arguments": {}})
     report.check("unknown tool returns JSON-RPC -32602", ((payload or {}).get("error") or {}).get("code") == -32602, str((payload or {}).get("error")))
@@ -1787,6 +2042,7 @@ def main():
     parser.add_argument("--skip-p6", action="store_true", help="skip creating data assets and importing textures (needs the testbed toolset)")
     parser.add_argument("--skip-p7", action="store_true", help="skip level and actor authoring (creates a fixture level and writes it to disk)")
     parser.add_argument("--skip-p8", action="store_true", help="skip animation authoring (needs the testbed animation fixtures)")
+    parser.add_argument("--skip-p9", action="store_true", help="skip the source tools, navigation tools and the approval gate (writes and removes text files in a readable folder)")
     args = parser.parse_args()
 
     # Every editor with the plugin serves the same default port, so make sure the smoke test talks to the intended project.
@@ -1823,6 +2079,8 @@ def main():
         expected_tools |= P7_TOOLS
     if not args.skip_p8:
         expected_tools |= P8_TOOLS
+    if not args.skip_p9:
+        expected_tools |= P9_TOOLS
     try:
         run_p0(client, report, evidence, expected_tools)
         if not args.skip_slice1:
@@ -1843,6 +2101,8 @@ def main():
             run_p7(client, report, evidence)
         if not args.skip_p8:
             run_p8(client, report, evidence)
+        if not args.skip_p9:
+            run_p9(client, report, evidence)
         run_protocol_errors(client, report)
     except Exception as error:  # Keep the evidence of the checks that did run.
         report.check("smoke test ran to completion", False, f"{type(error).__name__}: {error}")
