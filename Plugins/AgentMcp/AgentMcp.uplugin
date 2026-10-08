@@ -35,6 +35,11 @@
 			"Name": "AgentMcpTools",
 			"Type": "Editor",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "AgentMcpChat",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
 		}
 	]
 }
