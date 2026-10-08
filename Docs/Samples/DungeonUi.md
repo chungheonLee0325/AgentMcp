@@ -52,7 +52,7 @@ The C++ classes live under `Source/AgentMcpTestbed`. The Widget Blueprints draw 
 
 ## Run it
 
-Open the testbed as described in [Testbed and smoke test](../../README.md#testbed-and-smoke-test), then call:
+Open the testbed as described in [Testbed and smoke test](../Testing.md), then call:
 
 ```text
 pie_start

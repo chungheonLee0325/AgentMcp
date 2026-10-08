@@ -52,7 +52,7 @@ C++ 클래스는 `Source/AgentMcpTestbed`에 있습니다. 위젯 블루프린�
 
 ## 실행
 
-[테스트베드와 smoke 테스트](../../README.ko.md#테스트베드와-smoke-테스트)대로 테스트베드를 연 뒤 다음 도구를 호출합니다.
+[테스트베드와 smoke 테스트](../Testing.ko.md)대로 테스트베드를 연 뒤 다음 도구를 호출합니다.
 
 ```text
 pie_start
