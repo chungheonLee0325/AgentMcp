@@ -11,6 +11,12 @@ struct FAgentMcpCallContext
 	FString SessionId;
 	FString RequestKey;
 
+	/**
+	 * The X-AgentMcp-Client header of the session, set by clients such as the editor chat whose calls that change something must be
+	 * approved first. Empty for other clients.
+	 */
+	FString ClientTag;
+
 	/** Set to true when the client sends notifications/cancelled for this request. */
 	TSharedRef<bool> CancelFlag = MakeShared<bool>(false);
 

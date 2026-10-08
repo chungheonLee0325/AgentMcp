@@ -33,6 +33,7 @@ namespace UE::AgentMcp::ServerPrivate
 
 	const TCHAR* const SessionIdHeader = TEXT("Mcp-Session-Id");
 	const TCHAR* const ProtocolVersionHeader = TEXT("MCP-Protocol-Version");
+	const TCHAR* const ClientTagHeader = TEXT("X-AgentMcp-Client");
 
 	FString GetHeader(const FHttpServerRequest& Request, const TCHAR* Name)
 	{
@@ -187,6 +188,9 @@ struct FAgentMcpSession
 	FString ClientVersion;
 	bool bInitialized = false;
 	double LastSeenSeconds = 0.0;
+
+	/** X-AgentMcp-Client of the session. Once set it stays, so a client cannot leave the approval gate by dropping the header. */
+	FString ClientTag;
 
 	/** Request key -> cancel flag for in-flight tools/call requests. */
 	TMap<FString, TSharedRef<bool>> ActiveRequests;
@@ -514,6 +518,11 @@ bool FAgentMcpServerImpl::HandlePost(const FHttpServerRequest& Request, const FH
 
 	const TSharedRef<FAgentMcpSession> Session = *FoundSession;
 	Session->LastSeenSeconds = FPlatformTime::Seconds();
+	const FString ClientTag = GetHeader(Request, ClientTagHeader);
+	if (!ClientTag.IsEmpty())
+	{
+		Session->ClientTag = ClientTag;
+	}
 
 	if (bIsNotification)
 	{
@@ -686,6 +695,7 @@ void FAgentMcpServerImpl::HandleToolsCall(const TSharedPtr<FJsonValue>& Id, cons
 	FAgentMcpCallContext Context;
 	Context.SessionId = Session->Id;
 	Context.RequestKey = RequestIdToKey(Id);
+	Context.ClientTag = Session->ClientTag;
 	Session->ActiveRequests.Add(Context.RequestKey, Context.CancelFlag);
 
 	const TSharedRef<IAgentMcpTool> Tool = *FoundTool;

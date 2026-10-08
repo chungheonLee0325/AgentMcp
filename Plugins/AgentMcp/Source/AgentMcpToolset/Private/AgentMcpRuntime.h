@@ -41,4 +41,7 @@ namespace UE::AgentMcp
 		FString LastError;
 		bool bStarted = false;
 	};
+
+	/** The gate registered for a client tag, or null. */
+	const FAgentMcpApprovalGate* FindApprovalGate(const FString& ClientTag);
 }

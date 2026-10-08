@@ -3,6 +3,7 @@
 #include "AgentMcpAsyncResult.h"
 #include "AgentMcpCompat.h"
 #include "AgentMcpInvoker.h"
+#include "AgentMcpRuntime.h"
 #include "AgentMcpSchema.h"
 #include "AgentMcpSettings.h"
 #include "AgentMcpToolsetLog.h"
@@ -304,6 +305,57 @@ namespace UE::AgentMcp
 	}
 
 	void FReflectedTool::Run(const TSharedRef<FJsonObject>& Arguments, const FAgentMcpCallContext& Context, FAgentMcpToolCompletion&& OnComplete)
+	{
+		if (Context.ClientTag.IsEmpty() || Access == EToolAccess::Read)
+		{
+			RunApproved(Arguments, Context, MoveTemp(OnComplete));
+			return;
+		}
+
+		// A tagged client (the editor chat) asks before anything changes.
+		const FAgentMcpApprovalGate* Gate = FindApprovalGate(Context.ClientTag);
+		if (!Gate)
+		{
+			OnComplete(FAgentMcpToolResult::MakeError(TEXT("APPROVAL_UNAVAILABLE"),
+				FString::Printf(TEXT("%s needs approval, and nothing is there to approve calls from client '%s'."), *Name, *Context.ClientTag),
+				TEXT("Open the editor's AI chat panel, or connect without the X-AgentMcp-Client header.")));
+			return;
+		}
+
+		FAgentMcpApprovalRequest Request;
+		Request.ClientTag = Context.ClientTag;
+		Request.ToolName = Name;
+		Request.Access = LexToString(Access);
+		Request.Arguments = Arguments;
+
+		const TSharedRef<FReflectedTool> Self = StaticCastSharedRef<FReflectedTool>(AsShared());
+		const TSharedRef<FAgentMcpToolCompletion> Completion = MakeShared<FAgentMcpToolCompletion>(MoveTemp(OnComplete));
+		const FAgentMcpCallContext ContextCopy = Context;
+		(*Gate)(Request, [Self, Arguments, ContextCopy, Completion](bool bApproved, const FString& Reason)
+		{
+			if (!*Completion)
+			{
+				return;
+			}
+			if (ContextCopy.IsCancelled())
+			{
+				(*Completion)(FAgentMcpToolResult::MakeError(TEXT("CANCELLED"), TEXT("The request was cancelled while waiting for approval.")));
+			}
+			else if (!bApproved)
+			{
+				(*Completion)(FAgentMcpToolResult::MakeError(TEXT("DENIED"),
+					Reason.IsEmpty() ? FString::Printf(TEXT("The user did not approve %s."), *Self->Name) : Reason,
+					TEXT("Do not retry the same call. Tell the user what you wanted to change, or ask what to do instead.")));
+			}
+			else
+			{
+				Self->RunApproved(Arguments, ContextCopy, MoveTemp(*Completion));
+			}
+			*Completion = nullptr;
+		});
+	}
+
+	void FReflectedTool::RunApproved(const TSharedRef<FJsonObject>& Arguments, const FAgentMcpCallContext& Context, FAgentMcpToolCompletion&& OnComplete)
 	{
 		using namespace ReflectedToolPrivate;
 

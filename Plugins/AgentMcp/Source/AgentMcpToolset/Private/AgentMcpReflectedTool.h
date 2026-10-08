@@ -53,6 +53,9 @@ namespace UE::AgentMcp
 		FReflectedTool();
 
 	private:
+		/** Run after the approval gate: busy wait, then Execute. */
+		void RunApproved(const TSharedRef<FJsonObject>& Arguments, const FAgentMcpCallContext& Context, FAgentMcpToolCompletion&& OnComplete);
+
 		/** Ticks the result every frame until it finishes, the client cancels, or its timeout plus a grace period expires. */
 		void WaitForAsyncResult(TStrongObjectPtr<UAgentMcpAsyncResult>&& Pending, const TSharedRef<bool>& CancelFlag, FAgentMcpToolCompletion&& OnComplete) const;
 

@@ -281,4 +281,30 @@ namespace UE::AgentMcp
 	{
 		return FAgentMcpRuntime::Get().GetInfo();
 	}
+
+	namespace RuntimePrivate
+	{
+		TMap<FString, FAgentMcpApprovalGate>& GetApprovalGates()
+		{
+			static TMap<FString, FAgentMcpApprovalGate> Gates;
+			return Gates;
+		}
+	}
+
+	void SetApprovalGate(const FString& ClientTag, FAgentMcpApprovalGate Gate)
+	{
+		check(IsInGameThread());
+		RuntimePrivate::GetApprovalGates().Add(ClientTag, MoveTemp(Gate));
+	}
+
+	void ClearApprovalGate(const FString& ClientTag)
+	{
+		check(IsInGameThread());
+		RuntimePrivate::GetApprovalGates().Remove(ClientTag);
+	}
+
+	const FAgentMcpApprovalGate* FindApprovalGate(const FString& ClientTag)
+	{
+		return RuntimePrivate::GetApprovalGates().Find(ClientTag);
+	}
 }

@@ -61,4 +61,25 @@ namespace UE::AgentMcp
 
 	/** Server and registry status, for tools such as editor_get_state. */
 	AGENTMCPTOOLSET_API FAgentMcpRuntimeInfo GetRuntimeInfo();
+
+	/** A call that changes something, waiting for approval. */
+	struct FAgentMcpApprovalRequest
+	{
+		FString ClientTag;
+		FString ToolName;
+		/** Write, Destructive or Control. */
+		FString Access;
+		TSharedPtr<FJsonObject> Arguments;
+	};
+
+	/** Called once on the game thread. Reason is shown to the client when the call is refused. */
+	using FAgentMcpApprovalDecision = TFunction<void(bool bApproved, const FString& Reason)>;
+	using FAgentMcpApprovalGate = TFunction<void(const FAgentMcpApprovalRequest& Request, FAgentMcpApprovalDecision Decide)>;
+
+	/**
+	 * Routes every call that is not read-only from sessions tagged ClientTag (the X-AgentMcp-Client header) through Gate before it
+	 * runs. A session with a tag that has no gate gets those calls refused, so a tag only ever adds a check. Game thread only.
+	 */
+	AGENTMCPTOOLSET_API void SetApprovalGate(const FString& ClientTag, FAgentMcpApprovalGate Gate);
+	AGENTMCPTOOLSET_API void ClearApprovalGate(const FString& ClientTag);
 }
