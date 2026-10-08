@@ -16,6 +16,7 @@
 #include "Misc/EngineVersion.h"
 #include "Modules/ModuleManager.h"
 #include "Selection.h"
+#include "Subsystems/AssetEditorSubsystem.h"
 #include "ShaderCompiler.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectIterator.h"
@@ -232,5 +233,110 @@ FAgentMcpClientConfigResult UAgentMcpEditorTools::WriteClientConfig(bool bUserCo
 	Result.Written = MoveTemp(Written.Written);
 	Result.Unchanged = MoveTemp(Written.Unchanged);
 	Result.Failures = MoveTemp(Written.Failures);
+	return Result;
+}
+
+namespace UE::AgentMcp::EditorToolsPrivate
+{
+	/** The registry entry for an object path or a package name, without loading the asset. */
+	FAssetData FindAssetData(const FString& Text)
+	{
+		const FString Trimmed = Text.TrimStartAndEnd();
+		IAssetRegistry& Registry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
+		if (Trimmed.Contains(TEXT(".")))
+		{
+			const FAssetData Asset = Registry.GetAssetByObjectPath(FSoftObjectPath(Trimmed));
+			if (Asset.IsValid())
+			{
+				return Asset;
+			}
+		}
+		TArray<FAssetData> InPackage;
+		Registry.GetAssetsByPackageName(FName(*Trimmed), InPackage);
+		return InPackage.Num() > 0 ? InPackage[0] : FAssetData();
+	}
+
+	TArray<FAssetData> ResolveAssets(const TArray<FString>& Assets, FAgentMcpNavigateResult& Result)
+	{
+		TArray<FAssetData> Found;
+		for (const FString& Text : Assets)
+		{
+			const FAssetData Asset = FindAssetData(Text);
+			if (Asset.IsValid())
+			{
+				Found.Add(Asset);
+			}
+			else
+			{
+				Result.Skipped.Add(FString::Printf(TEXT("%s: no such asset"), *Text));
+			}
+		}
+		return Found;
+	}
+}
+
+FAgentMcpNavigateResult UAgentMcpEditorTools::OpenAssets(const TArray<FString>& Assets)
+{
+	using namespace UE::AgentMcp;
+
+	FAgentMcpNavigateResult Result;
+	UAssetEditorSubsystem* Editors = GEditor ? GEditor->GetEditorSubsystem<UAssetEditorSubsystem>() : nullptr;
+	if (!Editors)
+	{
+		RaiseToolError(TEXT("EDITOR_UNAVAILABLE"), TEXT("The asset editor subsystem is not available."));
+		return Result;
+	}
+	if (Assets.IsEmpty())
+	{
+		RaiseToolError(TEXT("INVALID_ARGUMENT"), TEXT("'assets' must name at least one asset."), TEXT("asset_find lists assets."));
+		return Result;
+	}
+
+	for (const FAssetData& Asset : EditorToolsPrivate::ResolveAssets(Assets, Result))
+	{
+		// Opening a map would replace the open level, which asks about unsaved changes; that is level_open's job.
+		if (Asset.AssetClassPath == UWorld::StaticClass()->GetClassPathName())
+		{
+			Result.Skipped.Add(FString::Printf(TEXT("%s: a level; use level_open"), *Asset.GetObjectPathString()));
+			continue;
+		}
+		UObject* Object = Asset.GetAsset();
+		if (Object && Editors->OpenEditorForAsset(Object))
+		{
+			Result.Assets.Add(Asset.GetObjectPathString());
+		}
+		else
+		{
+			Result.Skipped.Add(FString::Printf(TEXT("%s: could not be opened"), *Asset.GetObjectPathString()));
+		}
+	}
+	return Result;
+}
+
+FAgentMcpNavigateResult UAgentMcpEditorTools::ShowInContentBrowser(const TArray<FString>& Assets)
+{
+	using namespace UE::AgentMcp;
+
+	FAgentMcpNavigateResult Result;
+	if (!GEditor)
+	{
+		RaiseToolError(TEXT("EDITOR_UNAVAILABLE"), TEXT("The editor is not available."));
+		return Result;
+	}
+	if (Assets.IsEmpty())
+	{
+		RaiseToolError(TEXT("INVALID_ARGUMENT"), TEXT("'assets' must name at least one asset."), TEXT("asset_find lists assets."));
+		return Result;
+	}
+
+	TArray<FAssetData> Found = EditorToolsPrivate::ResolveAssets(Assets, Result);
+	if (Found.Num() > 0)
+	{
+		GEditor->SyncBrowserToObjects(Found);
+	}
+	for (const FAssetData& Asset : Found)
+	{
+		Result.Assets.Add(Asset.GetObjectPathString());
+	}
 	return Result;
 }

@@ -692,3 +692,50 @@ FAgentMcpActorBatchResult UAgentMcpActorTools::SetFolder(const TArray<FString>& 
 	Result.bApplied = true;
 	return Result;
 }
+
+FAgentMcpActorBatchResult UAgentMcpActorTools::Select(const TArray<FString>& Actors, bool bFocus)
+{
+	using namespace UE::AgentMcp;
+	using namespace UE::AgentMcp::ActorWriteToolsPrivate;
+
+	FAgentMcpActorBatchResult Result;
+	UWorld* World = RequireEditorWorld();
+	if (!World)
+	{
+		return Result;
+	}
+	if (Actors.IsEmpty())
+	{
+		RaiseToolError(TEXT("INVALID_ARGUMENT"), TEXT("'actors' must name at least one actor."), TEXT("actor_find lists the actors of the level."));
+		return Result;
+	}
+
+	FProblems Problems;
+	TArray<AActor*> Targets;
+	for (int32 Index = 0; Index < Actors.Num(); ++Index)
+	{
+		if (AActor* Actor = FindEditorActor(World, Actors[Index], FString::Printf(TEXT("actors[%d]"), Index), Problems))
+		{
+			Targets.AddUnique(Actor);
+		}
+	}
+	if (!Problems.IsEmpty())
+	{
+		Tools::RaiseProblems(TEXT("Nothing was selected"), Problems.Messages, Problems.Codes, TEXT("Pass object paths from actor_find, or actor labels."));
+		return Result;
+	}
+
+	GEditor->SelectNone(/*bNoteSelectionChange=*/false, /*bDeselectBSPSurfs=*/true);
+	for (AActor* Actor : Targets)
+	{
+		GEditor->SelectActor(Actor, /*bInSelected=*/true, /*bNotify=*/false);
+		Result.Actors.Add(MakeSummary(Actor));
+	}
+	GEditor->NoteSelectionChange();
+	if (bFocus)
+	{
+		GEditor->MoveViewportCamerasToActor(Targets, /*bActiveViewportOnly=*/false);
+	}
+	Result.bApplied = true;
+	return Result;
+}

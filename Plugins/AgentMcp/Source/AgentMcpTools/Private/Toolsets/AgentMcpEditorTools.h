@@ -151,7 +151,21 @@ struct FAgentMcpClientConfigResult
 	TArray<FString> Failures;
 };
 
-/** Editor session state and undo history. */
+USTRUCT(BlueprintType)
+struct FAgentMcpNavigateResult
+{
+	GENERATED_BODY()
+
+	/** Object paths of the assets the call opened or showed. */
+	UPROPERTY()
+	TArray<FString> Assets;
+
+	/** Inputs that were left out, with the reason. */
+	UPROPERTY()
+	TArray<FString> Skipped;
+};
+
+/** Editor session state, undo history, and opening assets for the person to look at. */
 UCLASS(meta = (McpToolset = "editor"))
 class UAgentMcpEditorTools : public UAgentMcpToolset
 {
@@ -166,6 +180,23 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Editor", meta = (AICallable, McpAccess = "Read", BlueprintInternalUseOnly = "true"))
 	static FAgentMcpEditorState GetState(int32 MaxListedItems = 20);
+
+	/**
+	 * Opens assets in their editors (Blueprint editor, widget designer, DataTable editor and so on) for the person to look at. Nothing is
+	 * changed. Levels are not opened here; use level_open.
+	 * @param Assets Object paths or package names, for example /Game/UI/WBP_Main.
+	 * @return The assets opened and the ones skipped.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Editor", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))
+	static FAgentMcpNavigateResult OpenAssets(const TArray<FString>& Assets);
+
+	/**
+	 * Shows assets in the Content Browser and selects them, without loading or changing them.
+	 * @param Assets Object paths or package names, for example /Game/UI/WBP_Main.
+	 * @return The assets shown and the ones skipped.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Editor", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))
+	static FAgentMcpNavigateResult ShowInContentBrowser(const TArray<FString>& Assets);
 
 	/**
 	 * Undoes the most recent editor transaction, for example the last Write tool call. Unavailable during a play session.

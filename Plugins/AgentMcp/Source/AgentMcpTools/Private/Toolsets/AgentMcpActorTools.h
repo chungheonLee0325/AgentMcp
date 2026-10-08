@@ -271,6 +271,15 @@ public:
 	static FAgentMcpActorBatchResult Duplicate(AActor* Actor, const TArray<double>& Offset, const TArray<FJsonObjectWrapper>& Transforms, int32 Count = 1);
 
 	/**
+	 * Selects actors of the editor level and moves the viewport to them, for the person to look at. Nothing is changed.
+	 * @param Actors Object paths or labels of the actors to select.
+	 * @param bFocus Move the level viewport camera to frame them.
+	 * @return The selected actors.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Actor", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))
+	static FAgentMcpActorBatchResult Select(const TArray<FString>& Actors, bool bFocus = true);
+
+	/**
 	 * Deletes actors of the editor level, together with the actors attached to them. Without bConfirm it only reports what it would delete.
 	 * @param Actors Object paths or labels of the actors to delete.
 	 * @param bConfirm Delete them; without it the call is a dry run.
