@@ -69,6 +69,13 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Tools")
 	TArray<FString> AllowedTools;
 
+	/**
+	 * Project folders the source tools (source_find, source_search, source_read) may read, relative to the project folder. Their text
+	 * files are readable by any client of this server; nothing outside them is.
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Tools")
+	TArray<FString> SourceFolders = { TEXT("Source"), TEXT("Config"), TEXT("Plugins") };
+
 	/** Allow Write and Destructive tools while a play session is running. */
 	UPROPERTY(Config, EditAnywhere, Category = "Safety")
 	bool bAllowWritesDuringPIE = false;
