@@ -51,7 +51,7 @@ Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
 
 도구는 일반 `static UFUNCTION`입니다. 이름, 설명, 인자와 반환 JSON 스키마를 Unreal Reflection에서 생성하므로 Toolset에 함수를 추가하면 MCP 도구가 됩니다.
 
-> **상태: 베타.** Windows 64비트의 Unreal Engine 5.5.4(설치형 빌드)로 빌드하고 테스트했습니다. 이 저장소의 smoke 테스트는 테스트베드 프로젝트에서 246개 검사를 통과합니다. 다른 엔진 버전과 플랫폼은 확인하지 않았습니다.
+> **상태: 베타.** Windows 64비트의 Unreal Engine 5.5.4(설치형 빌드)로 빌드하고 테스트했습니다. 이 저장소의 smoke 테스트는 테스트베드 프로젝트에서 249개 검사를 통과합니다. 다른 엔진 버전과 플랫폼은 확인하지 않았습니다.
 
 ## Dungeon UI — 워크플로 검증 사례
 
@@ -169,7 +169,7 @@ tool_timeout_sec = 600
 | `level_save` | Control | 에디터에 열린 레벨, 또는 저장 안 된 모든 레벨을 저장 |
 | `object_list_properties` | Read | 객체의 프로퍼티와 변경 가능 여부 |
 | `object_get_properties` | Read | 프로퍼티 값을 JSON으로 읽기 |
-| `object_set_properties` | Write | 에디터 레벨의 액터·컴포넌트, 데이터 에셋·텍스처 같은 프로젝트 에셋, 프로젝트 블루프린트 클래스 기본값의 프로퍼티 변경과 변경 후 값 확인 |
+| `object_set_properties` | Write | 에디터 레벨의 액터·컴포넌트, 데이터 에셋·텍스처 같은 프로젝트 에셋, 프로젝트 블루프린트의 클래스 기본값과 컴포넌트 기본값의 프로퍼티 변경과 변경 후 값 확인 |
 | `pie_start`, `pie_stop` | Control | Play In Editor를 시작하거나 종료하고, 세션이 시작되거나 끝날 때까지 대기. `pie_start`는 레벨 뷰포트에서 실행하고, `windowWidth`와 `windowHeight`를 주면 뷰포트가 그 크기인 새 창에서 실행 |
 | `pie_status` | Read | 플레이 세션이 시작 중인지, 실행 중인지 |
 | `asset_find` | Read | 폴더, 클래스, 이름으로 에셋 찾기(에셋을 로드하지 않음) |
@@ -324,6 +324,7 @@ public:
 | `Source/AgentMcpTestbed` | 테스트용 행 구조체, 데이터 에셋 클래스, 위젯 부모 클래스, 게임 모드, UI 샘플의 C++ 클래스 |
 | `Source/AgentMcpTestbedEditor` | `/Game/AgentMcpFixtures` 아래에 테스트 에셋을 만드는 `testbed_*` 도구, 롤백·취소 검사용 훅, `sample_show_widget` |
 | `Content/Samples/DungeonUi` | 도구로 만든 UI 샘플의 위젯 블루프린트, 테마 데이터 에셋, 아이템 테이블 |
+| `Content/Samples/Pickup` | 블루프린트 도구로 만든 회전·부유 픽업 블루프린트(변수, pure 함수, Construction Script, 이벤트 그래프)와 데모 레벨 |
 | `Art/Requests` | 샘플의 아트 요청 |
 | `Docs` | 샘플을 만든 과정과 계획한 실험 |
 | `.mcp.json`, `.codex/config.toml` | Claude Code와 Codex를 포트 18766의 테스트베드 에디터에 연결 |

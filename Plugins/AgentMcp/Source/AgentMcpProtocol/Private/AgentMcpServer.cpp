@@ -145,11 +145,22 @@ namespace UE::AgentMcp::ServerPrivate
 		return Envelope;
 	}
 
+	/**
+	 * UE HTTPServer closes a kept-alive connection after 15 idle seconds (FHttpConnection::ConnectionKeepAliveTimeout), and a client that
+	 * reuses it at that moment gets a reset connection: an agent's next call after a longer pause failed with ECONNRESET. A new
+	 * connection per request avoids that, at the cost of a loopback connect.
+	 */
+	void AddConnectionClose(FHttpServerResponse& Response)
+	{
+		Response.Headers.Add(TEXT("Connection"), { TEXT("close") });
+	}
+
 	TUniquePtr<FHttpServerResponse> MakeJsonResponse(const TSharedRef<FJsonObject>& Body, EHttpServerResponseCodes Code, const FString& SessionId)
 	{
 		TUniquePtr<FHttpServerResponse> Response =
 			FHttpServerResponse::Create(UE::AgentMcp::Compat::JsonObjectToUtf8(Body), TEXT("application/json"));
 		Response->Code = Code;
+		AddConnectionClose(*Response);
 		if (!SessionId.IsEmpty())
 		{
 			Response->Headers.Add(SessionIdHeader, { SessionId });
@@ -161,6 +172,7 @@ namespace UE::AgentMcp::ServerPrivate
 	{
 		TUniquePtr<FHttpServerResponse> Response = FHttpServerResponse::Create(FString(), TEXT("application/json"));
 		Response->Code = Code;
+		AddConnectionClose(*Response);
 		if (!SessionId.IsEmpty())
 		{
 			Response->Headers.Add(SessionIdHeader, { SessionId });

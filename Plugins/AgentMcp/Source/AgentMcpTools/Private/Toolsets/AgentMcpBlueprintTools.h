@@ -30,6 +30,13 @@ struct FAgentMcpBlueprintComponent
 	/** Native for components created in a C++ constructor, otherwise the path of the Blueprint that adds the component. */
 	UPROPERTY()
 	FString DefinedIn;
+
+	/**
+	 * Object holding the component's defaults, which object_set_properties changes: a component of the default object for C++
+	 * components, the component template for components a Blueprint adds. A template in a parent Blueprint changes that Blueprint.
+	 */
+	UPROPERTY()
+	FString Template;
 };
 
 USTRUCT(BlueprintType)
@@ -564,7 +571,8 @@ public:
 	/**
 	 * Finds node types that can be added to a graph, as in the node menu of the editor: functions, events, variables, flow control,
 	 * casts, macros and operators. A type id is Category|Name without spaces, for example Development|PrintString,
-	 * Utilities|FlowControl|Branch or AddEvent|EventBeginPlay. A filter ending in | lists a category.
+	 * Utilities|FlowControl|Branch or AddEvent|EventBeginPlay. A filter ending in | lists a category. Node types whose name is the filter
+	 * come first, then names that start with it.
 	 * @param Blueprint The Blueprint asset.
 	 * @param Graph Graph the nodes would go into.
 	 * @param Filter Case-insensitive part of the type id, spaces ignored, or a wildcard pattern.

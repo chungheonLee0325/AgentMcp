@@ -22,13 +22,17 @@ description: Create Unreal Blueprint classes and read and edit their graphs (eve
 - The result names each new function's graph and its entry and return nodes with their pins. Fill the function with
   `blueprint_edit_graph` on that graph: wire `<entry>.then` to the first node and the last node to `<return>.execute`, inputs come
   out of the entry node and outputs go into the return node.
+- Component defaults of the class (mesh, mobility, collision) are set with `object_set_properties` on the `template` path that
+  `blueprint_inspect` lists for each component, as in the Blueprint editor's details panel. Values that differ per placed actor are
+  Instance Editable variables that the construction script applies.
 - The getter, setter and call nodes of new members are node types at once. Search them by name (`GetHealth`, `SetHealth`, `Heal`):
   in a localized editor their categories are localized too, so do not write their type ids from memory.
 
 ## Write
 
 1. **Look node types up; never guess them.** `blueprint_find_node_types` with a short filter (`PrintString`, `Branch`,
-   `GetActorLocation`) returns type ids such as `Development|PrintString`. A filter that ends in `|` lists a category
+   `GetActorLocation`) returns type ids such as `Development|PrintString`, those whose name is or starts with the filter first. A
+   filter that ends in `|` lists a category
    (`Utilities|FlowControl|`). `contextPin` keeps only node types that can connect to a pin you already have.
 2. **Add the nodes.** `blueprint_edit_graph` with `Add` operations, each with a `ref` and a position. Lay the chain out from left to
    right, about 300 units per column. The result lists the new nodes with their exact pin names.

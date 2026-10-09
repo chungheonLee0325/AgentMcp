@@ -151,6 +151,9 @@ def run_p0(client, report, evidence, expected_tools):
     client.session_id = headers.get("Mcp-Session-Id") if headers else None
     result = (payload or {}).get("result") or {}
     report.check("initialize returns 200 with a session id", status == 200 and bool(client.session_id), f"status={status}")
+    # UE HTTPServer drops a kept-alive connection after 15 idle seconds, and an agent's call that reused it failed with ECONNRESET.
+    connection = (headers or {}).get("Connection") or ""
+    report.check("responses ask the client for a new connection per request (Connection: close)", connection.lower() == "close", connection)
     report.check("initialize negotiates protocol 2025-06-18", result.get("protocolVersion") == "2025-06-18", str(result.get("protocolVersion")))
     evidence["initialize"] = result
 
@@ -1779,9 +1782,15 @@ def run_p9(client, report, evidence):
                  and (after or {}).get("totalNodes") == (graph or {}).get("totalNodes") and get_undo_state(client).get("undoableCount") == undo_before,
                  error_message(data)[:300])
 
+    # A short filter matches many ids; the node types it names come first. Sin once listed Sensing and Using before Sin (Radians).
+    _, _, _, data, _ = client.call_tool("blueprint_find_node_types", {"blueprint": blueprint, "filter": "Sin", "maxItems": 5})
+    first = [entry["typeId"] for entry in (data or {}).get("nodeTypes") or []]
+    report.check("blueprint_find_node_types lists the node types whose name starts with the filter first",
+                 "Math|Trig|Sin(Radians)" in first[:2] and "Math|Trig|Sin(Degrees)" in first[:2], json.dumps(first))
+
     # --- a new Blueprint with a variable and a function ---------------------------------------------
     members = object_path(MEMBERS_BLUEPRINT)
-    _, _, create_error, created, _ = client.call_tool("asset_create", {"assetPath": MEMBERS_BLUEPRINT, "assetClass": "Blueprint", "parentClass": "Actor"})
+    _, _, create_error, created, _ = client.call_tool("asset_create", {"assetPath": MEMBERS_BLUEPRINT, "assetClass": "Blueprint", "parentClass": "StaticMeshActor"})
     _, _, is_error, data, _ = client.call_tool("blueprint_add_members", {"blueprint": members, "variables": [
         {"name": "Health", "type": "Floaty"}, {"name": "Shield", "type": "Float", "defaultValue": "lots"}]})
     _, _, _, details, _ = client.call_tool("blueprint_inspect", {"blueprint": members, "bIncludeComponents": False})
@@ -1817,15 +1826,26 @@ def run_p9(client, report, evidence):
         {"op": "Connect", "from": "heal.NewHealth", "to": "print.InString"},
     ]})
     _, _, _, compiled, _ = client.call_tool("blueprint_compile", {"blueprint": members})
-    report.check("asset_create makes an Actor Blueprint, blueprint_add_members gives it a variable and a function with an input and an output, "
+    report.check("asset_create makes a Blueprint, blueprint_add_members gives it a variable and a function with an input and an output, "
                  "and the graphs blueprint_edit_graph fills compile",
                  not is_error and (added or {}).get("variables") == ["Health"] and entry != "?" and result != "?" and not heal_error and not play_error
                  and (compiled or {}).get("status") == "UpToDate", json.dumps([error_message(healed), error_message(played), compiled, added])[:500])
+
+    # The component of the C++ parent is changed through the template path blueprint_inspect gives, as the Blueprint editor's details panel
+    # does; it was refused as an archetype before.
+    _, _, _, details, _ = client.call_tool("blueprint_inspect", {"blueprint": members, "bIncludeVariables": False, "bIncludeFunctions": False})
+    template = next((component.get("template") for component in (details or {}).get("components") or [] if component.get("name") == "StaticMeshComponent0"), "")
+    _, _, template_error, changed, _ = client.call_tool("object_set_properties", {"object": template, "values": {"StaticMesh": SMOKE_CUBE + ".Cube"}})
 
     # --- both Blueprints run in a play session ------------------------------------------------------
     client.call_tool("level_new", {"assetPath": SMOKE_LEVEL, "bPartitioned": False})
     client.call_tool("actor_spawn", {"actors": [{"asset": blueprint.rpartition(".")[0], "label": "SmokeGraph"},
                                                 {"asset": MEMBERS_BLUEPRINT, "label": "SmokeMembers", "location": [0, 300, 0]}]})
+    report.check("object_set_properties changes the component defaults of a Blueprint through the template blueprint_inspect lists, "
+                 "and a new instance has the value",
+                 not template_error and (changed or {}).get("blueprint") == members
+                 and read_property(client, "SmokeMembers.StaticMeshComponent0", "StaticMesh") == SMOKE_CUBE + ".Cube",
+                 template + " " + (error_message(changed) or json.dumps((changed or {}).get("after"))))
     # The fixture Widget Blueprint without its binding does not compile, which pie_start refuses unless its warning is off.
     client.call_tool("testbed_set_pie_warning", {"blueprint": object_path(FIXTURE_FOLDER + "/WBP_AgentMcpMissingBinding"), "bEnabled": False})
     _, _, is_error, data, _ = client.call_tool("pie_start", {"warmupSeconds": 1.0})

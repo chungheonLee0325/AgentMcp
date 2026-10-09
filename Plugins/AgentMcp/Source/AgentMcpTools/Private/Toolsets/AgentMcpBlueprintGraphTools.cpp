@@ -261,6 +261,21 @@ namespace UE::AgentMcp::BlueprintGraphToolsPrivate
 		return Pin;
 	}
 
+	/**
+	 * How closely a type id matches a filter, best first: 0 the node name (after the last |) is the filter, or the id ends with a filter
+	 * that holds a |; 1 the name starts with the filter; 2 the name contains it; 3 only the category does.
+	 */
+	int32 GetMatchRank(const FString& TypeId, const FString& Pattern)
+	{
+		if (Pattern.Contains(TEXT("|")))
+		{
+			return TypeId.EndsWith(Pattern) ? 0 : 1;
+		}
+		FString Name = TypeId;
+		TypeId.Split(TEXT("|"), nullptr, &Name, ESearchCase::CaseSensitive, ESearchDir::FromEnd);
+		return Name.Equals(Pattern, ESearchCase::IgnoreCase) ? 0 : Name.StartsWith(Pattern) ? 1 : Name.Contains(Pattern) ? 2 : 3;
+	}
+
 	/** Node type chosen for an add operation. */
 	struct FResolvedType
 	{
@@ -543,7 +558,14 @@ FAgentMcpNodeTypeList UAgentMcpBlueprintTools::FindNodeTypes(UBlueprint* Bluepri
 			Entry.Description = Tools::GetShortDescription(UiSpec.Tooltip.BuildSourceString(), 160);
 		});
 
-	Found.Sort([](const FAgentMcpNodeType& A, const FAgentMcpNodeType& B) { return A.TypeId < B.TypeId; });
+	// A short filter such as Sin or Add matches many ids (Sensing, Address), so the node types it names come first.
+	const bool bWildcard = Pattern.Contains(TEXT("*")) || Pattern.Contains(TEXT("?"));
+	Found.Sort([&Pattern, bWildcard](const FAgentMcpNodeType& A, const FAgentMcpNodeType& B)
+	{
+		const int32 RankA = bWildcard ? 0 : GetMatchRank(A.TypeId, Pattern);
+		const int32 RankB = bWildcard ? 0 : GetMatchRank(B.TypeId, Pattern);
+		return RankA != RankB ? RankA < RankB : A.TypeId < B.TypeId;
+	});
 	const int32 Limit = FMath::Clamp(MaxItems, 1, MaxNodeTypes);
 	for (FAgentMcpNodeType& Entry : Found)
 	{
