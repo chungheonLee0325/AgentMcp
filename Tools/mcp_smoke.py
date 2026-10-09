@@ -12,7 +12,8 @@ Checks the MCP transport contract and the tools against a running editor:
   P6       asset_create, asset_import_textures, object_set_properties on assets, string tables: checks, undo, replacing, saving,
            PIE refusal
   P8       anim_build_blend_space, anim_build_montage, anim_build_anim_blueprint on the testbed animation fixtures
-  P9       blueprint_find_node_types, blueprint_edit_graph, blueprint_get_graph: a BeginPlay chain built, compiled, rolled back and played
+  P9       blueprint_find_node_types, blueprint_edit_graph, blueprint_get_graph, blueprint_add_members, asset_create of a Blueprint: graphs
+           and a function built, compiled, rolled back and played
 
 Level writes are undone again. P2, P3, P4 and P6 need the AgentMcpTestbed "testbed" toolset, which resets and saves its fixture assets.
 P5 writes temporary skills to Saved/MCP/SmokeSkills, which the testbed configuration adds to SkillDirectories. P6 writes images to
@@ -1721,8 +1722,15 @@ def run_p8(client, report, evidence):
                  is_error and error_code(data) == "INVALID_ARGUMENT" and "NoSuchVariable" in message, message[:200])
 
 
-P9_TOOLS = {"blueprint_get_graph", "blueprint_find_node_types", "blueprint_edit_graph"}
+P9_TOOLS = {"blueprint_get_graph", "blueprint_find_node_types", "blueprint_edit_graph", "blueprint_add_members"}
 GRAPH_PROBE = "AgentMcp graph probe"
+MEMBERS_BLUEPRINT = FIXTURE_FOLDER + "/BP_AgentMcpMembers"
+
+
+def find_type_id(client, blueprint, graph, name):
+    """The type id that blueprint_find_node_types gives for a node name; categories can be localized in the editor language."""
+    _, _, _, data, _ = client.call_tool("blueprint_find_node_types", {"blueprint": blueprint, "graph": graph, "filter": name})
+    return next((entry["typeId"] for entry in (data or {}).get("nodeTypes") or [] if entry["typeId"].endswith("|" + name)), name)
 
 
 def run_p9(client, report, evidence):
@@ -1771,17 +1779,63 @@ def run_p9(client, report, evidence):
                  and (after or {}).get("totalNodes") == (graph or {}).get("totalNodes") and get_undo_state(client).get("undoableCount") == undo_before,
                  error_message(data)[:300])
 
-    # --- the graph runs in a play session ------------------------------------------------------------
-    package = blueprint.rpartition(".")[0]
+    # --- a new Blueprint with a variable and a function ---------------------------------------------
+    members = object_path(MEMBERS_BLUEPRINT)
+    _, _, create_error, created, _ = client.call_tool("asset_create", {"assetPath": MEMBERS_BLUEPRINT, "assetClass": "Blueprint", "parentClass": "Actor"})
+    _, _, is_error, data, _ = client.call_tool("blueprint_add_members", {"blueprint": members, "variables": [
+        {"name": "Health", "type": "Floaty"}, {"name": "Shield", "type": "Float", "defaultValue": "lots"}]})
+    _, _, _, details, _ = client.call_tool("blueprint_inspect", {"blueprint": members, "bIncludeComponents": False})
+    report.check("blueprint_add_members reports a bad type and a bad default value together and adds nothing",
+                 not create_error and is_error and "Floaty" in error_message(data) and "lots" in error_message(data)
+                 and not (details or {}).get("variables"), error_message(data or created)[:300])
+
+    _, _, is_error, added, _ = client.call_tool("blueprint_add_members", {"blueprint": members,
+        "variables": [{"name": "Health", "type": "Float", "defaultValue": "100", "category": "Stats"}],
+        "functions": [{"name": "Heal", "inputs": [{"name": "Amount", "type": "Float"}], "outputs": [{"name": "NewHealth", "type": "Float"}]}]})
+    p9["members"] = added
+    heal_nodes = {node["nodeClass"]: node["name"] for function in (added or {}).get("functions") or [] for node in function.get("nodes") or []}
+    entry, result = heal_nodes.get("K2Node_FunctionEntry", "?"), heal_nodes.get("K2Node_FunctionResult", "?")
+    # Heal adds Amount to Health, stores it and returns it; BeginPlay prints Heal(5).
+    _, _, heal_error, healed, _ = client.call_tool("blueprint_edit_graph", {"blueprint": members, "graph": "Heal", "operations": [
+        {"op": "Add", "typeId": find_type_id(client, members, "Heal", "GetHealth"), "ref": "get", "x": 100, "y": 200},
+        {"op": "Add", "typeId": find_type_id(client, members, "Heal", "Operators|Add"), "ref": "add", "x": 250, "y": 150},
+        {"op": "Add", "typeId": find_type_id(client, members, "Heal", "SetHealth"), "ref": "set", "x": 400},
+        {"op": "Connect", "from": entry + ".then", "to": "set.execute"},
+        {"op": "Connect", "from": "set.then", "to": result + ".execute"},
+        {"op": "Connect", "from": "get.Health", "to": "add.A"},
+        {"op": "Connect", "from": entry + ".Amount", "to": "add.B"},
+        {"op": "Connect", "from": "add.ReturnValue", "to": "set.Health"},
+        {"op": "Connect", "from": "set.Output_Get", "to": result + ".NewHealth"},
+    ]})
+    _, _, play_error, played, _ = client.call_tool("blueprint_edit_graph", {"blueprint": members, "graph": "EventGraph", "operations": [
+        {"op": "Add", "typeId": type_ids["EventBeginPlay"], "ref": "begin"},
+        {"op": "Add", "typeId": find_type_id(client, members, "EventGraph", "Heal"), "ref": "heal", "x": 300},
+        {"op": "Add", "typeId": type_ids["PrintString"], "ref": "print", "x": 600},
+        {"op": "Connect", "from": "begin.then", "to": "heal.execute"},
+        {"op": "SetDefault", "from": "heal.Amount", "value": "5"},
+        {"op": "Connect", "from": "heal.then", "to": "print.execute"},
+        {"op": "Connect", "from": "heal.NewHealth", "to": "print.InString"},
+    ]})
+    _, _, _, compiled, _ = client.call_tool("blueprint_compile", {"blueprint": members})
+    report.check("asset_create makes an Actor Blueprint, blueprint_add_members gives it a variable and a function with an input and an output, "
+                 "and the graphs blueprint_edit_graph fills compile",
+                 not is_error and (added or {}).get("variables") == ["Health"] and entry != "?" and result != "?" and not heal_error and not play_error
+                 and (compiled or {}).get("status") == "UpToDate", json.dumps([error_message(healed), error_message(played), compiled, added])[:500])
+
+    # --- both Blueprints run in a play session ------------------------------------------------------
     client.call_tool("level_new", {"assetPath": SMOKE_LEVEL, "bPartitioned": False})
-    client.call_tool("actor_spawn", {"actors": [{"asset": package, "label": "SmokeGraph"}]})
+    client.call_tool("actor_spawn", {"actors": [{"asset": blueprint.rpartition(".")[0], "label": "SmokeGraph"},
+                                                {"asset": MEMBERS_BLUEPRINT, "label": "SmokeMembers", "location": [0, 300, 0]}]})
     # The fixture Widget Blueprint without its binding does not compile, which pie_start refuses unless its warning is off.
     client.call_tool("testbed_set_pie_warning", {"blueprint": object_path(FIXTURE_FOLDER + "/WBP_AgentMcpMissingBinding"), "bEnabled": False})
     _, _, is_error, data, _ = client.call_tool("pie_start", {"warmupSeconds": 1.0})
-    if report.check("pie_start plays the level with the edited Blueprint", not is_error, error_message(data)[:200]):
-        _, _, _, logs, _ = client.call_tool("log_get_recent", {"sinceSequence": (data or {}).get("startLogSequence", 0), "contains": GRAPH_PROBE, "maxEntries": 5})
+    if report.check("pie_start plays the level with the edited Blueprints", not is_error, error_message(data)[:200]):
+        _, _, _, logs, _ = client.call_tool("log_get_recent", {"sinceSequence": (data or {}).get("startLogSequence", 0),
+                                                              "categories": "LogBlueprintUserMessages", "maxEntries": 20})
         lines = [entry.get("message", "") for entry in (logs or {}).get("entries") or []]
-        report.check("the play session log shows the string the edited graph prints", bool(lines), "; ".join(lines)[:240])
+        report.check("the play session log shows the string the edited graph prints", any(GRAPH_PROBE in line for line in lines), "; ".join(lines)[:240])
+        report.check("the play session log shows Heal(5) on the default Health 100", any("BP_AgentMcpMembers" in line and "105" in line for line in lines),
+                     "; ".join(lines)[:240])
         client.call_tool("pie_stop")
 
 

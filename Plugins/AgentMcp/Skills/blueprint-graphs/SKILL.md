@@ -1,6 +1,6 @@
 ---
 name: blueprint-graphs
-description: Read and edit Unreal Blueprint graphs (event graphs, functions, macros) through the Agent MCP blueprint tools - find node types, add and wire nodes, set pin values, compile and check the result in a play session. Use whenever a task calls blueprint_get_graph, blueprint_find_node_types or blueprint_edit_graph, or asks to add or change Blueprint logic in an Unreal project that has the Agent MCP server.
+description: Create Unreal Blueprint classes and read and edit their graphs (event graphs, functions, macros) through the Agent MCP blueprint tools - add variables, functions and event dispatchers, find node types, add and wire nodes, set pin values, compile and check the result in a play session. Use whenever a task calls blueprint_get_graph, blueprint_find_node_types, blueprint_edit_graph or blueprint_add_members, or asks to add or change Blueprint logic in an Unreal project that has the Agent MCP server.
 ---
 
 # Blueprint graphs with Agent MCP
@@ -11,6 +11,19 @@ description: Read and edit Unreal Blueprint graphs (event graphs, functions, mac
 - `blueprint_get_graph` lists the nodes of one graph with their pins, values and links. A link reads `Node.Pin`.
 - In a large event graph, read one chain at a time: `bEntryPointsOnly` finds the events, and `connectedTo` with an event's node name
   returns only that chain.
+
+## New classes and members
+
+- A new Blueprint class: `asset_create` with `assetClass` `Blueprint` and a `parentClass` (`Actor`, `Character`, a C++ class of the
+  project). Widget and Animation Blueprints have their own tools.
+- `blueprint_add_members` adds variables (type, default value, category, Instance Editable, Expose on Spawn), functions with inputs
+  and outputs, and event dispatchers in one call. Types are names: `Float`, `Integer`, `Vector`, `Actor` (an object reference),
+  `Class of Actor`, `EMovementMode`, `Array of Name`, `Map of Name to Integer`.
+- The result names each new function's graph and its entry and return nodes with their pins. Fill the function with
+  `blueprint_edit_graph` on that graph: wire `<entry>.then` to the first node and the last node to `<return>.execute`, inputs come
+  out of the entry node and outputs go into the return node.
+- The getter, setter and call nodes of new members are node types at once. Search them by name (`GetHealth`, `SetHealth`, `Heal`):
+  in a localized editor their categories are localized too, so do not write their type ids from memory.
 
 ## Write
 

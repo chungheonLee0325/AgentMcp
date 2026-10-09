@@ -13,6 +13,8 @@
 #include "K2Node.h"
 #include "K2Node_AddPinInterface.h"
 #include "K2Node_CustomEvent.h"
+#include "K2Node_FunctionEntry.h"
+#include "K2Node_FunctionResult.h"
 #include "K2Node_Switch.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/Kismet2NameValidators.h"
@@ -270,6 +272,154 @@ namespace UE::AgentMcp::BlueprintGraphToolsPrivate
 	{
 		return Class ? const_cast<UClass*>(Class)->GetAuthoritativeClass() : nullptr;
 	}
+
+	/** Why a name was refused, without the final period. Ok means the name is taken by another member of the same call. */
+	FString GetNameProblem(const FString& Name, EValidatorResult Validity)
+	{
+		FString Text = INameValidatorInterface::GetErrorText(Name, Validity == EValidatorResult::Ok ? EValidatorResult::AlreadyInUse : Validity).BuildSourceString();
+		Text.RemoveFromEnd(TEXT("."));
+		return Text;
+	}
+
+	/** Type of a variable or parameter without a container. Returns the problem, empty when the type was found. */
+	FString ParseTerminalType(FString Text, FEdGraphPinType& OutType)
+	{
+		OutType = FEdGraphPinType();
+		const FString Written = Text.TrimStartAndEnd();
+		// The pin types that blueprint_get_graph prints (UEdGraphSchema_K2::TypeToText): Linear Color Structure, Actor Object Reference.
+		Text = Written.Replace(TEXT("(single-precision)"), TEXT("")).Replace(TEXT("(double-precision)"), TEXT(""));
+		const bool bClassReference = Text.RemoveFromStart(TEXT("Class of ")) || Text.RemoveFromEnd(TEXT(" Class Reference"));
+		if (!bClassReference && !Text.RemoveFromEnd(TEXT(" Object Reference")) && !Text.RemoveFromEnd(TEXT(" Structure")))
+		{
+			Text.RemoveFromEnd(TEXT(" Enum"));
+		}
+		Text.ReplaceInline(TEXT(" "), TEXT(""));
+		if (Text.IsEmpty())
+		{
+			return TEXT("the type is empty");
+		}
+
+		static const TMap<FString, FName> BasicTypes = {
+			{ TEXT("Boolean"), UEdGraphSchema_K2::PC_Boolean }, { TEXT("Bool"), UEdGraphSchema_K2::PC_Boolean },
+			{ TEXT("Byte"), UEdGraphSchema_K2::PC_Byte },
+			{ TEXT("Integer"), UEdGraphSchema_K2::PC_Int }, { TEXT("Int"), UEdGraphSchema_K2::PC_Int },
+			{ TEXT("Integer64"), UEdGraphSchema_K2::PC_Int64 }, { TEXT("Int64"), UEdGraphSchema_K2::PC_Int64 },
+			{ TEXT("Float"), UEdGraphSchema_K2::PC_Real }, { TEXT("Double"), UEdGraphSchema_K2::PC_Real }, { TEXT("Real"), UEdGraphSchema_K2::PC_Real },
+			{ TEXT("Name"), UEdGraphSchema_K2::PC_Name },
+			{ TEXT("String"), UEdGraphSchema_K2::PC_String },
+			{ TEXT("Text"), UEdGraphSchema_K2::PC_Text },
+		};
+		if (const FName* Category = bClassReference ? nullptr : BasicTypes.Find(Text))
+		{
+			OutType.PinCategory = *Category;
+			// Blueprint float variables are double precision (UBlueprintEditorLibrary::GetBasicTypeByName).
+			OutType.PinSubCategory = *Category == UEdGraphSchema_K2::PC_Real ? UEdGraphSchema_K2::PC_Double : NAME_None;
+			return FString();
+		}
+
+		if (!bClassReference)
+		{
+			if (UScriptStruct* Struct = Tools::ResolveStruct(Text))
+			{
+				if (!UEdGraphSchema_K2::IsAllowableBlueprintVariableType(Struct))
+				{
+					return FString::Printf(TEXT("the struct %s cannot be used in Blueprints"), *Struct->GetName());
+				}
+				OutType.PinCategory = UEdGraphSchema_K2::PC_Struct;
+				OutType.PinSubCategoryObject = Struct;
+				return FString();
+			}
+			UEnum* Enum = Text.StartsWith(TEXT("/")) ? LoadObject<UEnum>(nullptr, *Text, nullptr, LOAD_NoWarn | LOAD_Quiet)
+				: FindFirstObject<UEnum>(*Text, EFindFirstObjectOptions::NativeFirst);
+			if (Enum)
+			{
+				if (!UEdGraphSchema_K2::IsAllowableBlueprintVariableType(Enum))
+				{
+					return FString::Printf(TEXT("the enum %s cannot be used in Blueprints"), *Enum->GetName());
+				}
+				OutType.PinCategory = UEdGraphSchema_K2::PC_Byte;
+				OutType.PinSubCategoryObject = Enum;
+				return FString();
+			}
+		}
+
+		UClass* Class = ResolveClassName(Text);
+		if (!Class)
+		{
+			return FString::Printf(TEXT("'%s' is no type: write Boolean, Byte, Integer, Integer64, Float, Name, String, Text, a struct, an enum, a class or Class of <class>"), *Written);
+		}
+		if (!UEdGraphSchema_K2::IsAllowableBlueprintVariableType(Class))
+		{
+			return FString::Printf(TEXT("the class %s cannot be used in Blueprints"), *Class->GetName());
+		}
+		OutType.PinCategory = bClassReference ? UEdGraphSchema_K2::PC_Class : (Class->HasAnyClassFlags(CLASS_Interface) ? UEdGraphSchema_K2::PC_Interface : UEdGraphSchema_K2::PC_Object);
+		OutType.PinSubCategoryObject = Class;
+		return FString();
+	}
+
+	/** Type of a variable or parameter, with Array of, Set of or Map of <key> to <value>. Returns the problem, empty when the type was found. */
+	FString ParsePinType(const FString& Text, FEdGraphPinType& OutType)
+	{
+		FString Element = Text.TrimStartAndEnd();
+		FString ValueText;
+		EPinContainerType Container = EPinContainerType::None;
+		if (Element.RemoveFromStart(TEXT("Array of ")))
+		{
+			Container = EPinContainerType::Array;
+		}
+		else if (Element.RemoveFromStart(TEXT("Set of ")))
+		{
+			Container = EPinContainerType::Set;
+		}
+		else if (Element.RemoveFromStart(TEXT("Map of ")))
+		{
+			if (!Element.Split(TEXT(" to "), &Element, &ValueText))
+			{
+				return TEXT("write a map type as Map of <key> to <value>");
+			}
+			Container = EPinContainerType::Map;
+		}
+		if (Container == EPinContainerType::None)
+		{
+			return ParseTerminalType(Element, OutType);
+		}
+
+		// TypeToText writes the element types of containers in the plural: Array of Integers.
+		const auto ParseElement = [](const FString& Name, FEdGraphPinType& OutElement)
+		{
+			const FString Problem = ParseTerminalType(Name, OutElement);
+			return !Problem.IsEmpty() && Name.EndsWith(TEXT("s")) && ParseTerminalType(Name.LeftChop(1), OutElement).IsEmpty() ? FString() : Problem;
+		};
+		FString Problem = ParseElement(Element, OutType);
+		if (Problem.IsEmpty() && Container == EPinContainerType::Map)
+		{
+			FEdGraphPinType ValueType;
+			Problem = ParseElement(ValueText, ValueType);
+			OutType.PinValueType = FEdGraphTerminalType::FromPinType(ValueType);
+		}
+		OutType.ContainerType = Container;
+		return Problem;
+	}
+
+	/** Problem with the default value of a new variable, or empty. */
+	FString GetDefaultValueProblem(const FEdGraphPinType& Type, const FString& Name, const FString& Value)
+	{
+		if (Value.IsEmpty())
+		{
+			return FString();
+		}
+		if (Type.IsContainer())
+		{
+			return TEXT("containers take no default value here; set it on the class defaults with object_set_properties after blueprint_compile");
+		}
+		const UEdGraphSchema_K2* Schema = GetDefault<UEdGraphSchema_K2>();
+		FString UseValue;
+		TObjectPtr<UObject> UseObject;
+		FText UseText;
+		Schema->GetPinDefaultValuesFromString(Type, nullptr, Value, UseValue, UseObject, UseText, /*bPreserveTextIdentity=*/false);
+		FString Message;
+		return Schema->DefaultValueSimpleValidation(Type, FName(*Name), UseValue, UseObject, UseText, &Message) ? FString() : Message;
+	}
 }
 
 FAgentMcpGraphDetails UAgentMcpBlueprintTools::GetGraph(UBlueprint* Blueprint, const FString& Graph, const FString& Title, bool bEntryPointsOnly, const FString& ConnectedTo, int32 MaxNodes)
@@ -501,7 +651,7 @@ FAgentMcpGraphEditResult UAgentMcpBlueprintTools::EditGraph(UBlueprint* Blueprin
 				else if (Validity != EValidatorResult::Ok || NewEventNames.Contains(EventName))
 				{
 					AddProblem(Index, FString::Printf(TEXT("'%s' cannot name a new event: %s"), *EventName,
-						*INameValidatorInterface::GetErrorText(EventName, Validity == EValidatorResult::Ok ? EValidatorResult::AlreadyInUse : Validity).BuildSourceString()));
+						*GetNameProblem(EventName, Validity)));
 				}
 				NewEventNames.Add(EventName);
 			}
@@ -836,6 +986,232 @@ FAgentMcpGraphEditResult UAgentMcpBlueprintTools::EditGraph(UBlueprint* Blueprin
 		if (Node && (Touched.Contains(Node) || !NodesBefore.Contains(Node)))
 		{
 			Result.Nodes.Add(MakeNode(*Node));
+		}
+	}
+	return Result;
+}
+
+FAgentMcpBlueprintMembersResult UAgentMcpBlueprintTools::AddMembers(UBlueprint* Blueprint, const TArray<FAgentMcpNewVariable>& Variables, const TArray<FAgentMcpNewFunction>& Functions,
+	const TArray<FAgentMcpNewEventDispatcher>& EventDispatchers)
+{
+	using namespace UE::AgentMcp;
+	using namespace UE::AgentMcp::BlueprintGraphToolsPrivate;
+
+	FAgentMcpBlueprintMembersResult Result;
+	if (!Tools::RequireObject(Blueprint, TEXT("blueprint")) || !Tools::RequireProjectContent(Blueprint))
+	{
+		return Result;
+	}
+	if (Variables.IsEmpty() && Functions.IsEmpty() && EventDispatchers.IsEmpty())
+	{
+		RaiseToolError(TEXT("INVALID_ARGUMENT"), TEXT("Nothing to add: 'variables', 'functions' and 'eventDispatchers' are empty."));
+		return Result;
+	}
+
+	// Check every name, type and default value before anything changes.
+	TArray<FString> Problems;
+	TSet<FString> ProblemCodes;
+	TSet<FString> NewNames;
+	const auto AddProblem = [&Problems, &ProblemCodes](const FString& Where, const FString& Text)
+	{
+		Problems.Add(FString::Printf(TEXT("%s: %s"), *Where, *Text));
+		ProblemCodes.Add(TEXT("INVALID_ARGUMENT"));
+	};
+	const auto CheckName = [&](const FString& Where, const FString& Name)
+	{
+		const EValidatorResult Validity = Name.IsEmpty() ? EValidatorResult::EmptyName : FKismetNameValidator(Blueprint).IsValid(Name);
+		if (Validity != EValidatorResult::Ok || NewNames.Contains(Name))
+		{
+			AddProblem(Where, FString::Printf(TEXT("'%s' cannot name a new member: %s"), *Name,
+				*GetNameProblem(Name, Validity)));
+		}
+		NewNames.Add(Name);
+	};
+	const auto CheckType = [&](const FString& Where, const FString& Type, FEdGraphPinType& OutType)
+	{
+		const FString Problem = ParsePinType(Type, OutType);
+		if (!Problem.IsEmpty())
+		{
+			AddProblem(Where, Problem);
+		}
+	};
+	const auto CheckParameters = [&](const FString& Where, const TArray<FAgentMcpNewParameter>& Inputs, const TArray<FAgentMcpNewParameter>& Outputs,
+		TArray<FEdGraphPinType>& OutInputTypes, TArray<FEdGraphPinType>& OutOutputTypes)
+	{
+		TSet<FString> ParameterNames;
+		for (const bool bInputs : { true, false })
+		{
+			const TArray<FAgentMcpNewParameter>& List = bInputs ? Inputs : Outputs;
+			TArray<FEdGraphPinType>& Types = bInputs ? OutInputTypes : OutOutputTypes;
+			for (int32 Index = 0; Index < List.Num(); ++Index)
+			{
+				const FString ParameterWhere = FString::Printf(TEXT("%s.%s[%d]"), *Where, bInputs ? TEXT("inputs") : TEXT("outputs"), Index);
+				if (List[Index].Name.IsEmpty() || ParameterNames.Contains(List[Index].Name))
+				{
+					AddProblem(ParameterWhere, TEXT("parameter names must be set and differ"));
+				}
+				ParameterNames.Add(List[Index].Name);
+				CheckType(ParameterWhere, List[Index].Type, Types.AddDefaulted_GetRef());
+			}
+		}
+	};
+
+	TArray<FEdGraphPinType> VariableTypes;
+	for (int32 Index = 0; Index < Variables.Num(); ++Index)
+	{
+		const FAgentMcpNewVariable& Variable = Variables[Index];
+		const FString Where = FString::Printf(TEXT("variables[%d]"), Index);
+		CheckName(Where, Variable.Name);
+		FEdGraphPinType& Type = VariableTypes.AddDefaulted_GetRef();
+		CheckType(Where, Variable.Type, Type);
+		const FString Problem = Type.PinCategory.IsNone() ? FString() : GetDefaultValueProblem(Type, Variable.Name, Variable.DefaultValue);
+		if (!Problem.IsEmpty())
+		{
+			AddProblem(Where, FString::Printf(TEXT("'%s' is not a default value of %s: %s"), *Variable.DefaultValue, *Variable.Type, *Problem));
+		}
+	}
+	TArray<TArray<FEdGraphPinType>> FunctionInputTypes;
+	TArray<TArray<FEdGraphPinType>> FunctionOutputTypes;
+	for (int32 Index = 0; Index < Functions.Num(); ++Index)
+	{
+		const FString Where = FString::Printf(TEXT("functions[%d]"), Index);
+		CheckName(Where, Functions[Index].Name);
+		CheckParameters(Where, Functions[Index].Inputs, Functions[Index].Outputs, FunctionInputTypes.AddDefaulted_GetRef(), FunctionOutputTypes.AddDefaulted_GetRef());
+	}
+	TArray<TArray<FEdGraphPinType>> DispatcherInputTypes;
+	for (int32 Index = 0; Index < EventDispatchers.Num(); ++Index)
+	{
+		const FString Where = FString::Printf(TEXT("eventDispatchers[%d]"), Index);
+		CheckName(Where, EventDispatchers[Index].Name);
+		TArray<FEdGraphPinType> NoOutputTypes;
+		CheckParameters(Where, EventDispatchers[Index].Inputs, {}, DispatcherInputTypes.AddDefaulted_GetRef(), NoOutputTypes);
+	}
+	if (!Problems.IsEmpty())
+	{
+		Tools::RaiseProblems(TEXT("Nothing was added"), Problems, ProblemCodes, TEXT("blueprint_inspect lists the members the Blueprint already has."));
+		return Result;
+	}
+
+	// Apply as the My Blueprint panel does. The tool runs in one transaction, and a failure undoes the whole call (AgentMcpReflectedTool).
+	const auto Fail = [](const FString& Where, const FString& Text)
+	{
+		RaiseToolError(TEXT("MEMBER_ADD_FAILED"), FString::Printf(TEXT("%s: %s. Nothing was added."), *Where, *Text), TEXT("log_get_recent may show the reason."));
+	};
+	Blueprint->Modify();
+	for (int32 Index = 0; Index < Variables.Num(); ++Index)
+	{
+		const FAgentMcpNewVariable& Variable = Variables[Index];
+		const FName Name(*Variable.Name);
+		if (!FBlueprintEditorUtils::AddMemberVariable(Blueprint, Name, VariableTypes[Index], Variable.DefaultValue))
+		{
+			Fail(FString::Printf(TEXT("variables[%d]"), Index), FString::Printf(TEXT("%s could not be added"), *Variable.Name));
+			return Result;
+		}
+		if (!Variable.Category.IsEmpty())
+		{
+			FBlueprintEditorUtils::SetBlueprintVariableCategory(Blueprint, Name, nullptr, FText::FromString(Variable.Category), /*bDontRecompile=*/true);
+		}
+		if (Variable.bInstanceEditable)
+		{
+			FBlueprintEditorUtils::SetBlueprintOnlyEditableFlag(Blueprint, Name, /*bNewBlueprintOnly=*/false);
+		}
+		if (Variable.bExposeOnSpawn)
+		{
+			FBlueprintEditorUtils::SetBlueprintVariableMetaData(Blueprint, Name, nullptr, FBlueprintMetadata::MD_ExposeOnSpawn, TEXT("true"));
+		}
+		Result.Variables.Add(Variable.Name);
+	}
+
+	TArray<UEdGraph*> FunctionGraphs;
+	for (int32 Index = 0; Index < Functions.Num(); ++Index)
+	{
+		const FAgentMcpNewFunction& Function = Functions[Index];
+		const FString Where = FString::Printf(TEXT("functions[%d]"), Index);
+		// UE 5.8 UBlueprintEditorLibrary::AddFunctionGraph, UBlueprintGraphEditor::AddGraphInputParameter and AddGraphOutputParameter.
+		UEdGraph* Graph = FBlueprintEditorUtils::CreateNewGraph(Blueprint, FName(*Function.Name), UEdGraph::StaticClass(), UEdGraphSchema_K2::StaticClass());
+		FBlueprintEditorUtils::AddFunctionGraph<UFunction>(Blueprint, Graph, /*bIsUserCreated=*/true, nullptr);
+		TArray<UK2Node_FunctionEntry*> Entries;
+		Graph->GetNodesOfClass(Entries);
+		if (Entries.IsEmpty())
+		{
+			Fail(Where, FString::Printf(TEXT("%s has no entry node"), *Function.Name));
+			return Result;
+		}
+		UK2Node_FunctionEntry* Entry = Entries[0];
+		Entry->Modify();
+		for (int32 Input = 0; Input < Function.Inputs.Num(); ++Input)
+		{
+			Entry->CreateUserDefinedPin(FName(*Function.Inputs[Input].Name), FunctionInputTypes[Index][Input], EGPD_Output);
+		}
+		if (Function.bPure)
+		{
+			Entry->AddExtraFlags(FUNC_BlueprintPure);
+		}
+		if (!Function.Outputs.IsEmpty())
+		{
+			TArray<UK2Node_FunctionResult*> Returns;
+			Graph->GetNodesOfClass(Returns);
+			UK2Node_FunctionResult* Return = !Returns.IsEmpty() ? Returns[0]
+				: Cast<UK2Node_FunctionResult>(UBlueprintNodeSpawner::Create(UK2Node_FunctionResult::StaticClass())->Invoke(Graph, IBlueprintNodeBinder::FBindingSet(), FVector2D(Entry->NodePosX + 600, Entry->NodePosY)));
+			if (!Return)
+			{
+				Fail(Where, FString::Printf(TEXT("%s got no return node"), *Function.Name));
+				return Result;
+			}
+			Return->Modify();
+			for (int32 Output = 0; Output < Function.Outputs.Num(); ++Output)
+			{
+				Return->CreateUserDefinedPin(FName(*Function.Outputs[Output].Name), FunctionOutputTypes[Index][Output], EGPD_Input);
+			}
+		}
+		FunctionGraphs.Add(Graph);
+	}
+
+	const UEdGraphSchema_K2* Schema = GetDefault<UEdGraphSchema_K2>();
+	for (int32 Index = 0; Index < EventDispatchers.Num(); ++Index)
+	{
+		const FAgentMcpNewEventDispatcher& Dispatcher = EventDispatchers[Index];
+		const FName Name(*Dispatcher.Name);
+		// UE 5.8 UBlueprintEditorLibrary::AddEventDispatcher and AddEventDispatcherParameter.
+		FEdGraphPinType DelegateType;
+		DelegateType.PinCategory = UEdGraphSchema_K2::PC_MCDelegate;
+		UEdGraph* Signature = FBlueprintEditorUtils::AddMemberVariable(Blueprint, Name, DelegateType)
+			? FBlueprintEditorUtils::CreateNewGraph(Blueprint, Name, UEdGraph::StaticClass(), UEdGraphSchema_K2::StaticClass())
+			: nullptr;
+		if (!Signature)
+		{
+			Fail(FString::Printf(TEXT("eventDispatchers[%d]"), Index), FString::Printf(TEXT("%s could not be added"), *Dispatcher.Name));
+			return Result;
+		}
+		Signature->bEditable = false;
+		Schema->CreateDefaultNodesForGraph(*Signature);
+		Schema->CreateFunctionGraphTerminators(*Signature, (UClass*)nullptr);
+		Schema->AddExtraFunctionFlags(Signature, FUNC_BlueprintCallable | FUNC_BlueprintEvent | FUNC_Public);
+		Schema->MarkFunctionEntryAsEditable(Signature, true);
+		Blueprint->DelegateSignatureGraphs.Add(Signature);
+		TArray<UK2Node_FunctionEntry*> Entries;
+		Signature->GetNodesOfClass(Entries);
+		for (int32 Input = 0; Input < Dispatcher.Inputs.Num() && !Entries.IsEmpty(); ++Input)
+		{
+			Entries[0]->Modify();
+			Entries[0]->CreateUserDefinedPin(FName(*Dispatcher.Inputs[Input].Name), DispatcherInputTypes[Index][Input], EGPD_Output);
+		}
+		Result.EventDispatchers.Add(Dispatcher.Name);
+	}
+
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+
+	Result.Blueprint = Blueprint->GetPathName();
+	for (const UEdGraph* Graph : FunctionGraphs)
+	{
+		FAgentMcpAddedFunction& Added = Result.Functions.AddDefaulted_GetRef();
+		Added.Graph = Graph->GetName();
+		for (const UEdGraphNode* Node : Graph->Nodes)
+		{
+			if (Cast<UK2Node_FunctionEntry>(Node) || Cast<UK2Node_FunctionResult>(Node))
+			{
+				Added.Nodes.Add(MakeNode(*Node));
+			}
 		}
 	}
 	return Result;

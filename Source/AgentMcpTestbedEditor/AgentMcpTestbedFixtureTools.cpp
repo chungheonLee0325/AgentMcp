@@ -249,6 +249,8 @@ FAgentMcpTestbedFixtures UAgentMcpTestbedFixtureTools::ResetFixtures()
 	DeleteFixtureAsset(TEXT("Maps/L_AgentMcpSmoke"), Result.Deleted);
 	DeleteFixtureAsset(TEXT("Maps/L_AgentMcpSmokeSecond"), Result.Deleted);
 	DeleteFixtureAsset(DefaultsBlueprintName, Result.Deleted);
+	// Created by the smoke test with asset_create and filled with blueprint_add_members.
+	DeleteFixtureAsset(TEXT("BP_AgentMcpMembers"), Result.Deleted);
 
 	// Without undo history nothing refers to the authored Widget Blueprints any more, so they can be deleted. The part is nested in
 	// the authoring Widget Blueprint, so it goes second.

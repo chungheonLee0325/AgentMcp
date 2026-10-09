@@ -408,6 +408,116 @@ struct FAgentMcpGraphEditResult
 	TArray<FAgentMcpGraphNode> Nodes;
 };
 
+USTRUCT(BlueprintType)
+struct FAgentMcpNewParameter
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString Name;
+
+	/** Type, as for variables. */
+	UPROPERTY()
+	FString Type;
+};
+
+USTRUCT(BlueprintType)
+struct FAgentMcpNewVariable
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString Name;
+
+	/**
+	 * Boolean, Byte, Integer, Integer64, Float, Name, String or Text; a struct (Vector, Rotator, Transform, LinearColor or a struct path);
+	 * an enum (EMovementMode or an enum path); a class for an object reference (Actor, /Game/Enemies/BP_Enemy.BP_Enemy_C); Class of
+	 * <class> for a class reference. Array of <type>, Set of <type> and Map of <key> to <value> make containers. The pin types that
+	 * blueprint_get_graph prints, such as Linear Color Structure or Actor Object Reference, are accepted too.
+	 */
+	UPROPERTY()
+	FString Type;
+
+	/** Value as the editor writes it, for example 100, true, (X=1,Y=2,Z=3) or /Game/Meshes/SM_Rock.SM_Rock. Not for containers. */
+	UPROPERTY()
+	FString DefaultValue;
+
+	UPROPERTY()
+	FString Category;
+
+	/** Editable on placed actors (Instance Editable). */
+	UPROPERTY()
+	bool bInstanceEditable = false;
+
+	/** Shown as an input of Spawn Actor and Construct Object nodes. */
+	UPROPERTY()
+	bool bExposeOnSpawn = false;
+};
+
+USTRUCT(BlueprintType)
+struct FAgentMcpNewFunction
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString Name;
+
+	UPROPERTY()
+	TArray<FAgentMcpNewParameter> Inputs;
+
+	UPROPERTY()
+	TArray<FAgentMcpNewParameter> Outputs;
+
+	/** A pure function has no execution pins and runs for each node that reads its outputs. */
+	UPROPERTY()
+	bool bPure = false;
+};
+
+USTRUCT(BlueprintType)
+struct FAgentMcpNewEventDispatcher
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString Name;
+
+	/** Parameters that the dispatcher passes to its bound events. */
+	UPROPERTY()
+	TArray<FAgentMcpNewParameter> Inputs;
+};
+
+USTRUCT(BlueprintType)
+struct FAgentMcpAddedFunction
+{
+	GENERATED_BODY()
+
+	/** Graph of the function, to pass to blueprint_edit_graph. */
+	UPROPERTY()
+	FString Graph;
+
+	/** The entry node, and the return node when the function has outputs, with their pins. */
+	UPROPERTY()
+	TArray<FAgentMcpGraphNode> Nodes;
+};
+
+USTRUCT(BlueprintType)
+struct FAgentMcpBlueprintMembersResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString Blueprint;
+
+	UPROPERTY()
+	TArray<FString> Variables;
+
+	UPROPERTY()
+	TArray<FAgentMcpAddedFunction> Functions;
+
+	UPROPERTY()
+	TArray<FString> EventDispatchers;
+};
+
 /** Blueprint inspection, compilation and graph editing. */
 UCLASS(meta = (McpToolset = "blueprint"))
 class UAgentMcpBlueprintTools : public UAgentMcpToolset
@@ -477,4 +587,18 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Blueprint", meta = (AICallable, McpAccess = "Write", BlueprintInternalUseOnly = "true"))
 	static FAgentMcpGraphEditResult EditGraph(UBlueprint* Blueprint, const FString& Graph, const TArray<FAgentMcpGraphEdit>& Operations);
+
+	/**
+	 * Adds member variables, functions with inputs and outputs, and event dispatchers to a Blueprint. Names, types and default values are
+	 * checked before anything changes, and the call is one undo step. Returns the entry and return nodes of each new function with their
+	 * pins, so blueprint_edit_graph can fill the function. Their nodes appear in blueprint_find_node_types at once: search Get<Name>,
+	 * Set<Name> or the function name. Does not compile (blueprint_compile) or save.
+	 * @param Blueprint The Blueprint asset, in project content.
+	 * @param Variables Member variables.
+	 * @param Functions Function graphs.
+	 * @param EventDispatchers Event dispatchers.
+	 * @return Names of the new members and the nodes of the new functions.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Blueprint", meta = (AICallable, McpAccess = "Write", AutoCreateRefTerm = "Variables,Functions,EventDispatchers", BlueprintInternalUseOnly = "true"))
+	static FAgentMcpBlueprintMembersResult AddMembers(UBlueprint* Blueprint, const TArray<FAgentMcpNewVariable>& Variables, const TArray<FAgentMcpNewFunction>& Functions, const TArray<FAgentMcpNewEventDispatcher>& EventDispatchers);
 };

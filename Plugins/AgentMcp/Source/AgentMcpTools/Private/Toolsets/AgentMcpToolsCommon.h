@@ -8,6 +8,7 @@ class FJsonValue;
 class FProperty;
 class UClass;
 class UObject;
+class UScriptStruct;
 class UWorld;
 
 /** Helpers shared by the concrete toolsets. Functions that fail raise a tool error and return false or null. */
@@ -43,6 +44,9 @@ namespace UE::AgentMcp::Tools
 
 	/** Class'/Script/Engine.Actor' (export text used by asset registry tags) becomes /Script/Engine.Actor. */
 	FString StripExportTextPath(const FString& Text);
+
+	/** A struct by path (/Script/Module.Struct or a user-defined struct asset) or by name, with or without the C++ prefix F. */
+	UScriptStruct* ResolveStruct(const FString& NameOrPath);
 
 	/** First C++ class in the hierarchy, starting with the class itself. */
 	const UClass* FindNativeClass(const UClass* Class);

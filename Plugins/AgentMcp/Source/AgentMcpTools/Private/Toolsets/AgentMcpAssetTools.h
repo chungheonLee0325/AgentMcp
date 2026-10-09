@@ -205,6 +205,10 @@ struct FAgentMcpAssetCreateResult
 	/** Row struct of a new DataTable. */
 	UPROPERTY()
 	FString RowStruct;
+
+	/** Parent class of a new Blueprint. */
+	UPROPERTY()
+	FString ParentClass;
 };
 
 USTRUCT(BlueprintType)
@@ -347,17 +351,19 @@ public:
 	static FAgentMcpSaveResult Save(const TArray<FString>& Assets, bool bOnlyIfDirty = true, bool bAllowCheckout = false);
 
 	/**
-	 * Creates a data asset (an instance of a DataAsset subclass, for example a UI theme or an item definition), a DataTable or a string
-	 * table under /Game or in a project plugin. Set its values afterwards with object_set_properties, the datatable tools or
-	 * stringtable_set_entries. The asset is not saved (use asset_save), its creation cannot be undone with editor_undo, and the tool is
-	 * blocked during a play session.
+	 * Creates a data asset (an instance of a DataAsset subclass, for example a UI theme or an item definition), a DataTable, a string
+	 * table or a Blueprint class under /Game or in a project plugin. Set its values afterwards with object_set_properties, the datatable
+	 * tools or stringtable_set_entries; give a Blueprint members with blueprint_add_members and logic with blueprint_edit_graph. The asset
+	 * is not saved (use asset_save), its creation cannot be undone with editor_undo, and the tool is blocked during a play session.
 	 * @param AssetPath Package path of the new asset, for example /Game/UI/DA_Theme. No asset may exist there yet.
-	 * @param AssetClass DataAsset subclass to create, DataTable or StringTable.
-	 * @param RowStruct Row struct of a DataTable: a path such as /Script/MyGame.ItemRow, or the struct name. Leave it empty for data assets.
+	 * @param AssetClass DataAsset subclass to create, DataTable, StringTable or Blueprint.
+	 * @param RowStruct Row struct of a DataTable: a path such as /Script/MyGame.ItemRow, or the struct name. Leave it empty otherwise.
+	 * @param ParentClass Parent class of a Blueprint, for example Actor, Character or a C++ class of the project. Widget and Animation
+	 * Blueprints have their own tools (umg_create_widget_blueprint, anim_build_anim_blueprint).
 	 * @return The new asset.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Asset", meta = (AICallable, McpAccess = "Control", BlueprintInternalUseOnly = "true"))
-	static FAgentMcpAssetCreateResult Create(const FString& AssetPath, UClass* AssetClass, const FString& RowStruct = TEXT(""));
+	static FAgentMcpAssetCreateResult Create(const FString& AssetPath, UClass* AssetClass, const FString& RowStruct = TEXT(""), UClass* ParentClass = nullptr);
 
 	/**
 	 * Imports image files (PNG, JPEG, TGA, BMP) as textures under /Game or in a project plugin, without dialogs. Every entry is checked

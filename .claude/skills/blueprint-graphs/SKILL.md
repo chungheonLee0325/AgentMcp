@@ -1,6 +1,6 @@
 ---
 name: blueprint-graphs
-description: Read and edit Unreal Blueprint graphs (event graphs, functions, macros) through the Agent MCP blueprint tools - find node types, add and wire nodes, set pin values, compile and check the result in a play session. Use whenever a task calls blueprint_get_graph, blueprint_find_node_types or blueprint_edit_graph, or asks to add or change Blueprint logic in an Unreal project that has the Agent MCP server.
+description: Create Unreal Blueprint classes and read and edit their graphs (event graphs, functions, macros) through the Agent MCP blueprint tools - add variables, functions and event dispatchers, find node types, add and wire nodes, set pin values, compile and check the result in a play session. Use whenever a task calls blueprint_get_graph, blueprint_find_node_types, blueprint_edit_graph or blueprint_add_members, or asks to add or change Blueprint logic in an Unreal project that has the Agent MCP server.
 ---
 
 # Blueprint graphs

@@ -169,7 +169,7 @@ The server returns short usage instructions from `initialize`, including the lis
 | `asset_inspect` | Read | Class, tags, file size, loaded and dirty state and reference counts of an asset |
 | `asset_referencers`, `asset_dependencies` | Read | Packages that reference an asset, or that it depends on |
 | `asset_save` | Control | Save loaded project assets without dialogs |
-| `asset_create` | Control | Create a data asset, a DataTable or a string table |
+| `asset_create` | Control | Create a data asset, a DataTable, a string table or a Blueprint class with a parent class |
 | `asset_import_textures` | Control | Import PNG, JPEG, TGA or BMP files as textures, with the settings for UMG. `bMipmaps` keeps mipmaps for images drawn smaller than their size or at several sizes |
 | `asset_import_meshes` | Control | Import FBX, glTF, GLB or OBJ files as static meshes, with their size and collision |
 | `class_find_derived` | Read | C++ and Blueprint classes that derive from a class, with headers and assets |
@@ -184,6 +184,7 @@ The server returns short usage instructions from `initialize`, including the lis
 | `blueprint_get_graph` | Read | Nodes of a graph with their pins, values and links, optionally only the entry points or the chain linked to one node |
 | `blueprint_find_node_types` | Read | Node types a graph can take, as in the editor's node menu, by type id such as `Development\|PrintString`, optionally only those that connect to a pin |
 | `blueprint_edit_graph` | Write | Add, remove and move nodes, connect and break pins, set input values and add pins, in order, as one undo step |
+| `blueprint_add_members` | Write | Add variables, functions with inputs and outputs, and event dispatchers to a Blueprint, as one undo step |
 | `anim_build_blend_space` | Control | Create or rebuild a 1D blend space from animations placed on one axis, with optional smoothing of the axis |
 | `anim_build_montage` | Control | Create or rebuild a montage whose segments start named sections, with loops and jumps between sections |
 | `anim_build_anim_blueprint` | Control | Create an Animation Blueprint, or rebuild its anim graph, from a tree of inertialization, slot, blend space and sequence nodes, and compile it |
@@ -206,7 +207,7 @@ To keep presentation in data, `asset_create` can make a theme data asset or item
 
 To block out a level: `level_new` → `actor_spawn` with meshes or Blueprints → `actor_duplicate` for rows and grids → `actor_attach` and `actor_set_folder` to keep the outliner readable → `viewport_set_camera` and `viewport_capture` to look at it → `level_save`. `actor_set_transform` and `object_set_properties` adjust what is already placed, and `editor_undo` reverts the last call.
 
-To change Blueprint logic: `blueprint_get_graph` to read the graph → `blueprint_find_node_types` for each node type → `blueprint_edit_graph` to add nodes and wire them by the pin names it returns → `blueprint_compile` → `pie_start` and `log_get_recent` to see it run → `asset_save`.
+To change Blueprint logic: `asset_create` with `assetClass` `Blueprint` for a new class → `blueprint_add_members` for its variables and functions → `blueprint_get_graph` to read a graph → `blueprint_find_node_types` for each node type → `blueprint_edit_graph` to add nodes and wire them by the pin names it returns → `blueprint_compile` → `pie_start` and `log_get_recent` to see it run → `asset_save`.
 
 To animate a character: `anim_build_blend_space` for locomotion → `anim_build_montage` for each attack, with a looping section where the game decides when to go on → `anim_build_anim_blueprint` with a Slot node over the blend space that reads the speed from a variable of the C++ parent class → `asset_save`.
 
@@ -350,7 +351,7 @@ python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --exp
 - Meshes are imported with the materials and textures their file carries, and there is no tool to author materials. Fab content is added through the Fab plugin, which needs the user's Epic account.
 - The level tools create and open levels and place actors. World Partition data layers, streaming sources and level instances are not covered, and a partitioned level saves its actors in their own packages.
 - Source control handling of `level_save` has not been tested.
-- Blueprint graph nodes can be added, wired and removed, but variables, functions, local variables and event dispatchers cannot yet be added, and graphs are not laid out automatically. Widget animations and designer property bindings can be inspected but not edited, and widgets cannot yet be moved to a different parent or changed to another class; the UI sample rebuilt subtrees instead.
+- Blueprint variables, functions and event dispatchers can be added but not yet removed or renamed; local variables, function overrides and interfaces are not covered, and graphs are not laid out automatically. In a localized editor the node type ids of variables and event dispatchers carry localized categories. Widget animations and designer property bindings can be inspected but not edited, and widgets cannot yet be moved to a different parent or changed to another class; the UI sample rebuilt subtrees instead.
 - `ToolSearch` exposure mode and source-control handling on save have not yet been tested.
 
 ## Background
