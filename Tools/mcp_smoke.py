@@ -12,6 +12,7 @@ Checks the MCP transport contract and the tools against a running editor:
   P6       asset_create, asset_import_textures, object_set_properties on assets, string tables: checks, undo, replacing, saving,
            PIE refusal
   P8       anim_build_blend_space, anim_build_montage, anim_build_anim_blueprint on the testbed animation fixtures
+  P9       blueprint_find_node_types, blueprint_edit_graph, blueprint_get_graph: a BeginPlay chain built, compiled, rolled back and played
 
 Level writes are undone again. P2, P3, P4 and P6 need the AgentMcpTestbed "testbed" toolset, which resets and saves its fixture assets.
 P5 writes temporary skills to Saved/MCP/SmokeSkills, which the testbed configuration adds to SkillDirectories. P6 writes images to
@@ -20,7 +21,7 @@ Saved/MCP/SmokeImport of the project.
 Usage:
   python mcp_smoke.py [--url http://127.0.0.1:18766/mcp] [--expect-project AgentMcpTestbed] [--token TOKEN] [--out evidence.json]
                       [--skip-slice1] [--skip-pie] [--pie-cycles 3] [--skip-p1] [--skip-p2] [--skip-p3] [--skip-p4] [--skip-p5]
-                      [--skip-p6] [--skip-p7] [--skip-p8]
+                      [--skip-p6] [--skip-p7] [--skip-p8] [--skip-p9]
 
 Before any check, the script asks the editor at --url for its project and stops unless it is --expect-project: the checks
 start and stop Play In Editor, change the level and save assets.
@@ -1720,6 +1721,70 @@ def run_p8(client, report, evidence):
                  is_error and error_code(data) == "INVALID_ARGUMENT" and "NoSuchVariable" in message, message[:200])
 
 
+P9_TOOLS = {"blueprint_get_graph", "blueprint_find_node_types", "blueprint_edit_graph"}
+GRAPH_PROBE = "AgentMcp graph probe"
+
+
+def run_p9(client, report, evidence):
+    """Builds Event BeginPlay -> Print String in the fixture Actor Blueprint from the node types blueprint_find_node_types names, then
+    checks the graph read back, a failing edit that must leave nothing behind, and the string in a play session."""
+    p9 = evidence.setdefault("p9", {})
+    _, _, is_error, fixtures, _ = client.call_tool("testbed_reset_fixtures")
+    blueprint = "" if is_error else (fixtures or {}).get("actorBlueprint") or ""
+    if not report.check("testbed_reset_fixtures prepares the Actor Blueprint for the graph checks", bool(blueprint), error_message(fixtures)[:200]):
+        return
+
+    # The type ids come from blueprint_find_node_types, so the edit also checks that the two tools name node types alike.
+    type_ids = {}
+    for name in ("EventBeginPlay", "PrintString"):
+        _, _, _, data, _ = client.call_tool("blueprint_find_node_types", {"blueprint": blueprint, "filter": name})
+        type_ids[name] = next((entry["typeId"] for entry in (data or {}).get("nodeTypes") or [] if entry["typeId"].endswith("|" + name)), name)
+    p9["typeIds"] = type_ids
+
+    _, _, is_error, data, _ = client.call_tool("blueprint_edit_graph", {"blueprint": blueprint, "graph": "EventGraph", "operations": [
+        {"op": "Add", "typeId": type_ids["EventBeginPlay"], "ref": "begin"},
+        {"op": "Add", "typeId": type_ids["PrintString"], "ref": "print", "x": 300},
+        {"op": "Connect", "from": "begin.then", "to": "print.execute"},
+        {"op": "SetDefault", "from": "print.InString", "value": GRAPH_PROBE},
+    ]})
+    p9["edit"] = data
+    refs = (data or {}).get("refs") or {}
+    begin, printer = refs.get("begin", "?"), refs.get("print", "?")
+    _, _, _, graph, _ = client.call_tool("blueprint_get_graph", {"blueprint": blueprint, "connectedTo": begin})
+    pins = {(node["name"], pin["name"]): pin for node in (graph or {}).get("nodes") or [] for pin in node.get("pins") or []}
+    _, _, _, compiled, _ = client.call_tool("blueprint_compile", {"blueprint": blueprint})
+    report.check("blueprint_edit_graph wires BeginPlay to Print String as blueprint_get_graph reads it back, and the Blueprint compiles",
+                 not is_error and printer + ".execute" in pins.get((begin, "then"), {}).get("linkedTo", [])
+                 and pins.get((printer, "InString"), {}).get("defaultValue") == GRAPH_PROBE
+                 and (compiled or {}).get("status") == "UpToDate", json.dumps([type_ids, graph, compiled])[:500])
+
+    # A failing operation after others that worked: the tool must undo them all and record no undo step.
+    undo_before = get_undo_state(client).get("undoableCount")
+    _, _, is_error, data, _ = client.call_tool("blueprint_edit_graph", {"blueprint": blueprint, "graph": "EventGraph", "operations": [
+        {"op": "Add", "typeId": "Utilities|FlowControl|Sequence", "ref": "sequence", "x": 600},
+        {"op": "AddPin", "node": "sequence"},
+        {"op": "Connect", "from": printer + ".then", "to": "sequence.NoSuchPin"},
+    ]})
+    _, _, _, after, _ = client.call_tool("blueprint_get_graph", {"blueprint": blueprint, "maxNodes": 1})
+    report.check("a blueprint_edit_graph call that fails midway leaves the graph and the undo history as they were",
+                 is_error and error_code(data) == "NOT_FOUND" and "then_2" in error_message(data)
+                 and (after or {}).get("totalNodes") == (graph or {}).get("totalNodes") and get_undo_state(client).get("undoableCount") == undo_before,
+                 error_message(data)[:300])
+
+    # --- the graph runs in a play session ------------------------------------------------------------
+    package = blueprint.rpartition(".")[0]
+    client.call_tool("level_new", {"assetPath": SMOKE_LEVEL, "bPartitioned": False})
+    client.call_tool("actor_spawn", {"actors": [{"asset": package, "label": "SmokeGraph"}]})
+    # The fixture Widget Blueprint without its binding does not compile, which pie_start refuses unless its warning is off.
+    client.call_tool("testbed_set_pie_warning", {"blueprint": object_path(FIXTURE_FOLDER + "/WBP_AgentMcpMissingBinding"), "bEnabled": False})
+    _, _, is_error, data, _ = client.call_tool("pie_start", {"warmupSeconds": 1.0})
+    if report.check("pie_start plays the level with the edited Blueprint", not is_error, error_message(data)[:200]):
+        _, _, _, logs, _ = client.call_tool("log_get_recent", {"sinceSequence": (data or {}).get("startLogSequence", 0), "contains": GRAPH_PROBE, "maxEntries": 5})
+        lines = [entry.get("message", "") for entry in (logs or {}).get("entries") or []]
+        report.check("the play session log shows the string the edited graph prints", bool(lines), "; ".join(lines)[:240])
+        client.call_tool("pie_stop")
+
+
 def run_protocol_errors(client, report):
     status, _, payload, _ = client.request("tools/call", {"name": "no_such_tool", "arguments": {}})
     report.check("unknown tool returns JSON-RPC -32602", ((payload or {}).get("error") or {}).get("code") == -32602, str((payload or {}).get("error")))
@@ -1787,6 +1852,7 @@ def main():
     parser.add_argument("--skip-p6", action="store_true", help="skip creating data assets and importing textures (needs the testbed toolset)")
     parser.add_argument("--skip-p7", action="store_true", help="skip level and actor authoring (creates a fixture level and writes it to disk)")
     parser.add_argument("--skip-p8", action="store_true", help="skip animation authoring (needs the testbed animation fixtures)")
+    parser.add_argument("--skip-p9", action="store_true", help="skip Blueprint graph editing (needs the testbed toolset, creates a fixture level)")
     args = parser.parse_args()
 
     # Every editor with the plugin serves the same default port, so make sure the smoke test talks to the intended project.
@@ -1823,6 +1889,8 @@ def main():
         expected_tools |= P7_TOOLS
     if not args.skip_p8:
         expected_tools |= P8_TOOLS
+    if not args.skip_p9:
+        expected_tools |= P9_TOOLS
     try:
         run_p0(client, report, evidence, expected_tools)
         if not args.skip_slice1:
@@ -1843,6 +1911,8 @@ def main():
             run_p7(client, report, evidence)
         if not args.skip_p8:
             run_p8(client, report, evidence)
+        if not args.skip_p9:
+            run_p9(client, report, evidence)
         run_protocol_errors(client, report)
     except Exception as error:  # Keep the evidence of the checks that did run.
         report.check("smoke test ran to completion", False, f"{type(error).__name__}: {error}")

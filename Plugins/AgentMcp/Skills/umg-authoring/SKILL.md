@@ -62,7 +62,8 @@ Write a short plan first and keep it in the conversation:
   `{"class": "/Game/UI/Components/WBP_StatTile.WBP_StatTile_C", "name": "TimeTile", "properties": {"Label": "Clear time"}}`
 - **Entry classes of lists** are widget properties, so the tools can set them:
   `{"class": "DynamicEntryBox", "name": "RewardList", "properties": {"EntryWidgetClass": "/Game/UI/Components/WBP_RewardSlot.WBP_RewardSlot_C", "EntryBoxType": "Horizontal", "EntrySpacing": {"X": 10, "Y": 0}}}`
-- Blueprint graphs cannot be edited through the tools. Behavior belongs in C++ bases, or tell the user what to add in the graph.
+- Behavior belongs in C++ bases. Small glue in a Widget Blueprint graph (an event that calls a base function) can be added with
+  `blueprint_edit_graph`; see the `blueprint-graphs` skill.
 
 ## 3. Screens
 

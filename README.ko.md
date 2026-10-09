@@ -17,6 +17,7 @@ Agent MCP는 Unreal Engine 5.5 에디터 안에서 [Model Context Protocol](http
 - `umg-authoring`: 재사용 가능한 Widget Blueprint 컴포넌트, C++ `BindWidget` 계약, 데이터 기반 목록, Theme Data Asset, 캡처 검토를 포함한 UMG 제작 규칙
 - `ui-style-system`: 디자인 토큰, UI kit/gallery, 스타일 추출과 viewport capture 비교
 - `ui-art-requests`: 이미지 모델·다른 에이전트·아티스트와 UMG 사이의 아트 요청 → 검수 → import → 연결 워크플로
+- `blueprint-graphs`: 블루프린트 그래프 읽기와 편집. 노드 타입을 찾아 노드를 추가·연결하고, 한 번 컴파일한 뒤 플레이 세션에서 동작 확인
 
 ### UMG 특화 도구
 
@@ -177,6 +178,9 @@ tool_timeout_sec = 600
 | `stringtable_set_entries` | Write | 프로젝트 스트링 테이블 항목 추가나 원문 변경, 네임스페이스 설정 |
 | `blueprint_inspect` | Read | 부모 클래스 체인, 인터페이스, 컴포넌트, 변수, 함수, 그래프 |
 | `blueprint_compile` | Control | 블루프린트나 위젯 블루프린트를 컴파일하고 오류와 경고 반환 |
+| `blueprint_get_graph` | Read | 그래프의 노드와 핀, 값, 연결. 진입점만 또는 한 노드에 이어진 체인만 볼 수도 있음 |
+| `blueprint_find_node_types` | Read | 그래프에 넣을 수 있는 노드 타입을 에디터 노드 메뉴처럼 `Development\|PrintString` 같은 타입 ID로 반환. 특정 핀에 연결되는 것만 고를 수도 있음 |
+| `blueprint_edit_graph` | Write | 노드 추가·삭제·이동, 핀 연결·끊기, 입력값 설정, 핀 추가를 순서대로, undo 한 단계로 수행 |
 | `anim_build_blend_space` | Control | 한 축에 애니메이션을 배치한 1D 블렌드 스페이스를 만들거나 다시 구성, 축 입력 스무딩 선택 |
 | `anim_build_montage` | Control | 세그먼트마다 이름 붙은 섹션을 두고 섹션 반복과 이동을 지정한 몽타주를 만들거나 다시 구성 |
 | `anim_build_anim_blueprint` | Control | 관성 블렌드(Inertialization), 슬롯, 블렌드 스페이스, 시퀀스 노드 트리로 애니메이션 블루프린트를 만들거나 애님 그래프를 다시 구성하고 컴파일 |
@@ -197,6 +201,8 @@ UI를 만드는 흐름: `umg_create_widget_blueprint`(`BindWidget` 프로퍼티�
 
 UI의 모양을 데이터로 두려면 `asset_create`로 테마 데이터 에셋이나 아이템 DataTable을 만들고, `object_set_properties`와 datatable 도구로 채우고, `asset_import_textures`로 아이콘과 프레임을 UMG용 텍스처 설정으로 가져옵니다. 화면에 보이는 글은 스트링 테이블에 둡니다(`asset_create`의 `StringTable`, 이어서 `stringtable_set_entries`). 글 속성을 `LOCTABLE("/Game/Text/ST_Ui.ST_Ui", "Key")`로 설정하면 그 항목을 참조하므로, 스크립트가 몇 번을 다시 써도 로컬라이제이션 키가 하나로 유지됩니다.
 
+블루프린트 로직 수정 흐름: `blueprint_get_graph`로 그래프 읽기 → 노드 타입마다 `blueprint_find_node_types` → `blueprint_edit_graph`로 노드를 추가하고 반환된 핀 이름으로 연결 → `blueprint_compile` → `pie_start`와 `log_get_recent`로 실행 확인 → `asset_save`
+
 캐릭터 애니메이션 흐름: 이동은 `anim_build_blend_space` → 공격마다 `anim_build_montage`(게임이 다음 단계를 정할 때까지 반복하는 섹션 포함) → `anim_build_anim_blueprint`로 블렌드 스페이스 위에 Slot 노드를 두고 속도는 C++ 부모 클래스 변수에서 읽음 → `asset_save`
 
 ## 스킬
@@ -209,7 +215,7 @@ UI의 모양을 데이터로 두려면 `asset_create`로 테마 데이터 에셋
 
 스킬은 다음 폴더에서 이 순서로 읽습니다. 뒤 폴더의 스킬이 앞 폴더의 같은 이름 스킬을 대신하므로, 프로젝트가 플러그인 스킬을 고쳐 쓸 수 있습니다.
 
-1. `Plugins/AgentMcp/Skills`: 플러그인 스킬. 지금은 `umg-authoring`, `ui-art-requests`, `ui-style-system`
+1. `Plugins/AgentMcp/Skills`: 플러그인 스킬. 지금은 `umg-authoring`, `ui-art-requests`, `ui-style-system`, `blueprint-graphs`
 2. 프로젝트 폴더의 `AgentMcp/Skills`
 3. `SkillDirectories` 설정의 폴더
 
@@ -320,7 +326,7 @@ public:
 2. `AgentMcpTestbed.uproject`를 열고 `Agent MCP server listening on http://127.0.0.1:18766/mcp`가 나올 때까지 기다립니다.
 3. `python Tools/mcp_smoke.py --out Saved/MCP/smoke.json`을 실행합니다.
 
-smoke 테스트는 MCP 전송과 오류 처리, 모든 도구, undo와 롤백, 요청 취소, Play In Editor, 게임 UI를 포함한 뷰포트 캡처, Live Coding, 중첩된 위젯 블루프린트 인스턴스를 포함한 편집, 스킬, 데이터 에셋·DataTable 생성, 텍스처와 메시 가져오기, 레벨 제작, 애니메이션 에셋을 검사합니다.
+smoke 테스트는 MCP 전송과 오류 처리, 모든 도구, undo와 롤백, 요청 취소, Play In Editor, 게임 UI를 포함한 뷰포트 캡처, Live Coding, 중첩된 위젯 블루프린트 인스턴스를 포함한 편집, 블루프린트 그래프 편집, 스킬, 데이터 에셋·DataTable 생성, 텍스처와 메시 가져오기, 레벨 제작, 애니메이션 에셋을 검사합니다.
 
 도구 하나만 호출하려면:
 
@@ -339,7 +345,7 @@ python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --exp
 - 메시는 파일에 든 머티리얼·텍스처와 함께 임포트되며, 머티리얼을 만드는 도구는 없습니다. Fab 콘텐츠는 사용자의 Epic 계정이 필요한 Fab 플러그인으로 들여옵니다.
 - 레벨 도구는 레벨 생성·열기와 액터 배치까지입니다. World Partition의 데이터 레이어, 스트리밍 소스, 레벨 인스턴스는 다루지 않으며, 파티션 레벨은 액터를 각자의 패키지에 저장합니다.
 - `level_save`의 소스 컨트롤 동작은 확인하지 않았습니다.
-- 블루프린트 그래프와 클래스 기본값, 위젯 애니메이션, 디자이너 프로퍼티 바인딩은 조회만 할 수 있고, 위젯을 다른 부모로 옮기거나 다른 클래스로 바꾸는 기능은 아직 없습니다. UI 샘플은 대신 하위 트리를 다시 만들었습니다.
+- 블루프린트 그래프 노드는 추가·연결·삭제할 수 있지만 변수, 함수, 로컬 변수, 이벤트 디스패처는 아직 추가할 수 없고 그래프 자동 정렬도 없습니다. 위젯 애니메이션과 디자이너 프로퍼티 바인딩은 조회만 할 수 있고, 위젯을 다른 부모로 옮기거나 다른 클래스로 바꾸는 기능은 아직 없습니다. UI 샘플은 대신 하위 트리를 다시 만들었습니다.
 - `ToolSearch` 노출 모드와 저장 시 소스 컨트롤 처리는 아직 테스트하지 않았습니다.
 
 ## 배경

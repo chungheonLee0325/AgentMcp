@@ -17,6 +17,7 @@ Included skills:
 - `umg-authoring`: production-oriented UMG authoring with reusable Widget Blueprint components, C++ `BindWidget` contracts, data-driven lists, Theme Data Assets and capture-based review
 - `ui-style-system`: design tokens, a UI kit/gallery, style extraction and viewport-capture comparison
 - `ui-art-requests`: an art request → review → import → connection workflow between UMG and an image model, another agent or an artist
+- `blueprint-graphs`: reading and editing Blueprint graphs: look node types up, add and wire nodes, compile once and check the behavior in a play session
 
 ### UMG-focused tools
 
@@ -180,6 +181,9 @@ The server returns short usage instructions from `initialize`, including the lis
 | `stringtable_set_entries` | Write | Add entries to a project string table or change their strings, and set its namespace |
 | `blueprint_inspect` | Read | Parent chain, interfaces, components, variables, functions and graphs |
 | `blueprint_compile` | Control | Compile a Blueprint or Widget Blueprint and return its errors and warnings |
+| `blueprint_get_graph` | Read | Nodes of a graph with their pins, values and links, optionally only the entry points or the chain linked to one node |
+| `blueprint_find_node_types` | Read | Node types a graph can take, as in the editor's node menu, by type id such as `Development\|PrintString`, optionally only those that connect to a pin |
+| `blueprint_edit_graph` | Write | Add, remove and move nodes, connect and break pins, set input values and add pins, in order, as one undo step |
 | `anim_build_blend_space` | Control | Create or rebuild a 1D blend space from animations placed on one axis, with optional smoothing of the axis |
 | `anim_build_montage` | Control | Create or rebuild a montage whose segments start named sections, with loops and jumps between sections |
 | `anim_build_anim_blueprint` | Control | Create an Animation Blueprint, or rebuild its anim graph, from a tree of inertialization, slot, blend space and sequence nodes, and compile it |
@@ -202,6 +206,8 @@ To keep presentation in data, `asset_create` can make a theme data asset or item
 
 To block out a level: `level_new` → `actor_spawn` with meshes or Blueprints → `actor_duplicate` for rows and grids → `actor_attach` and `actor_set_folder` to keep the outliner readable → `viewport_set_camera` and `viewport_capture` to look at it → `level_save`. `actor_set_transform` and `object_set_properties` adjust what is already placed, and `editor_undo` reverts the last call.
 
+To change Blueprint logic: `blueprint_get_graph` to read the graph → `blueprint_find_node_types` for each node type → `blueprint_edit_graph` to add nodes and wire them by the pin names it returns → `blueprint_compile` → `pie_start` and `log_get_recent` to see it run → `asset_save`.
+
 To animate a character: `anim_build_blend_space` for locomotion → `anim_build_montage` for each attack, with a looping section where the game decides when to go on → `anim_build_anim_blueprint` with a Slot node over the blend space that reads the speed from a variable of the C++ parent class → `asset_save`.
 
 ## Skills
@@ -214,7 +220,7 @@ A skill is a task guide for agents: a folder with a `SKILL.md` file whose front 
 
 Skills are read from these folders in this order. A skill from a later folder replaces one with the same name from an earlier folder, allowing projects to adapt plugin guidance.
 
-1. `Plugins/AgentMcp/Skills`: plugin skills, currently `umg-authoring`, `ui-art-requests` and `ui-style-system`
+1. `Plugins/AgentMcp/Skills`: plugin skills, currently `umg-authoring`, `ui-art-requests`, `ui-style-system` and `blueprint-graphs`
 2. `AgentMcp/Skills` in the project folder
 3. folders configured through `SkillDirectories`
 
@@ -325,7 +331,7 @@ The repository root is a small Unreal Engine 5.5 project that builds and tests t
 2. Open `AgentMcpTestbed.uproject` and wait for `Agent MCP server listening on http://127.0.0.1:18766/mcp`.
 3. Run `python Tools/mcp_smoke.py --out Saved/MCP/smoke.json`.
 
-The smoke test covers MCP transport and errors, every tool, undo and rollback, request cancellation, Play In Editor, viewport capture with game UI, Live Coding, nested Widget Blueprint editing, skills, data-asset/DataTable creation, texture and mesh import, level authoring and animation assets.
+The smoke test covers MCP transport and errors, every tool, undo and rollback, request cancellation, Play In Editor, viewport capture with game UI, Live Coding, nested Widget Blueprint editing, Blueprint graph editing, skills, data-asset/DataTable creation, texture and mesh import, level authoring and animation assets.
 
 To call a single tool:
 
@@ -344,7 +350,7 @@ python Tools/mcp_call.py editor_get_state --url http://127.0.0.1:18766/mcp --exp
 - Meshes are imported with the materials and textures their file carries, and there is no tool to author materials. Fab content is added through the Fab plugin, which needs the user's Epic account.
 - The level tools create and open levels and place actors. World Partition data layers, streaming sources and level instances are not covered, and a partitioned level saves its actors in their own packages.
 - Source control handling of `level_save` has not been tested.
-- Blueprint graphs and class defaults, widget animations and designer property bindings can be inspected but not edited, and widgets cannot yet be moved to a different parent or changed to another class; the UI sample rebuilt subtrees instead.
+- Blueprint graph nodes can be added, wired and removed, but variables, functions, local variables and event dispatchers cannot yet be added, and graphs are not laid out automatically. Widget animations and designer property bindings can be inspected but not edited, and widgets cannot yet be moved to a different parent or changed to another class; the UI sample rebuilt subtrees instead.
 - `ToolSearch` exposure mode and source-control handling on save have not yet been tested.
 
 ## Background
