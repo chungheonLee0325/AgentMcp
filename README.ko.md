@@ -17,7 +17,7 @@ Agent MCP는 Unreal Engine 5.5 에디터 안에서 [Model Context Protocol](http
 - `umg-authoring`: 재사용 가능한 Widget Blueprint 컴포넌트, C++ `BindWidget` 계약, 데이터 기반 목록, Theme Data Asset, 캡처 검토를 포함한 UMG 제작 규칙
 - `ui-style-system`: 디자인 토큰, UI kit/gallery, 스타일 추출과 viewport capture 비교
 - `ui-art-requests`: 이미지 모델·다른 에이전트·아티스트와 UMG 사이의 아트 요청 → 검수 → import → 연결 워크플로
-- `blueprint-graphs`: 블루프린트 그래프 읽기와 편집. 노드 타입을 찾아 노드를 추가·연결하고, 한 번 컴파일한 뒤 플레이 세션에서 동작 확인
+- `blueprint-graphs`: 블루프린트 클래스와 로직. 클래스를 만들고 변수·함수·이벤트 디스패처를 추가하고, 노드 타입을 찾아 노드를 추가·연결한 뒤, 한 번 컴파일하고 플레이 세션에서 동작 확인
 
 ### UMG 특화 도구
 
@@ -28,6 +28,16 @@ Widget Blueprint를 단순히 생성하는 데서 끝나지 않습니다.
 - Widget Blueprint 생성, 하위 트리 단위 추가, Widget/Slot 프로퍼티 변경
 - 삭제 전 dry run과 바인딩·그래프 참조 영향 경고
 - Blueprint compile → PIE → viewport capture → 수정의 반복 검증 루프
+
+### 블루프린트 로직 도구
+
+에이전트가 그래프 에디터를 열지 않고 블루프린트 로직을 만들 수 있습니다. 노드 타입 이름은 UE 5.8의 실험적 Blueprint toolset(`Development|PrintString`)을 따르고, UE 5.5 에디터 API로 새로 구현했습니다.
+
+- 블루프린트 클래스 생성, 변수·입출력이 있는 함수·이벤트 디스패처 추가
+- 에디터 노드 메뉴와 같은 노드 타입 검색. 특정 핀에 연결되는 타입만 고를 수도 있음
+- 노드 추가·연결·삭제와 핀 값 설정을 한 호출로 수행. 먼저 전부 검사하고, undo 한 단계로 기록하며, 중간 실패 시 롤백
+- 큰 그래프를 이벤트 체인 단위로 읽기. 노드별 컴파일 메시지 포함
+- Blueprint compile → PIE → 로그로 검증
 
 ### Build → Run → Review
 
@@ -41,7 +51,7 @@ Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
 
 도구는 일반 `static UFUNCTION`입니다. 이름, 설명, 인자와 반환 JSON 스키마를 Unreal Reflection에서 생성하므로 Toolset에 함수를 추가하면 MCP 도구가 됩니다.
 
-> **상태: 베타.** Windows 64비트의 Unreal Engine 5.5.4(설치형 빌드)로 빌드하고 테스트했습니다. 이 저장소의 smoke 테스트는 테스트베드 프로젝트에서 216개 검사를 통과합니다. 다른 엔진 버전과 플랫폼은 확인하지 않았습니다.
+> **상태: 베타.** Windows 64비트의 Unreal Engine 5.5.4(설치형 빌드)로 빌드하고 테스트했습니다. 이 저장소의 smoke 테스트는 테스트베드 프로젝트에서 246개 검사를 통과합니다. 다른 엔진 버전과 플랫폼은 확인하지 않았습니다.
 
 ## Dungeon UI — 워크플로 검증 사례
 

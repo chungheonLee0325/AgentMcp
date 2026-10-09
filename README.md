@@ -17,7 +17,7 @@ Included skills:
 - `umg-authoring`: production-oriented UMG authoring with reusable Widget Blueprint components, C++ `BindWidget` contracts, data-driven lists, Theme Data Assets and capture-based review
 - `ui-style-system`: design tokens, a UI kit/gallery, style extraction and viewport-capture comparison
 - `ui-art-requests`: an art request → review → import → connection workflow between UMG and an image model, another agent or an artist
-- `blueprint-graphs`: reading and editing Blueprint graphs: look node types up, add and wire nodes, compile once and check the behavior in a play session
+- `blueprint-graphs`: Blueprint classes and logic: create a class, add variables, functions and event dispatchers, look node types up, add and wire nodes, compile once and check the behavior in a play session
 
 ### UMG-focused tools
 
@@ -28,6 +28,16 @@ The UMG toolset goes beyond creating Widget Blueprints.
 - create Widget Blueprints, add whole subtrees, and change widget and slot properties
 - dry-run destructive edits and report the affected bindings and graph references before removal
 - iterate through Blueprint compile → PIE → viewport capture → review
+
+### Blueprint logic tools
+
+Agents can build Blueprint logic without the graph editor. Node types are named as in the experimental Blueprint toolset of UE 5.8 (`Development|PrintString`), reimplemented on UE 5.5 editor APIs.
+
+- create Blueprint classes and add variables, functions with inputs and outputs, and event dispatchers
+- find node types as the editor's node menu offers them, optionally only those that connect to a given pin
+- add, wire and remove nodes and set pin values in one call that is checked first, recorded as one undo step and rolled back when an operation fails
+- read a large graph one event chain at a time, with each node's compile message
+- verify through Blueprint compile → PIE → log
 
 ### Build → Run → Review
 
@@ -41,7 +51,7 @@ Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
 
 Tools are plain `static UFUNCTION`s. Names, descriptions, arguments and result JSON schemas are generated from Unreal Reflection, so adding a function to a toolset creates an MCP tool.
 
-> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 216 checks against the testbed project. Other engine versions and platforms have not been tried.
+> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 246 checks against the testbed project. Other engine versions and platforms have not been tried.
 
 ## Dungeon UI — workflow case study
 
