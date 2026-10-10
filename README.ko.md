@@ -189,6 +189,7 @@ tool_timeout_sec = 600
 | `blueprint_inspect` | Read | 부모 클래스 체인, 인터페이스, 컴포넌트, 변수, 함수, 그래프 |
 | `blueprint_compile` | Control | 블루프린트나 위젯 블루프린트를 컴파일하고 오류와 경고 반환 |
 | `blueprint_get_graph` | Read | 그래프의 노드와 핀, 값, 연결. 진입점만 또는 한 노드에 이어진 체인만 볼 수도 있음 |
+| `blueprint_find_usages` | Read | Find in Blueprints 인덱스로 함수 호출, 변수 읽기·쓰기, 캐스트, 이벤트 바인딩 위치 찾기. 로드하지 않은 블루프린트도 포함 |
 | `blueprint_find_node_types` | Read | 그래프에 넣을 수 있는 노드 타입을 에디터 노드 메뉴처럼 `Development\|PrintString` 같은 타입 ID로 반환. 특정 핀에 연결되는 것만 고를 수도 있음 |
 | `blueprint_edit_graph` | Write | 노드 추가·삭제·이동, 핀 연결·끊기, 입력값 설정, 핀 추가를 순서대로, undo 한 단계로 수행 |
 | `blueprint_add_members` | Write | 블루프린트에 변수, 입출력이 있는 함수, 이벤트 디스패처를 undo 한 단계로 추가 |

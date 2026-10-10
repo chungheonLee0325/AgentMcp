@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "AgentMcpAsyncResult.h"
 #include "AgentMcpToolset.h"
 #include "AgentMcpToolTypes.h"
 
@@ -525,6 +526,65 @@ struct FAgentMcpBlueprintMembersResult
 	TArray<FString> EventDispatchers;
 };
 
+USTRUCT(BlueprintType)
+struct FAgentMcpBlueprintUsage
+{
+	GENERATED_BODY()
+
+	/** The Blueprint, or the level whose level Blueprint matched. */
+	UPROPERTY()
+	FString Blueprint;
+
+	/** Graph of the matching node; empty for variables and components. */
+	UPROPERTY()
+	FString Graph;
+
+	/** Node name, to read its chain with blueprint_get_graph and connectedTo. */
+	UPROPERTY()
+	FString Node;
+
+	/** Node class, as blueprint_get_graph names it (K2Node_CallFunction, K2Node_VariableSet), or Variable or Component. */
+	UPROPERTY()
+	FString Kind;
+
+	/** Node title, or the name of the variable or component. */
+	UPROPERTY()
+	FString Title;
+
+	/** Pins of the node that matched the query. */
+	UPROPERTY()
+	TArray<FString> Matches;
+
+	/** Comment of the node. */
+	UPROPERTY()
+	FString Comment;
+};
+
+USTRUCT(BlueprintType)
+struct FAgentMcpBlueprintUsageResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TArray<FAgentMcpBlueprintUsage> Usages;
+
+	/** Blueprints with at least one match. */
+	UPROPERTY()
+	int32 BlueprintCount = 0;
+
+	/** More usages matched than maxResults. */
+	UPROPERTY()
+	bool bTruncated = false;
+
+	/** Blueprints the search index has no data for, which were not searched. Indexing all Blueprints in the Find in Blueprints tab adds them. */
+	UPROPERTY()
+	int32 UnindexedBlueprints = 0;
+
+	/** Searched Blueprints whose search data an older engine version wrote; newer kinds of data may be missing from them. */
+	UPROPERTY()
+	int32 OutOfDateBlueprints = 0;
+};
+
 /** Blueprint inspection, compilation and graph editing. */
 UCLASS(meta = (McpToolset = "blueprint"))
 class UAgentMcpBlueprintTools : public UAgentMcpToolset
@@ -609,4 +669,19 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Blueprint", meta = (AICallable, McpAccess = "Write", AutoCreateRefTerm = "Variables,Functions,EventDispatchers", BlueprintInternalUseOnly = "true"))
 	static FAgentMcpBlueprintMembersResult AddMembers(UBlueprint* Blueprint, const TArray<FAgentMcpNewVariable>& Variables, const TArray<FAgentMcpNewFunction>& Functions, const TArray<FAgentMcpNewEventDispatcher>& EventDispatchers);
+
+	/**
+	 * Finds where Blueprints use something, through the index of the editor's Find in Blueprints: calls of a function, reads and writes
+	 * of a variable, casts, events, dispatcher bindings, components and comments, in every Blueprint and level Blueprint of the project,
+	 * also those that are not loaded. Plain words match node titles, pin names, variable names and comments. The query syntax of Find in
+	 * Blueprints narrows a search, for example Nodes("Native Name"=+"SetStaticMesh"), Variables(Name=Health) or
+	 * Nodes(Pins(Name=Target && ObjectClass=+"BP_Door")). Blueprints with matches are loaded to name their nodes for blueprint_get_graph.
+	 * @param Query Words or a Find in Blueprints query.
+	 * @param bIncludeEngineContent Also report Blueprints of the engine and engine plugins.
+	 * @param MaxResults Maximum number of usages (1-500).
+	 * @param TimeoutSeconds Maximum seconds to wait for the search (5-600).
+	 * @return The usages, and how many Blueprints the index does not cover.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Blueprint", meta = (AICallable, McpAccess = "Read", BlueprintInternalUseOnly = "true"))
+	static UAgentMcpAsyncResult* FindUsages(const FString& Query, bool bIncludeEngineContent = false, int32 MaxResults = 100, float TimeoutSeconds = 60.0f);
 };

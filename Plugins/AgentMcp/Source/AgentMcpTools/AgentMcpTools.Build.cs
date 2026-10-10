@@ -32,6 +32,8 @@ public class AgentMcpTools : ModuleRules
 			"AnimGraph",
 			"AnimGraphRuntime",
 			"AssetTools",
+			// blueprint_find_usages searches the index of Find in Blueprints.
+			"Kismet",
 			// Save warnings for packages under source control.
 			"SourceControl",
 			// viewport_capture encodes PNG images.
