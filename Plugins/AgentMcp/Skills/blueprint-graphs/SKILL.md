@@ -8,7 +8,10 @@ description: Create Unreal Blueprint classes and read and edit their graphs (eve
 ## Read before writing
 
 - `blueprint_inspect` lists the graphs, variables, functions and components of a Blueprint.
-- `blueprint_get_graph` lists the nodes of one graph with their pins, values and links. A link reads `Node.Pin`.
+- `blueprint_read_graph` reads a Blueprint's graphs as short pseudo-code: one block per event and function, statements in execution
+  order, data inputs as expressions. Start with it to understand what a Blueprint does; `bNodeNames` adds the node names for edits.
+- `blueprint_get_graph` lists the nodes of one graph with their pins, values and links. A link reads `Node.Pin`. Use it for the exact
+  pins before editing.
 - To find where something is used across the project, call `blueprint_find_usages`: plain words, or Find in Blueprints queries such
   as `Nodes("Native Name"=+"TakeDamage")` or `Variables(Name=Health)`. Each usage gives the graph and node to pass to
   `blueprint_get_graph`. Check where a function or variable is used before changing it.

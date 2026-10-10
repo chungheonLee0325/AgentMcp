@@ -51,7 +51,7 @@ Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
 
 Tools are plain `static UFUNCTION`s. Names, descriptions, arguments and result JSON schemas are generated from Unreal Reflection, so adding a function to a toolset creates an MCP tool.
 
-> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 249 checks against the testbed project. Other engine versions and platforms have not been tried.
+> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 251 checks against the testbed project. Other engine versions and platforms have not been tried.
 
 ## Dungeon UI — workflow case study
 
@@ -192,6 +192,7 @@ The server returns short usage instructions from `initialize`, including the lis
 | `blueprint_inspect` | Read | Parent chain, interfaces, components, variables, functions and graphs |
 | `blueprint_compile` | Control | Compile a Blueprint or Widget Blueprint and return its errors and warnings |
 | `blueprint_get_graph` | Read | Nodes of a graph with their pins, values and links, optionally only the entry points or the chain linked to one node |
+| `blueprint_read_graph` | Read | Graphs as short pseudo-code that follows the execution wires: events, functions, branches, loops and expressions |
 | `blueprint_find_usages` | Read | Where Blueprints call a function, read or write a variable, cast or bind an event, through the Find in Blueprints index, also in Blueprints that are not loaded |
 | `blueprint_find_node_types` | Read | Node types a graph can take, as in the editor's node menu, by type id such as `Development\|PrintString`, optionally only those that connect to a pin |
 | `blueprint_edit_graph` | Write | Add, remove and move nodes, connect and break pins, set input values and add pins, in order, as one undo step |

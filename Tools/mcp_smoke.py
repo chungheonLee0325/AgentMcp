@@ -1725,7 +1725,8 @@ def run_p8(client, report, evidence):
                  is_error and error_code(data) == "INVALID_ARGUMENT" and "NoSuchVariable" in message, message[:200])
 
 
-P9_TOOLS = {"blueprint_get_graph", "blueprint_find_node_types", "blueprint_edit_graph", "blueprint_add_members", "blueprint_find_usages"}
+P9_TOOLS = {"blueprint_get_graph", "blueprint_find_node_types", "blueprint_edit_graph", "blueprint_add_members", "blueprint_find_usages",
+            "blueprint_read_graph"}
 GRAPH_PROBE = "AgentMcp graph probe"
 MEMBERS_BLUEPRINT = FIXTURE_FOLDER + "/BP_AgentMcpMembers"
 
@@ -1830,6 +1831,14 @@ def run_p9(client, report, evidence):
                  "and the graphs blueprint_edit_graph fills compile",
                  not is_error and (added or {}).get("variables") == ["Health"] and entry != "?" and result != "?" and not heal_error and not play_error
                  and (compiled or {}).get("status") == "UpToDate", json.dumps([error_message(healed), error_message(played), compiled, added])[:500])
+
+    # The text follows the wires: the setter and the return read the variable, BeginPlay keeps Heal's result for Print String.
+    _, _, is_error, data, _ = client.call_tool("blueprint_read_graph", {"blueprint": members})
+    text = (data or {}).get("text") or ""
+    expected = ["function Heal(Amount: Float (double-precision)):", "  Health = (Health + Amount)", "  return NewHealth=Health",
+                "event BeginPlay():", "  $1 = Heal(Amount=5)", "  PrintString(InString=Conv_DoubleToString(InDouble=$1))"]
+    report.check("blueprint_read_graph writes the function and the event chain as pseudo-code",
+                 not is_error and all(line in text.splitlines() for line in expected), text[:500])
 
     # The Find in Blueprints index names graphs in the editor language; the usage must give the names blueprint_get_graph takes.
     _, _, is_error, data, _ = client.call_tool("blueprint_find_usages", {"query": 'Nodes("Native Name"=+"Heal")'})

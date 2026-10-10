@@ -11,11 +11,18 @@
 #include "EdGraphSchema_K2.h"
 #include "Engine/Blueprint.h"
 #include "K2Node.h"
+#include "EdGraphNode_Comment.h"
 #include "K2Node_AddPinInterface.h"
+#include "K2Node_CallFunction.h"
 #include "K2Node_CustomEvent.h"
+#include "K2Node_Event.h"
 #include "K2Node_FunctionEntry.h"
 #include "K2Node_FunctionResult.h"
+#include "K2Node_IfThenElse.h"
+#include "K2Node_Knot.h"
 #include "K2Node_Switch.h"
+#include "K2Node_Tunnel.h"
+#include "K2Node_VariableSet.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/Kismet2NameValidators.h"
 
@@ -1235,6 +1242,426 @@ FAgentMcpBlueprintMembersResult UAgentMcpBlueprintTools::AddMembers(UBlueprint* 
 				Added.Nodes.Add(MakeNode(*Node));
 			}
 		}
+	}
+	return Result;
+}
+
+// blueprint_read_graph writes graphs as pseudo-code for reading, the way UE 5.8 read_graph_dsl decompiles them (blueprint_dsl.py
+// Decompiler), but only one way: statements follow execution wires from each entry, and pure nodes become expressions.
+namespace UE::AgentMcp::BlueprintGraphToolsPrivate
+{
+	constexpr int32 MaxExpressionDepth = 24;
+
+	bool IsExecPin(const UEdGraphPin* Pin)
+	{
+		return Pin && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Exec;
+	}
+
+	bool HasExecPins(const UEdGraphNode& Node)
+	{
+		return Node.Pins.ContainsByPredicate([](const UEdGraphPin* Pin) { return IsExecPin(Pin); });
+	}
+
+	TArray<const UEdGraphPin*> GetDataPins(const UEdGraphNode& Node, EEdGraphPinDirection Direction)
+	{
+		TArray<const UEdGraphPin*> Result;
+		for (const UEdGraphPin* Pin : Node.Pins)
+		{
+			if (Pin && !Pin->bHidden && Pin->Direction == Direction && !IsExecPin(Pin))
+			{
+				Result.Add(Pin);
+			}
+		}
+		return Result;
+	}
+
+	/** Infix operators of the functions behind math and comparison nodes (Multiply_DoubleDouble is *). */
+	const TCHAR* GetOperator(const FString& FunctionName)
+	{
+		static const TPair<const TCHAR*, const TCHAR*> Operators[] = {
+			{ TEXT("Add_"), TEXT("+") }, { TEXT("Subtract_"), TEXT("-") }, { TEXT("Multiply_"), TEXT("*") }, { TEXT("Divide_"), TEXT("/") },
+			{ TEXT("Percent_"), TEXT("%") }, { TEXT("LessEqual_"), TEXT("<=") }, { TEXT("Less_"), TEXT("<") },
+			{ TEXT("GreaterEqual_"), TEXT(">=") }, { TEXT("Greater_"), TEXT(">") }, { TEXT("EqualEqual_"), TEXT("==") },
+			{ TEXT("NotEqual_"), TEXT("!=") }, { TEXT("BooleanAND"), TEXT("&&") }, { TEXT("BooleanOR"), TEXT("||") },
+		};
+		for (const TPair<const TCHAR*, const TCHAR*>& Operator : Operators)
+		{
+			if (FunctionName.StartsWith(Operator.Key, ESearchCase::CaseSensitive))
+			{
+				return Operator.Value;
+			}
+		}
+		return nullptr;
+	}
+
+	class FGraphWriter
+	{
+	public:
+		FGraphWriter(const UEdGraph& InGraph, bool bInNodeNames)
+			: Graph(InGraph), bNodeNames(bInNodeNames)
+		{
+		}
+
+		FString Write()
+		{
+			for (const UEdGraphNode* Node : Graph.Nodes)
+			{
+				if (const UEdGraphNode_Comment* Comment = Cast<UEdGraphNode_Comment>(Node))
+				{
+					AddLine(0, TEXT("# note: ") + Comment->NodeComment.Replace(TEXT("\n"), TEXT(" ")));
+				}
+				// A node that several execution paths reach gets a label, so the text names it once.
+				for (const UEdGraphPin* Pin : Node ? Node->Pins : TArray<UEdGraphPin*>())
+				{
+					if (IsExecPin(Pin) && Pin->Direction == EGPD_Input && Pin->LinkedTo.Num() > 1)
+					{
+						Labeled.Add(Node);
+					}
+				}
+			}
+			for (const UEdGraphNode* Node : Graph.Nodes)
+			{
+				if (Node && IsEntryPoint(*Node))
+				{
+					WriteEntry(*Node);
+				}
+			}
+
+			TArray<FString> Unreached;
+			for (const UEdGraphNode* Node : Graph.Nodes)
+			{
+				if (Node && HasExecPins(*Node) && !IsEntryPoint(*Node) && !Emitted.Contains(Node))
+				{
+					Unreached.Add(Node->GetName());
+				}
+			}
+			if (!Unreached.IsEmpty())
+			{
+				AddLine(0, FString::Printf(TEXT("# not reached from an entry: %s"), *FString::Join(Unreached, TEXT(", "))));
+			}
+			return FString::Join(Lines, TEXT("\n"));
+		}
+
+	private:
+		const UEdGraph& Graph;
+		const bool bNodeNames;
+		TArray<FString> Lines;
+		TSet<const UEdGraphNode*> Emitted;
+		TSet<const UEdGraphNode*> Labeled;
+		TMap<const UEdGraphNode*, FString> Results;
+		int32 ResultCount = 0;
+
+		void AddLine(int32 Indent, const FString& Text)
+		{
+			Lines.Add(FString::ChrN(Indent * 2, TEXT(' ')) + Text);
+		}
+
+		static FString GetCallName(const UEdGraphNode& Node)
+		{
+			if (const UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(&Node))
+			{
+				if (const UFunction* Function = Call->GetTargetFunction())
+				{
+					FString Name = Function->GetName();
+					Name.RemoveFromStart(TEXT("K2_"));
+					return Name;
+				}
+			}
+			return GetNodeTitle(Node).Replace(TEXT(" "), TEXT(""));
+		}
+
+		FString Literal(const UEdGraphPin& Pin) const
+		{
+			const FString Value = Pin.GetDefaultAsString();
+			const FName Category = Pin.PinType.PinCategory;
+			const bool bQuoted = Category == UEdGraphSchema_K2::PC_String || Category == UEdGraphSchema_K2::PC_Text || Category == UEdGraphSchema_K2::PC_Name;
+			return bQuoted ? TEXT("\"") + Value + TEXT("\"") : (Value.IsEmpty() ? FString(TEXT("none")) : Value);
+		}
+
+		/** The value an input pin receives: the expression of its link, or its own value. */
+		FString Input(const UEdGraphPin& Pin, int32 Depth)
+		{
+			return Pin.LinkedTo.IsEmpty() || !Pin.LinkedTo[0] ? Literal(Pin) : Source(*Pin.LinkedTo[0], Depth);
+		}
+
+		/** Inputs of a call worth writing: linked ones, and values other than the pin's own default. The hidden self is left out. */
+		FString Arguments(const UEdGraphNode& Node, int32 Depth)
+		{
+			TArray<FString> Arguments;
+			for (const UEdGraphPin* Pin : GetDataPins(Node, EGPD_Input))
+			{
+				if (Pin->PinName == UEdGraphSchema_K2::PN_Self || (Pin->LinkedTo.IsEmpty() && Pin->DoesDefaultValueMatchAutogenerated()))
+				{
+					continue;
+				}
+				Arguments.Add(FString::Printf(TEXT("%s=%s"), *Pin->PinName.ToString(), *Input(*Pin, Depth + 1)));
+			}
+			return FString::Join(Arguments, TEXT(", "));
+		}
+
+		/** Target.Call(arguments); the target is written when the self pin is wired to another object. */
+		FString Call(const UEdGraphNode& Node, int32 Depth)
+		{
+			const UEdGraphPin* Self = Node.FindPin(UEdGraphSchema_K2::PN_Self, EGPD_Input);
+			const FString Target = Self && !Self->LinkedTo.IsEmpty() ? Input(*Self, Depth + 1) + TEXT(".") : FString();
+			return FString::Printf(TEXT("%s%s(%s)"), *Target, *GetCallName(Node), *Arguments(Node, Depth));
+		}
+
+		/** The expression for the value of an output pin. */
+		FString Source(const UEdGraphPin& Output, int32 Depth)
+		{
+			const UEdGraphNode* Node = Output.GetOwningNodeUnchecked();
+			if (!Node || Depth > MaxExpressionDepth)
+			{
+				return TEXT("...");
+			}
+			const FString PinName = Output.PinName.ToString();
+			if (Node->IsA<UK2Node_Knot>())
+			{
+				const UEdGraphPin* const* KnotInput = Node->Pins.FindByPredicate([](const UEdGraphPin* Pin) { return Pin && Pin->Direction == EGPD_Input; });
+				return KnotInput ? Input(**KnotInput, Depth) : FString(TEXT("none"));
+			}
+			if (const FString* Result = Results.Find(Node))
+			{
+				return GetDataPins(*Node, EGPD_Output).Num() > 1 ? *Result + TEXT(".") + PinName : *Result;
+			}
+			if (Node->IsA<UK2Node_FunctionEntry>() || Node->IsA<UK2Node_Event>() || Node->IsA<UK2Node_Tunnel>())
+			{
+				return PinName;
+			}
+			if (const UK2Node_Variable* Variable = Cast<UK2Node_Variable>(Node))
+			{
+				const UEdGraphPin* Self = Node->FindPin(UEdGraphSchema_K2::PN_Self, EGPD_Input);
+				const FString Target = Self && !Self->bHidden && !Self->LinkedTo.IsEmpty() ? Input(*Self, Depth + 1) + TEXT(".") : FString();
+				return Target + Variable->GetVarNameString();
+			}
+			if (HasExecPins(*Node))
+			{
+				// An output of a node that runs on another path.
+				return FString::Printf(TEXT("%s.%s"), *Node->GetName(), *PinName);
+			}
+
+			const UK2Node_CallFunction* CallNode = Cast<UK2Node_CallFunction>(Node);
+			const UFunction* Function = CallNode ? CallNode->GetTargetFunction() : nullptr;
+			const FString FunctionName = Function ? Function->GetName() : FString();
+			if (const TCHAR* Operator = GetOperator(FunctionName))
+			{
+				TArray<FString> Operands;
+				for (const UEdGraphPin* Pin : GetDataPins(*Node, EGPD_Input))
+				{
+					Operands.Add(Input(*Pin, Depth + 1));
+				}
+				return TEXT("(") + FString::Join(Operands, *FString::Printf(TEXT(" %s "), Operator)) + TEXT(")");
+			}
+			if (FunctionName == TEXT("Not_PreBool"))
+			{
+				const TArray<const UEdGraphPin*> Inputs = GetDataPins(*Node, EGPD_Input);
+				return Inputs.IsEmpty() ? FString(TEXT("!none")) : TEXT("!") + Input(*Inputs[0], Depth + 1);
+			}
+			const FString Expression = Call(*Node, Depth);
+			return GetDataPins(*Node, EGPD_Output).Num() > 1 ? Expression + TEXT(".") + PinName : Expression;
+		}
+
+		void WriteEntry(const UEdGraphNode& Entry)
+		{
+			TArray<FString> Parameters;
+			for (const UEdGraphPin* Pin : GetDataPins(Entry, EGPD_Output))
+			{
+				if (Pin->PinType.PinCategory != UEdGraphSchema_K2::PC_Delegate)
+				{
+					Parameters.Add(FString::Printf(TEXT("%s: %s"), *Pin->PinName.ToString(), *GetPinTypeText(Pin->PinType)));
+				}
+			}
+			const UEdGraphPin* const* Then = Entry.Pins.FindByPredicate([](const UEdGraphPin* Pin) { return IsExecPin(Pin) && Pin->Direction == EGPD_Output; });
+			const bool bLinked = Then && !(*Then)->LinkedTo.IsEmpty();
+			// The disabled event nodes of a new Blueprint say nothing about it.
+			if (!bLinked && Entry.IsAutomaticallyPlacedGhostNode())
+			{
+				return;
+			}
+
+			FString Title = GetNodeTitle(Entry);
+			Title.RemoveFromStart(TEXT("Event "));
+			const FString Kind = Entry.IsA<UK2Node_FunctionEntry>() ? TEXT("function") : (Entry.IsA<UK2Node_Event>() ? TEXT("event") : TEXT("entry"));
+			AddLine(0, FString::Printf(TEXT("%s %s(%s):%s"), *Kind, *Title.Replace(TEXT(" "), TEXT("")), *FString::Join(Parameters, TEXT(", ")), *NodeSuffix(Entry)));
+			if (bLinked)
+			{
+				WriteChain(*Then, 1);
+			}
+			else
+			{
+				AddLine(1, TEXT("(empty)"));
+			}
+			AddLine(0, FString());
+		}
+
+		FString NodeSuffix(const UEdGraphNode& Node) const
+		{
+			FString Suffix;
+			if (Node.GetDesiredEnabledState() == ENodeEnabledState::Disabled)
+			{
+				Suffix += TEXT("  # disabled, not compiled");
+			}
+			if (bNodeNames)
+			{
+				Suffix += TEXT("  # ") + Node.GetName();
+			}
+			return Suffix;
+		}
+
+		/** Follows the execution wire of an output pin, one statement per node, until the path ends or meets a node already written. */
+		void WriteChain(const UEdGraphPin* ExecOutput, int32 Indent)
+		{
+			while (ExecOutput && !ExecOutput->LinkedTo.IsEmpty() && ExecOutput->LinkedTo[0])
+			{
+				const UEdGraphNode* Node = ExecOutput->LinkedTo[0]->GetOwningNodeUnchecked();
+				if (!Node)
+				{
+					return;
+				}
+				if (Node->IsA<UK2Node_Knot>())
+				{
+					const UEdGraphPin* const* KnotOutput = Node->Pins.FindByPredicate([](const UEdGraphPin* Pin) { return Pin && Pin->Direction == EGPD_Output; });
+					ExecOutput = KnotOutput ? *KnotOutput : nullptr;
+					continue;
+				}
+				if (Emitted.Contains(Node))
+				{
+					AddLine(Indent, TEXT("goto ") + Node->GetName());
+					return;
+				}
+				Emitted.Add(Node);
+				if (Labeled.Contains(Node))
+				{
+					AddLine(Indent, Node->GetName() + TEXT(":"));
+				}
+				if (!Node->NodeComment.IsEmpty())
+				{
+					AddLine(Indent, TEXT("# ") + Node->NodeComment.Replace(TEXT("\n"), TEXT(" ")));
+				}
+
+				TArray<const UEdGraphPin*> ExecOutputs;
+				for (const UEdGraphPin* Pin : Node->Pins)
+				{
+					if (IsExecPin(Pin) && Pin->Direction == EGPD_Output && !Pin->LinkedTo.IsEmpty())
+					{
+						ExecOutputs.Add(Pin);
+					}
+				}
+
+				if (Node->IsA<UK2Node_IfThenElse>())
+				{
+					const UEdGraphPin* Condition = Node->FindPin(UEdGraphSchema_K2::PN_Condition, EGPD_Input);
+					AddLine(Indent, TEXT("if ") + (Condition ? Input(*Condition, 0) : FString(TEXT("none"))) + TEXT(":") + NodeSuffix(*Node));
+					const UEdGraphPin* ThenPin = Node->FindPin(UEdGraphSchema_K2::PN_Then, EGPD_Output);
+					const UEdGraphPin* ElsePin = Node->FindPin(UEdGraphSchema_K2::PN_Else, EGPD_Output);
+					WriteBlock(ThenPin, Indent + 1);
+					if (ElsePin && !ElsePin->LinkedTo.IsEmpty())
+					{
+						AddLine(Indent, TEXT("else:"));
+						WriteBlock(ElsePin, Indent + 1);
+					}
+					return;
+				}
+
+				WriteStatement(*Node, Indent);
+				if (ExecOutputs.Num() == 1 && ExecOutputs[0]->PinName == UEdGraphSchema_K2::PN_Then)
+				{
+					ExecOutput = ExecOutputs[0];
+					continue;
+				}
+				for (const UEdGraphPin* Pin : ExecOutputs)
+				{
+					AddLine(Indent + 1, FString::Printf(TEXT("on %s:"), *Pin->PinName.ToString()));
+					WriteBlock(Pin, Indent + 2);
+				}
+				return;
+			}
+		}
+
+		void WriteBlock(const UEdGraphPin* ExecOutput, int32 Indent)
+		{
+			const int32 LinesBefore = Lines.Num();
+			WriteChain(ExecOutput, Indent);
+			if (Lines.Num() == LinesBefore)
+			{
+				AddLine(Indent, TEXT("(nothing)"));
+			}
+		}
+
+		void WriteStatement(const UEdGraphNode& Node, int32 Indent)
+		{
+			if (const UK2Node_VariableSet* Set = Cast<UK2Node_VariableSet>(&Node))
+			{
+				const UEdGraphPin* Value = Node.FindPin(Set->GetVarName(), EGPD_Input);
+				AddLine(Indent, FString::Printf(TEXT("%s = %s%s"), *Set->GetVarNameString(), Value ? *Input(*Value, 0) : TEXT("none"), *NodeSuffix(Node)));
+				Results.Add(&Node, Set->GetVarNameString());
+				return;
+			}
+			if (Node.IsA<UK2Node_FunctionResult>())
+			{
+				AddLine(Indent, FString::Printf(TEXT("return %s%s"), *Arguments(Node, 0), *NodeSuffix(Node)));
+				return;
+			}
+
+			const FString Statement = Call(Node, 0);
+			const bool bUsedOutput = GetDataPins(Node, EGPD_Output).ContainsByPredicate([](const UEdGraphPin* Pin) { return !Pin->LinkedTo.IsEmpty(); });
+			if (bUsedOutput)
+			{
+				const FString Name = FString::Printf(TEXT("$%d"), ++ResultCount);
+				Results.Add(&Node, Name);
+				AddLine(Indent, FString::Printf(TEXT("%s = %s%s"), *Name, *Statement, *NodeSuffix(Node)));
+			}
+			else
+			{
+				AddLine(Indent, Statement + NodeSuffix(Node));
+			}
+		}
+	};
+}
+
+FAgentMcpGraphText UAgentMcpBlueprintTools::ReadGraph(UBlueprint* Blueprint, const FString& Graph, bool bNodeNames, int32 MaxChars)
+{
+	using namespace UE::AgentMcp;
+	using namespace UE::AgentMcp::BlueprintGraphToolsPrivate;
+
+	FAgentMcpGraphText Result;
+	if (!Tools::RequireObject(Blueprint, TEXT("blueprint")))
+	{
+		return Result;
+	}
+	TArray<UEdGraph*> Graphs;
+	if (Graph.IsEmpty())
+	{
+		Graphs.Append(Blueprint->UbergraphPages);
+		Graphs.Append(Blueprint->FunctionGraphs);
+		Graphs.Append(Blueprint->MacroGraphs);
+	}
+	else if (UEdGraph* EdGraph = FindGraph(Blueprint, Graph))
+	{
+		Graphs.Add(EdGraph);
+	}
+	else
+	{
+		return Result;
+	}
+
+	Result.Blueprint = Blueprint->GetPathName();
+	TArray<FString> Sections;
+	for (const UEdGraph* EdGraph : Graphs)
+	{
+		if (EdGraph)
+		{
+			Sections.Add(FString::Printf(TEXT("== %s\n%s"), *EdGraph->GetName(), *FGraphWriter(*EdGraph, bNodeNames).Write()));
+		}
+	}
+	Result.Text = FString::Join(Sections, TEXT("\n"));
+	// Results above MaxResultBytes (64 KB) are cut; escaping and multi-byte text make the JSON larger than the text.
+	const int32 Limit = FMath::Clamp(MaxChars, 1000, 50000);
+	if (Result.Text.Len() > Limit)
+	{
+		Result.Text.LeftInline(Limit);
+		Result.bTruncated = true;
 	}
 	return Result;
 }

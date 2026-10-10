@@ -51,7 +51,7 @@ Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
 
 도구는 일반 `static UFUNCTION`입니다. 이름, 설명, 인자와 반환 JSON 스키마를 Unreal Reflection에서 생성하므로 Toolset에 함수를 추가하면 MCP 도구가 됩니다.
 
-> **상태: 베타.** Windows 64비트의 Unreal Engine 5.5.4(설치형 빌드)로 빌드하고 테스트했습니다. 이 저장소의 smoke 테스트는 테스트베드 프로젝트에서 249개 검사를 통과합니다. 다른 엔진 버전과 플랫폼은 확인하지 않았습니다.
+> **상태: 베타.** Windows 64비트의 Unreal Engine 5.5.4(설치형 빌드)로 빌드하고 테스트했습니다. 이 저장소의 smoke 테스트는 테스트베드 프로젝트에서 251개 검사를 통과합니다. 다른 엔진 버전과 플랫폼은 확인하지 않았습니다.
 
 ## Dungeon UI — 워크플로 검증 사례
 
@@ -189,6 +189,7 @@ tool_timeout_sec = 600
 | `blueprint_inspect` | Read | 부모 클래스 체인, 인터페이스, 컴포넌트, 변수, 함수, 그래프 |
 | `blueprint_compile` | Control | 블루프린트나 위젯 블루프린트를 컴파일하고 오류와 경고 반환 |
 | `blueprint_get_graph` | Read | 그래프의 노드와 핀, 값, 연결. 진입점만 또는 한 노드에 이어진 체인만 볼 수도 있음 |
+| `blueprint_read_graph` | Read | 실행 연결을 따라가는 짧은 의사코드로 그래프 읽기. 이벤트, 함수, 분기, 루프, 식 |
 | `blueprint_find_usages` | Read | Find in Blueprints 인덱스로 함수 호출, 변수 읽기·쓰기, 캐스트, 이벤트 바인딩 위치 찾기. 로드하지 않은 블루프린트도 포함 |
 | `blueprint_find_node_types` | Read | 그래프에 넣을 수 있는 노드 타입을 에디터 노드 메뉴처럼 `Development\|PrintString` 같은 타입 ID로 반환. 특정 핀에 연결되는 것만 고를 수도 있음 |
 | `blueprint_edit_graph` | Write | 노드 추가·삭제·이동, 핀 연결·끊기, 입력값 설정, 핀 추가를 순서대로, undo 한 단계로 수행 |

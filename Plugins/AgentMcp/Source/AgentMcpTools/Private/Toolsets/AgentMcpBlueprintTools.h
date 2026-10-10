@@ -527,6 +527,23 @@ struct FAgentMcpBlueprintMembersResult
 };
 
 USTRUCT(BlueprintType)
+struct FAgentMcpGraphText
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString Blueprint;
+
+	/** The graphs as pseudo-code, one section per graph. */
+	UPROPERTY()
+	FString Text;
+
+	/** The text was cut at maxChars. */
+	UPROPERTY()
+	bool bTruncated = false;
+};
+
+USTRUCT(BlueprintType)
 struct FAgentMcpBlueprintUsage
 {
 	GENERATED_BODY()
@@ -684,4 +701,18 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Blueprint", meta = (AICallable, McpAccess = "Read", BlueprintInternalUseOnly = "true"))
 	static UAgentMcpAsyncResult* FindUsages(const FString& Query, bool bIncludeEngineContent = false, int32 MaxResults = 100, float TimeoutSeconds = 60.0f);
+
+	/**
+	 * Reads Blueprint graphs as short pseudo-code, to understand what a Blueprint does without listing every pin. Each event and
+	 * function becomes a block whose statements follow the execution wires; data inputs are written as expressions, Branch as if and
+	 * else, other nodes with several execution outputs (Sequence, loops, casts, latent actions) as "on <pin>:" blocks, and a node that
+	 * several paths reach as a label with goto. $1, $2 name the outputs of executed nodes. Use blueprint_get_graph for exact pins.
+	 * @param Blueprint The Blueprint asset.
+	 * @param Graph Graph to read; empty reads the event graphs, the construction script, functions and macros.
+	 * @param bNodeNames End each statement with its node name, for blueprint_get_graph and blueprint_edit_graph.
+	 * @param MaxChars Maximum length of the text (1000-50000). A large Blueprint reads one graph at a time.
+	 * @return The graphs as text.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Agent MCP|Blueprint", meta = (AICallable, McpAccess = "Read", BlueprintInternalUseOnly = "true"))
+	static FAgentMcpGraphText ReadGraph(UBlueprint* Blueprint, const FString& Graph = TEXT(""), bool bNodeNames = false, int32 MaxChars = 20000);
 };
