@@ -10,6 +10,7 @@
 | `Source/AgentMcpTestbed` | 테스트용 행 구조체, 데이터 에셋 클래스, 위젯 부모 클래스, 게임 모드, UI 샘플의 C++ 클래스 |
 | `Source/AgentMcpTestbedEditor` | `/Game/AgentMcpFixtures` 아래에 테스트 에셋을 만드는 `testbed_*` 도구, 롤백·취소 검사용 훅, `sample_show_widget` |
 | `Content/Samples/DungeonUi` | 도구로 만든 UI 샘플의 위젯 블루프린트, 테마 데이터 에셋, 아이템 테이블 |
+| `Content/Samples/Pickup` | 블루프린트 도구로 만든 회전·부유 픽업 블루프린트(변수, pure 함수, Construction Script, 이벤트 그래프)와 데모 레벨 |
 | `Art/Requests` | 샘플의 아트 요청 |
 | `Docs` | 샘플을 만든 과정과 계획한 실험 |
 | `.mcp.json`, `.codex/config.toml` | Claude Code와 Codex를 포트 18766의 테스트베드 에디터에 연결 |
@@ -23,7 +24,7 @@
 2. `AgentMcpTestbed.uproject`를 열고 `Agent MCP server listening on http://127.0.0.1:18766/mcp`가 나올 때까지 기다립니다.
 3. `python Tools/mcp_smoke.py --out Saved/MCP/smoke.json`을 실행합니다.
 
-smoke 테스트는 MCP 전송과 오류 처리, 모든 도구, undo와 롤백, 요청 취소, Play In Editor, 게임 UI를 포함한 뷰포트 캡처, Live Coding, 중첩된 위젯 블루프린트 인스턴스를 포함한 편집, 스킬, 데이터 에셋·DataTable 생성, 텍스처와 메시 가져오기, 레벨 제작, 애니메이션 에셋을 검사합니다.
+smoke 테스트는 MCP 전송과 오류 처리, 모든 도구, undo와 롤백, 요청 취소, Play In Editor, 게임 UI를 포함한 뷰포트 캡처, Live Coding, 중첩된 위젯 블루프린트 인스턴스를 포함한 편집, 블루프린트 그래프 편집, 스킬, 데이터 에셋·DataTable 생성, 텍스처와 메시 가져오기, 레벨 제작, 애니메이션 에셋을 검사합니다.
 
 P9는 소스 도구(줄 범위, 정규식, CP949와 CRLF, 거부), 탐색 도구, 태그가 붙은 클라이언트의 승인 게이트를 검사합니다. 테스트베드 콘텐츠가 필요 없어서 다른 프로젝트에도 돌릴 수 있습니다. 테스트베드가 필요한 섹션은 건너뛰세요.
 

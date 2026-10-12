@@ -88,6 +88,7 @@ namespace UE::AgentMcp::BlueprintToolsPrivate
 				}
 			}
 			Entry.DefinedIn = TEXT("Native");
+			Entry.Template = Component->GetPathName();
 		}
 	}
 
@@ -141,6 +142,7 @@ namespace UE::AgentMcp::BlueprintToolsPrivate
 				Entry.Socket = Node->AttachToName.ToString();
 			}
 			Entry.DefinedIn = DefinedIn;
+			Entry.Template = GetPathNameSafe(Node->ComponentTemplate);
 		}
 	}
 }

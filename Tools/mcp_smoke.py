@@ -12,18 +12,20 @@ Checks the MCP transport contract and the tools against a running editor:
   P6       asset_create, asset_import_textures, object_set_properties on assets, string tables: checks, undo, replacing, saving,
            PIE refusal
   P8       anim_build_blend_space, anim_build_montage, anim_build_anim_blueprint on the testbed animation fixtures
-  P9       source_find, source_search, source_read, source_replace, source_write: ranges, CP949 and CRLF, refusals;
+  P9       blueprint_find_node_types, blueprint_edit_graph, blueprint_get_graph, blueprint_add_members, asset_create of a Blueprint: graphs
+           and a function built, compiled, rolled back and played
+  P10      source_find, source_search, source_read, source_replace, source_write: ranges, CP949 and CRLF, refusals;
            editor_open_assets, editor_show_in_content_browser, actor_select; the approval gate for tagged clients
 
 Level writes are undone again. P2, P3, P4 and P6 need the AgentMcpTestbed "testbed" toolset, which resets and saves its fixture assets.
 P5 writes temporary skills to Saved/MCP/SmokeSkills, which the testbed configuration adds to SkillDirectories. P6 writes images to
-Saved/MCP/SmokeImport of the project. P9 writes and removes two text files at the top of a readable source folder (Config by default)
+Saved/MCP/SmokeImport of the project. P10 writes and removes two text files at the top of a readable source folder (Config by default)
 and needs no testbed content.
 
 Usage:
   python mcp_smoke.py [--url http://127.0.0.1:18766/mcp] [--expect-project AgentMcpTestbed] [--token TOKEN] [--out evidence.json]
                       [--skip-slice1] [--skip-pie] [--pie-cycles 3] [--skip-p1] [--skip-p2] [--skip-p3] [--skip-p4] [--skip-p5]
-                      [--skip-p6] [--skip-p7] [--skip-p8] [--skip-p9]
+                      [--skip-p6] [--skip-p7] [--skip-p8] [--skip-p9] [--skip-p10]
 
 Before any check, the script asks the editor at --url for its project and stops unless it is --expect-project: the checks
 start and stop Play In Editor, change the level and save assets.
@@ -152,6 +154,9 @@ def run_p0(client, report, evidence, expected_tools):
     client.session_id = headers.get("Mcp-Session-Id") if headers else None
     result = (payload or {}).get("result") or {}
     report.check("initialize returns 200 with a session id", status == 200 and bool(client.session_id), f"status={status}")
+    # UE HTTPServer drops a kept-alive connection after 15 idle seconds, and an agent's call that reused it failed with ECONNRESET.
+    connection = (headers or {}).get("Connection") or ""
+    report.check("responses ask the client for a new connection per request (Connection: close)", connection.lower() == "close", connection)
     report.check("initialize negotiates protocol 2025-06-18", result.get("protocolVersion") == "2025-06-18", str(result.get("protocolVersion")))
     evidence["initialize"] = result
 
@@ -1723,7 +1728,156 @@ def run_p8(client, report, evidence):
                  is_error and error_code(data) == "INVALID_ARGUMENT" and "NoSuchVariable" in message, message[:200])
 
 
-P9_TOOLS = {"source_find", "source_search", "source_read", "source_replace", "source_write",
+P9_TOOLS = {"blueprint_get_graph", "blueprint_find_node_types", "blueprint_edit_graph", "blueprint_add_members", "blueprint_find_usages",
+            "blueprint_read_graph"}
+GRAPH_PROBE = "AgentMcp graph probe"
+MEMBERS_BLUEPRINT = FIXTURE_FOLDER + "/BP_AgentMcpMembers"
+
+
+def find_type_id(client, blueprint, graph, name):
+    """The type id that blueprint_find_node_types gives for a node name; categories can be localized in the editor language."""
+    _, _, _, data, _ = client.call_tool("blueprint_find_node_types", {"blueprint": blueprint, "graph": graph, "filter": name})
+    return next((entry["typeId"] for entry in (data or {}).get("nodeTypes") or [] if entry["typeId"].endswith("|" + name)), name)
+
+
+def run_p9(client, report, evidence):
+    """Builds Event BeginPlay -> Print String in the fixture Actor Blueprint from the node types blueprint_find_node_types names, then
+    checks the graph read back, a failing edit that must leave nothing behind, and the string in a play session."""
+    p9 = evidence.setdefault("p9", {})
+    _, _, is_error, fixtures, _ = client.call_tool("testbed_reset_fixtures")
+    blueprint = "" if is_error else (fixtures or {}).get("actorBlueprint") or ""
+    if not report.check("testbed_reset_fixtures prepares the Actor Blueprint for the graph checks", bool(blueprint), error_message(fixtures)[:200]):
+        return
+
+    # The type ids come from blueprint_find_node_types, so the edit also checks that the two tools name node types alike.
+    type_ids = {}
+    for name in ("EventBeginPlay", "PrintString"):
+        _, _, _, data, _ = client.call_tool("blueprint_find_node_types", {"blueprint": blueprint, "filter": name})
+        type_ids[name] = next((entry["typeId"] for entry in (data or {}).get("nodeTypes") or [] if entry["typeId"].endswith("|" + name)), name)
+    p9["typeIds"] = type_ids
+
+    _, _, is_error, data, _ = client.call_tool("blueprint_edit_graph", {"blueprint": blueprint, "graph": "EventGraph", "operations": [
+        {"op": "Add", "typeId": type_ids["EventBeginPlay"], "ref": "begin"},
+        {"op": "Add", "typeId": type_ids["PrintString"], "ref": "print", "x": 300},
+        {"op": "Connect", "from": "begin.then", "to": "print.execute"},
+        {"op": "SetDefault", "from": "print.InString", "value": GRAPH_PROBE},
+    ]})
+    p9["edit"] = data
+    refs = (data or {}).get("refs") or {}
+    begin, printer = refs.get("begin", "?"), refs.get("print", "?")
+    _, _, _, graph, _ = client.call_tool("blueprint_get_graph", {"blueprint": blueprint, "connectedTo": begin})
+    pins = {(node["name"], pin["name"]): pin for node in (graph or {}).get("nodes") or [] for pin in node.get("pins") or []}
+    _, _, _, compiled, _ = client.call_tool("blueprint_compile", {"blueprint": blueprint})
+    report.check("blueprint_edit_graph wires BeginPlay to Print String as blueprint_get_graph reads it back, and the Blueprint compiles",
+                 not is_error and printer + ".execute" in pins.get((begin, "then"), {}).get("linkedTo", [])
+                 and pins.get((printer, "InString"), {}).get("defaultValue") == GRAPH_PROBE
+                 and (compiled or {}).get("status") == "UpToDate", json.dumps([type_ids, graph, compiled])[:500])
+
+    # A failing operation after others that worked: the tool must undo them all and record no undo step.
+    undo_before = get_undo_state(client).get("undoableCount")
+    _, _, is_error, data, _ = client.call_tool("blueprint_edit_graph", {"blueprint": blueprint, "graph": "EventGraph", "operations": [
+        {"op": "Add", "typeId": "Utilities|FlowControl|Sequence", "ref": "sequence", "x": 600},
+        {"op": "AddPin", "node": "sequence"},
+        {"op": "Connect", "from": printer + ".then", "to": "sequence.NoSuchPin"},
+    ]})
+    _, _, _, after, _ = client.call_tool("blueprint_get_graph", {"blueprint": blueprint, "maxNodes": 1})
+    report.check("a blueprint_edit_graph call that fails midway leaves the graph and the undo history as they were",
+                 is_error and error_code(data) == "NOT_FOUND" and "then_2" in error_message(data)
+                 and (after or {}).get("totalNodes") == (graph or {}).get("totalNodes") and get_undo_state(client).get("undoableCount") == undo_before,
+                 error_message(data)[:300])
+
+    # A short filter matches many ids; the node types it names come first. Sin once listed Sensing and Using before Sin (Radians).
+    _, _, _, data, _ = client.call_tool("blueprint_find_node_types", {"blueprint": blueprint, "filter": "Sin", "maxItems": 5})
+    first = [entry["typeId"] for entry in (data or {}).get("nodeTypes") or []]
+    report.check("blueprint_find_node_types lists the node types whose name starts with the filter first",
+                 "Math|Trig|Sin(Radians)" in first[:2] and "Math|Trig|Sin(Degrees)" in first[:2], json.dumps(first))
+
+    # --- a new Blueprint with a variable and a function ---------------------------------------------
+    members = object_path(MEMBERS_BLUEPRINT)
+    _, _, create_error, created, _ = client.call_tool("asset_create", {"assetPath": MEMBERS_BLUEPRINT, "assetClass": "Blueprint", "parentClass": "StaticMeshActor"})
+    _, _, is_error, data, _ = client.call_tool("blueprint_add_members", {"blueprint": members, "variables": [
+        {"name": "Health", "type": "Floaty"}, {"name": "Shield", "type": "Float", "defaultValue": "lots"}]})
+    _, _, _, details, _ = client.call_tool("blueprint_inspect", {"blueprint": members, "bIncludeComponents": False})
+    report.check("blueprint_add_members reports a bad type and a bad default value together and adds nothing",
+                 not create_error and is_error and "Floaty" in error_message(data) and "lots" in error_message(data)
+                 and not (details or {}).get("variables"), error_message(data or created)[:300])
+
+    _, _, is_error, added, _ = client.call_tool("blueprint_add_members", {"blueprint": members,
+        "variables": [{"name": "Health", "type": "Float", "defaultValue": "100", "category": "Stats"}],
+        "functions": [{"name": "Heal", "inputs": [{"name": "Amount", "type": "Float"}], "outputs": [{"name": "NewHealth", "type": "Float"}]}]})
+    p9["members"] = added
+    heal_nodes = {node["nodeClass"]: node["name"] for function in (added or {}).get("functions") or [] for node in function.get("nodes") or []}
+    entry, result = heal_nodes.get("K2Node_FunctionEntry", "?"), heal_nodes.get("K2Node_FunctionResult", "?")
+    # Heal adds Amount to Health, stores it and returns it; BeginPlay prints Heal(5).
+    _, _, heal_error, healed, _ = client.call_tool("blueprint_edit_graph", {"blueprint": members, "graph": "Heal", "operations": [
+        {"op": "Add", "typeId": find_type_id(client, members, "Heal", "GetHealth"), "ref": "get", "x": 100, "y": 200},
+        {"op": "Add", "typeId": find_type_id(client, members, "Heal", "Operators|Add"), "ref": "add", "x": 250, "y": 150},
+        {"op": "Add", "typeId": find_type_id(client, members, "Heal", "SetHealth"), "ref": "set", "x": 400},
+        {"op": "Connect", "from": entry + ".then", "to": "set.execute"},
+        {"op": "Connect", "from": "set.then", "to": result + ".execute"},
+        {"op": "Connect", "from": "get.Health", "to": "add.A"},
+        {"op": "Connect", "from": entry + ".Amount", "to": "add.B"},
+        {"op": "Connect", "from": "add.ReturnValue", "to": "set.Health"},
+        {"op": "Connect", "from": "set.Output_Get", "to": result + ".NewHealth"},
+    ]})
+    _, _, play_error, played, _ = client.call_tool("blueprint_edit_graph", {"blueprint": members, "graph": "EventGraph", "operations": [
+        {"op": "Add", "typeId": type_ids["EventBeginPlay"], "ref": "begin"},
+        {"op": "Add", "typeId": find_type_id(client, members, "EventGraph", "Heal"), "ref": "heal", "x": 300},
+        {"op": "Add", "typeId": type_ids["PrintString"], "ref": "print", "x": 600},
+        {"op": "Connect", "from": "begin.then", "to": "heal.execute"},
+        {"op": "SetDefault", "from": "heal.Amount", "value": "5"},
+        {"op": "Connect", "from": "heal.then", "to": "print.execute"},
+        {"op": "Connect", "from": "heal.NewHealth", "to": "print.InString"},
+    ]})
+    _, _, _, compiled, _ = client.call_tool("blueprint_compile", {"blueprint": members})
+    report.check("asset_create makes a Blueprint, blueprint_add_members gives it a variable and a function with an input and an output, "
+                 "and the graphs blueprint_edit_graph fills compile",
+                 not is_error and (added or {}).get("variables") == ["Health"] and entry != "?" and result != "?" and not heal_error and not play_error
+                 and (compiled or {}).get("status") == "UpToDate", json.dumps([error_message(healed), error_message(played), compiled, added])[:500])
+
+    # The text follows the wires: the setter and the return read the variable, BeginPlay keeps Heal's result for Print String.
+    _, _, is_error, data, _ = client.call_tool("blueprint_read_graph", {"blueprint": members})
+    text = (data or {}).get("text") or ""
+    expected = ["function Heal(Amount: Float (double-precision)):", "  Health = (Health + Amount)", "  return NewHealth=Health",
+                "event BeginPlay():", "  $1 = Heal(Amount=5)", "  PrintString(InString=Conv_DoubleToString(InDouble=$1))"]
+    report.check("blueprint_read_graph writes the function and the event chain as pseudo-code",
+                 not is_error and all(line in text.splitlines() for line in expected), text[:500])
+
+    # The Find in Blueprints index names graphs in the editor language; the usage must give the names blueprint_get_graph takes.
+    _, _, is_error, data, _ = client.call_tool("blueprint_find_usages", {"query": 'Nodes("Native Name"=+"Heal")'})
+    usages = [usage for usage in (data or {}).get("usages") or [] if usage.get("blueprint") == members]
+    calls = [usage for usage in usages if usage.get("graph") == "EventGraph" and usage.get("kind") == "K2Node_CallFunction"]
+    _, _, _, graph, _ = client.call_tool("blueprint_get_graph", {"blueprint": members, "connectedTo": (calls or [{}])[0].get("node", "?"), "maxNodes": 1})
+    report.check("blueprint_find_usages finds the call of Heal in the event graph by the names blueprint_get_graph takes",
+                 not is_error and len(calls) == 1 and bool((graph or {}).get("nodes")), json.dumps(usages)[:400])
+
+    # The component of the C++ parent is changed through the template path blueprint_inspect gives, as the Blueprint editor's details panel
+    # does; it was refused as an archetype before.
+    _, _, _, details, _ = client.call_tool("blueprint_inspect", {"blueprint": members, "bIncludeVariables": False, "bIncludeFunctions": False})
+    template = next((component.get("template") for component in (details or {}).get("components") or [] if component.get("name") == "StaticMeshComponent0"), "")
+    _, _, template_error, changed, _ = client.call_tool("object_set_properties", {"object": template, "values": {"StaticMesh": SMOKE_CUBE + ".Cube"}})
+
+    # --- both Blueprints run in a play session ------------------------------------------------------
+    client.call_tool("level_new", {"assetPath": SMOKE_LEVEL, "bPartitioned": False})
+    client.call_tool("actor_spawn", {"actors": [{"asset": blueprint.rpartition(".")[0], "label": "SmokeGraph"},
+                                                {"asset": MEMBERS_BLUEPRINT, "label": "SmokeMembers", "location": [0, 300, 0]}]})
+    report.check("object_set_properties changes the component defaults of a Blueprint through the template blueprint_inspect lists, "
+                 "and a new instance has the value",
+                 not template_error and (changed or {}).get("blueprint") == members
+                 and read_property(client, "SmokeMembers.StaticMeshComponent0", "StaticMesh") == SMOKE_CUBE + ".Cube",
+                 template + " " + (error_message(changed) or json.dumps((changed or {}).get("after"))))
+    # The fixture Widget Blueprint without its binding does not compile, which pie_start refuses unless its warning is off.
+    client.call_tool("testbed_set_pie_warning", {"blueprint": object_path(FIXTURE_FOLDER + "/WBP_AgentMcpMissingBinding"), "bEnabled": False})
+    _, _, is_error, data, _ = client.call_tool("pie_start", {"warmupSeconds": 1.0})
+    if report.check("pie_start plays the level with the edited Blueprints", not is_error, error_message(data)[:200]):
+        _, _, _, logs, _ = client.call_tool("log_get_recent", {"sinceSequence": (data or {}).get("startLogSequence", 0),
+                                                              "categories": "LogBlueprintUserMessages", "maxEntries": 20})
+        lines = [entry.get("message", "") for entry in (logs or {}).get("entries") or []]
+        report.check("the play session log shows the string the edited graph prints", any(GRAPH_PROBE in line for line in lines), "; ".join(lines)[:240])
+        report.check("the play session log shows Heal(5) on the default Health 100", any("BP_AgentMcpMembers" in line and "105" in line for line in lines),
+                     "; ".join(lines)[:240])
+        client.call_tool("pie_stop")
+P10_TOOLS = {"source_find", "source_search", "source_read", "source_replace", "source_write",
             "editor_open_assets", "editor_show_in_content_browser", "actor_select", "actor_find"}
 SMOKE_SOURCE_FILE = "AgentMcpSmokeSource.txt"
 SMOKE_CP949_FILE = "AgentMcpSmokeCp949.txt"
@@ -1757,21 +1911,21 @@ class TaggedClient(McpClient):
         return bool(self.session_id)
 
 
-def run_p9(client, report, evidence):
-    p9 = evidence.setdefault("p9", {})
-    run_p9_source(client, report, p9)
-    run_p9_navigation(client, report, p9)
-    run_p9_approval(client, report)
+def run_p10(client, report, evidence):
+    p10 = evidence.setdefault("p10", {})
+    run_p10_source(client, report, p10)
+    run_p10_navigation(client, report, p10)
+    run_p10_approval(client, report)
 
 
-def run_p9_source(client, report, p9):
+def run_p10_source(client, report, p10):
     # --- source_find ----------------------------------------------------------------------------------
     _, _, is_error, data, _ = client.call_tool("source_find", {"pattern": "*.uplugin", "maxResults": 50})
     folders = (data or {}).get("folders") or []
     files = [entry.get("path") or "" for entry in (data or {}).get("files") or []]
     report.check("source_find lists the readable folders and finds the plugin descriptor",
                  not is_error and bool(folders) and any(path.endswith("AgentMcp.uplugin") for path in files), json.dumps(data)[:300])
-    p9["folders"] = folders
+    p10["folders"] = folders
     if not folders:
         return
 
@@ -1867,7 +2021,7 @@ def run_p9_source(client, report, p9):
                      not is_error and (data or {}).get("bCreated") is False and (data or {}).get("totalLines") == 1, json.dumps(data)[:200])
 
         if root:
-            run_p9_cp949(client, report, folder, root)
+            run_p10_cp949(client, report, folder, root)
         else:
             report.info("source tools keep CP949 and CRLF", "skipped: the project folder is unknown, so no CP949 file can be written")
     finally:
@@ -1875,7 +2029,7 @@ def run_p9_source(client, report, p9):
             os.remove(absolute)
 
 
-def run_p9_cp949(client, report, folder, root):
+def run_p10_cp949(client, report, folder, root):
     """Korean projects keep sources in CP949; the source tools decode them and write them back in CP949 with the file's line endings."""
     relative = f"{folder}/{SMOKE_CP949_FILE}"
     absolute = os.path.join(root, relative)
@@ -1902,7 +2056,7 @@ def run_p9_cp949(client, report, folder, root):
             os.remove(absolute)
 
 
-def run_p9_navigation(client, report, p9):
+def run_p10_navigation(client, report, p10):
     # --- editor_show_in_content_browser / editor_open_assets ------------------------------------------
     _, _, is_error, data, _ = client.call_tool("editor_show_in_content_browser", {"assets": [SMOKE_NAVIGATE_ASSET, "/Game/AgentMcpSmoke/NoSuchAsset"]})
     report.check("editor_show_in_content_browser shows an asset and skips a missing one",
@@ -1941,7 +2095,7 @@ def run_p9_navigation(client, report, p9):
     report.check("actor_select selects the actor without an editor transaction",
                  not is_error and (data or {}).get("bApplied") is True and selected == [actor.get("label")]
                  and get_undo_state(client).get("undoableCount") == undoable, json.dumps(selected)[:200])
-    p9["selected"] = selected
+    p10["selected"] = selected
 
     _, _, is_error, data, _ = client.call_tool("actor_select", {"actors": [actor.get("path"), "AgentMcpSmokeNoSuchActor"]})
     _, _, _, state, _ = client.call_tool("editor_get_state", {})
@@ -1949,7 +2103,7 @@ def run_p9_navigation(client, report, p9):
                  is_error and (state or {}).get("selectedActors") == selected, error_message(data)[:200])
 
 
-def run_p9_approval(client, report):
+def run_p10_approval(client, report):
     """A session that sends X-AgentMcp-Client asks the gate registered for its tag before anything but a Read tool."""
     tagged = TaggedClient(client.url, client.token, SMOKE_CLIENT_TAG)
     if not report.check("a session with X-AgentMcp-Client opens", tagged.open()):
@@ -2042,7 +2196,8 @@ def main():
     parser.add_argument("--skip-p6", action="store_true", help="skip creating data assets and importing textures (needs the testbed toolset)")
     parser.add_argument("--skip-p7", action="store_true", help="skip level and actor authoring (creates a fixture level and writes it to disk)")
     parser.add_argument("--skip-p8", action="store_true", help="skip animation authoring (needs the testbed animation fixtures)")
-    parser.add_argument("--skip-p9", action="store_true", help="skip the source tools, navigation tools and the approval gate (writes and removes text files in a readable folder)")
+    parser.add_argument("--skip-p9", action="store_true", help="skip Blueprint graph editing (needs the testbed toolset, creates a fixture level)")
+    parser.add_argument("--skip-p10", action="store_true", help="skip the source tools, navigation tools and the approval gate (writes and removes text files in a readable folder)")
     args = parser.parse_args()
 
     # Every editor with the plugin serves the same default port, so make sure the smoke test talks to the intended project.
@@ -2081,6 +2236,8 @@ def main():
         expected_tools |= P8_TOOLS
     if not args.skip_p9:
         expected_tools |= P9_TOOLS
+    if not args.skip_p10:
+        expected_tools |= P10_TOOLS
     try:
         run_p0(client, report, evidence, expected_tools)
         if not args.skip_slice1:
@@ -2103,6 +2260,8 @@ def main():
             run_p8(client, report, evidence)
         if not args.skip_p9:
             run_p9(client, report, evidence)
+        if not args.skip_p10:
+            run_p10(client, report, evidence)
         run_protocol_errors(client, report)
     except Exception as error:  # Keep the evidence of the checks that did run.
         report.check("smoke test ran to completion", False, f"{type(error).__name__}: {error}")

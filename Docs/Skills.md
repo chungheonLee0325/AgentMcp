@@ -10,7 +10,7 @@ A skill is a task guide for agents: a folder with a `SKILL.md` file whose front 
 
 Skills are read from these folders in this order. A skill from a later folder replaces one with the same name from an earlier folder, allowing projects to adapt plugin guidance.
 
-1. `Plugins/AgentMcp/Skills`: plugin skills, currently `umg-authoring`, `ui-art-requests` and `ui-style-system`
+1. `Plugins/AgentMcp/Skills`: plugin skills, currently `umg-authoring`, `ui-art-requests`, `ui-style-system` and `blueprint-graphs`
 2. `AgentMcp/Skills` in the project folder
 3. folders configured through `SkillDirectories`
 

@@ -170,6 +170,34 @@ namespace UE::AgentMcp::Tools
 		return Result;
 	}
 
+	UScriptStruct* ResolveStruct(const FString& NameOrPath)
+	{
+		const FString Text = StripExportTextPath(NameOrPath);
+		if (Text.IsEmpty() || Text.Len() >= NAME_SIZE)
+		{
+			return nullptr;
+		}
+		if (Text.StartsWith(TEXT("/")))
+		{
+			FString ObjectPath = Text;
+			if (!ObjectPath.Contains(TEXT(".")))
+			{
+				ObjectPath += TEXT(".") + FPackageName::GetShortName(ObjectPath);
+			}
+			if (UScriptStruct* Struct = FindObject<UScriptStruct>(nullptr, *ObjectPath))
+			{
+				return Struct;
+			}
+			return LoadObject<UScriptStruct>(nullptr, *ObjectPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+		}
+		UScriptStruct* Struct = FindFirstObject<UScriptStruct>(*Text, EFindFirstObjectOptions::NativeFirst);
+		if (!Struct && Text.Len() > 1 && Text[0] == TEXT('F'))
+		{
+			Struct = FindFirstObject<UScriptStruct>(*Text.RightChop(1), EFindFirstObjectOptions::NativeFirst);
+		}
+		return Struct;
+	}
+
 	const UClass* FindNativeClass(const UClass* Class)
 	{
 		while (Class && !Class->HasAnyClassFlags(CLASS_Native))

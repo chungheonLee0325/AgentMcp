@@ -145,12 +145,12 @@ public:
 
 	/**
 	 * Changes property values of an actor or component in the editor level, of a project asset such as a data asset or a texture, or the
-	 * class defaults of a project Blueprint through its default object (/Game/UI/WBP_Hud.Default__WBP_Hud_C), with editor change
-	 * notifications (PreEditChange and PostEditChangeProperty). A class default change marks the Blueprint modified, as the Blueprint
-	 * editor does, so instances created afterwards get the value. Blueprint graphs, native class defaults, DataTables (use the datatable
-	 * tools) and engine content are refused. Every value is checked before anything changes. A struct value may list only the fields to
-	 * change; an array value replaces the whole array.
-	 * @param Object The actor, component, asset or Blueprint default object to change.
+	 * class defaults of a project Blueprint through its default object (/Game/UI/WBP_Hud.Default__WBP_Hud_C) or one of its components
+	 * (the template path that blueprint_inspect lists), with editor change notifications (PreEditChange and PostEditChangeProperty). A
+	 * class default change marks the Blueprint modified, as the Blueprint editor does, so instances created afterwards get the value.
+	 * Blueprint graphs, native class defaults, DataTables (use the datatable tools) and engine content are refused. Every value is checked
+	 * before anything changes. A struct value may list only the fields to change; an array value replaces the whole array.
+	 * @param Object The actor, component, asset, Blueprint default object or Blueprint component template to change.
 	 * @param Values Property name to new value, for example {"Tags": ["Door"], "bHidden": true}.
 	 * @return Values before and after the call, and which properties changed.
 	 */

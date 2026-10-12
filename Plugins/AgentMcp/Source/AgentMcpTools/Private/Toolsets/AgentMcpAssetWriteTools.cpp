@@ -2,21 +2,26 @@
 
 #include "AgentMcpToolsCommon.h"
 
+#include "Animation/AnimInstance.h"
 #include "AssetImportTask.h"
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetToolsModule.h"
+#include "Blueprint/UserWidget.h"
 #include "Dom/JsonObject.h"
+#include "Engine/Blueprint.h"
 #include "Engine/DataAsset.h"
 #include "Engine/DataTable.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture2D.h"
+#include "Factories/BlueprintFactory.h"
 #include "Factories/DataAssetFactory.h"
 #include "Factories/DataTableFactory.h"
 #include "Factories/StringTableFactory.h"
 #include "HAL/FileManager.h"
 #include "IAssetTools.h"
 #include "Internationalization/StringTable.h"
+#include "Kismet2/KismetEditorUtilities.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
@@ -30,35 +35,6 @@ namespace UE::AgentMcp::AssetWriteToolsPrivate
 	IAssetTools& GetAssetTools()
 	{
 		return FModuleManager::LoadModuleChecked<FAssetToolsModule>(TEXT("AssetTools")).Get();
-	}
-
-	/** A row struct by path (/Script/Module.Struct or a user-defined struct asset) or by name, with or without the C++ prefix F. */
-	UScriptStruct* ResolveRowStruct(const FString& NameOrPath)
-	{
-		const FString Text = Tools::StripExportTextPath(NameOrPath);
-		if (Text.IsEmpty() || Text.Len() >= NAME_SIZE)
-		{
-			return nullptr;
-		}
-		if (Text.StartsWith(TEXT("/")))
-		{
-			FString ObjectPath = Text;
-			if (!ObjectPath.Contains(TEXT(".")))
-			{
-				ObjectPath += TEXT(".") + FPackageName::GetShortName(ObjectPath);
-			}
-			if (UScriptStruct* Struct = FindObject<UScriptStruct>(nullptr, *ObjectPath))
-			{
-				return Struct;
-			}
-			return LoadObject<UScriptStruct>(nullptr, *ObjectPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
-		}
-		UScriptStruct* Struct = FindFirstObject<UScriptStruct>(*Text, EFindFirstObjectOptions::NativeFirst);
-		if (!Struct && Text.Len() > 1 && Text[0] == TEXT('F'))
-		{
-			Struct = FindFirstObject<UScriptStruct>(*Text.RightChop(1), EFindFirstObjectOptions::NativeFirst);
-		}
-		return Struct;
 	}
 
 	/** Absolute path of a file argument; a relative path starts at the project folder. */
@@ -228,7 +204,7 @@ namespace UE::AgentMcp::AssetWriteToolsPrivate
 	}
 }
 
-FAgentMcpAssetCreateResult UAgentMcpAssetTools::Create(const FString& AssetPath, UClass* AssetClass, const FString& RowStruct)
+FAgentMcpAssetCreateResult UAgentMcpAssetTools::Create(const FString& AssetPath, UClass* AssetClass, const FString& RowStruct, UClass* ParentClass)
 {
 	using namespace UE::AgentMcp;
 	using namespace UE::AgentMcp::AssetWriteToolsPrivate;
@@ -258,9 +234,40 @@ FAgentMcpAssetCreateResult UAgentMcpAssetTools::Create(const FString& AssetPath,
 
 	const bool bDataTable = AssetClass == UDataTable::StaticClass();
 	const bool bStringTable = AssetClass == UStringTable::StaticClass();
+	const bool bBlueprint = AssetClass == UBlueprint::StaticClass();
 	const FString RowStructName = RowStruct.TrimStartAndEnd();
 	UScriptStruct* Struct = nullptr;
-	if (bDataTable)
+	if (ParentClass && !bBlueprint)
+	{
+		RaiseToolError(TEXT("INVALID_ARGUMENT"), TEXT("'parentClass' only applies to Blueprints."), TEXT("Pass assetClass Blueprint, or leave parentClass empty."));
+		return Result;
+	}
+	if (bBlueprint)
+	{
+		if (!ParentClass)
+		{
+			RaiseToolError(TEXT("INVALID_ARGUMENT"), TEXT("'parentClass' is required to create a Blueprint."), TEXT("Pass the parent class, for example Actor or Character."));
+			return Result;
+		}
+		if (ParentClass->IsChildOf(UUserWidget::StaticClass()) || ParentClass->IsChildOf(UAnimInstance::StaticClass()))
+		{
+			RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("%s needs a Widget or Animation Blueprint."), *ParentClass->GetName()),
+				TEXT("Create Widget Blueprints with umg_create_widget_blueprint and Animation Blueprints with anim_build_anim_blueprint."));
+			return Result;
+		}
+		if (!FKismetEditorUtilities::CanCreateBlueprintOfClass(ParentClass))
+		{
+			RaiseToolError(TEXT("INVALID_ARGUMENT"), FString::Printf(TEXT("%s cannot be the parent of a Blueprint."), *ParentClass->GetName()),
+				TEXT("Blueprintable classes can; class_find_derived lists the classes that derive from one."));
+			return Result;
+		}
+		if (!RowStructName.IsEmpty())
+		{
+			RaiseToolError(TEXT("INVALID_ARGUMENT"), TEXT("'rowStruct' only applies to DataTables."), TEXT("Leave rowStruct empty for Blueprints."));
+			return Result;
+		}
+	}
+	else if (bDataTable)
 	{
 		if (RowStructName.IsEmpty())
 		{
@@ -268,7 +275,7 @@ FAgentMcpAssetCreateResult UAgentMcpAssetTools::Create(const FString& AssetPath,
 				TEXT("Pass the row struct, for example /Script/MyGame.ItemRow or ItemRow."));
 			return Result;
 		}
-		Struct = ResolveRowStruct(RowStructName);
+		Struct = Tools::ResolveStruct(RowStructName);
 		if (!Struct || !Struct->IsChildOf(FTableRowBase::StaticStruct()))
 		{
 			RaiseToolError(TEXT("INVALID_ARGUMENT"), FString::Printf(TEXT("'%s' is not a row struct, a struct derived from FTableRowBase."), *RowStructName.Left(256)),
@@ -286,7 +293,7 @@ FAgentMcpAssetCreateResult UAgentMcpAssetTools::Create(const FString& AssetPath,
 	}
 	else if (!AssetClass->IsChildOf(UDataAsset::StaticClass()))
 	{
-		RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("asset_create creates data assets, DataTables and string tables, not %s assets."), *AssetClass->GetName()),
+		RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("asset_create creates data assets, DataTables, string tables and Blueprints, not %s assets."), *AssetClass->GetName()),
 			TEXT("Create Widget Blueprints with umg_create_widget_blueprint and textures with asset_import_textures."));
 		return Result;
 	}
@@ -311,7 +318,13 @@ FAgentMcpAssetCreateResult UAgentMcpAssetTools::Create(const FString& AssetPath,
 	}
 
 	UFactory* Factory = nullptr;
-	if (bDataTable)
+	if (bBlueprint)
+	{
+		UBlueprintFactory* BlueprintFactory = NewObject<UBlueprintFactory>();
+		BlueprintFactory->ParentClass = ParentClass;
+		Factory = BlueprintFactory;
+	}
+	else if (bDataTable)
 	{
 		UDataTableFactory* DataTableFactory = NewObject<UDataTableFactory>();
 		DataTableFactory->Struct = Struct;
@@ -340,6 +353,10 @@ FAgentMcpAssetCreateResult UAgentMcpAssetTools::Create(const FString& AssetPath,
 	if (Struct)
 	{
 		Result.RowStruct = Struct->GetPathName();
+	}
+	if (bBlueprint)
+	{
+		Result.ParentClass = ParentClass->GetPathName();
 	}
 	return Result;
 }

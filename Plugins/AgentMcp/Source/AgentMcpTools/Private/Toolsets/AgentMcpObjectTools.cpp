@@ -3,6 +3,7 @@
 #include "AgentMcpJson.h"
 #include "AgentMcpToolsCommon.h"
 
+#include "Components/ActorComponent.h"
 #include "Dom/JsonObject.h"
 #include "Editor.h"
 #include "Engine/Blueprint.h"
@@ -27,9 +28,24 @@ namespace UE::AgentMcp::ObjectToolsPrivate
 	}
 
 	/**
+	 * The Blueprint whose class defaults hold Object: the default object of its generated class, a component of that default object
+	 * (components of C++ parents, as Default__BP_Door_C:StaticMeshComponent0), or a component template in the generated class
+	 * (components added in Blueprints, as BP_Door_C:Frame_GEN_VARIABLE). The Blueprint editor's details panel edits these objects.
+	 */
+	UBlueprint* FindClassDefaultsBlueprint(const UObject* Object)
+	{
+		const UObject* Outer = Object->GetOuter();
+		const UClass* Class = Object->HasAnyFlags(RF_ClassDefaultObject) ? Object->GetClass()
+			: (Outer && Outer->HasAnyFlags(RF_ClassDefaultObject)) ? Outer->GetClass()
+			: Object->IsA<UActorComponent>() ? Object->GetTypedOuter<UBlueprintGeneratedClass>() : nullptr;
+		UBlueprint* Blueprint = Class ? UBlueprint::GetBlueprintFromClass(Class) : nullptr;
+		return Blueprint && Blueprint->GeneratedClass == Class ? Blueprint : nullptr;
+	}
+
+	/**
 	 * Tools change objects of the editor level (actors, their components and other level sub-objects), project assets such as data
-	 * assets and textures, and the class defaults of project Blueprints. Blueprint graphs and DataTables have their own tools. Sets
-	 * bOutLevelObject for objects of the editor level, and OutBlueprint for the default object of a Blueprint's generated class.
+	 * assets and textures, and the class defaults of project Blueprints with their components. Blueprint graphs and DataTables have their
+	 * own tools. Sets bOutLevelObject for objects of the editor level, and OutBlueprint for class defaults of a Blueprint.
 	 */
 	bool RequireEditableObject(const UObject* Object, bool& bOutLevelObject, UBlueprint*& OutBlueprint)
 	{
@@ -37,11 +53,11 @@ namespace UE::AgentMcp::ObjectToolsPrivate
 		OutBlueprint = nullptr;
 		if (Object->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject))
 		{
-			UBlueprint* Blueprint = Object->HasAnyFlags(RF_ClassDefaultObject) ? UBlueprint::GetBlueprintFromClass(Object->GetClass()) : nullptr;
-			if (!Blueprint || Blueprint->GeneratedClass != Object->GetClass())
+			UBlueprint* Blueprint = FindClassDefaultsBlueprint(Object);
+			if (!Blueprint)
 			{
 				RaiseToolError(TEXT("NOT_SUPPORTED"), FString::Printf(TEXT("%s is a native class default or an archetype object."), *Object->GetPathName()),
-					TEXT("Only the class defaults of a Blueprint can be changed, through its default object, for example /Game/UI/WBP_Hud.Default__WBP_Hud_C."));
+					TEXT("Only the class defaults of a Blueprint and their components can be changed: the default object, for example /Game/UI/WBP_Hud.Default__WBP_Hud_C, or a component path that blueprint_inspect lists as template."));
 				return false;
 			}
 			if (!Tools::RequireProjectContent(Blueprint))

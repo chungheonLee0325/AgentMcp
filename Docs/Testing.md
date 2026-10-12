@@ -10,6 +10,7 @@ The repository root is a small Unreal Engine 5.5 project that builds and tests t
 | `Source/AgentMcpTestbed` | Row structs, data assets, widget bases, game mode and the C++ classes of the UI sample |
 | `Source/AgentMcpTestbedEditor` | Test-only tools and `sample_show_widget` |
 | `Content/Samples/DungeonUi` | Widget Blueprints, theme data asset and item table built through the tools |
+| `Content/Samples/Pickup` | A spinning, bobbing pickup Blueprint (variables, a pure function, construction script and event graph) and its demo level, built through the blueprint tools |
 | `Art/Requests` | Art requests for the sample |
 | `Docs` | Case studies, the UI style system of the sample, and experiments |
 | `.mcp.json`, `.codex/config.toml` | Claude Code and Codex connection settings for testbed port 18766 |
@@ -23,7 +24,7 @@ The repository root is a small Unreal Engine 5.5 project that builds and tests t
 2. Open `AgentMcpTestbed.uproject` and wait for `Agent MCP server listening on http://127.0.0.1:18766/mcp`.
 3. Run `python Tools/mcp_smoke.py --out Saved/MCP/smoke.json`.
 
-The smoke test covers MCP transport and errors, every tool, undo and rollback, request cancellation, Play In Editor, viewport capture with game UI, Live Coding, nested Widget Blueprint editing, skills, data-asset/DataTable creation, texture and mesh import, level authoring and animation assets.
+The smoke test covers MCP transport and errors, every tool, undo and rollback, request cancellation, Play In Editor, viewport capture with game UI, Live Coding, nested Widget Blueprint editing, Blueprint graph editing, skills, data-asset/DataTable creation, texture and mesh import, level authoring and animation assets.
 
 P9 checks the source tools (ranges, regular expressions, CP949 and CRLF, refusals), the navigation tools and the approval gate for tagged clients. It needs no testbed content, so it also runs against another project; skip the sections that need the testbed:
 

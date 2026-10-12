@@ -26,14 +26,14 @@
 | `level_save` | Control | 에디터에 열린 레벨, 또는 저장 안 된 모든 레벨을 저장 |
 | `object_list_properties` | Read | 객체의 프로퍼티와 변경 가능 여부 |
 | `object_get_properties` | Read | 프로퍼티 값을 JSON으로 읽기 |
-| `object_set_properties` | Write | 에디터 레벨의 액터·컴포넌트, 데이터 에셋·텍스처 같은 프로젝트 에셋, 프로젝트 블루프린트 클래스 기본값의 프로퍼티 변경과 변경 후 값 확인 |
+| `object_set_properties` | Write | 에디터 레벨의 액터·컴포넌트, 데이터 에셋·텍스처 같은 프로젝트 에셋, 프로젝트 블루프린트의 클래스 기본값과 컴포넌트 기본값의 프로퍼티 변경과 변경 후 값 확인 |
 | `pie_start`, `pie_stop` | Control | Play In Editor를 시작하거나 종료하고, 세션이 시작되거나 끝날 때까지 대기. `pie_start`는 레벨 뷰포트에서 실행하고, `windowWidth`와 `windowHeight`를 주면 뷰포트가 그 크기인 새 창에서 실행 |
 | `pie_status` | Read | 플레이 세션이 시작 중인지, 실행 중인지 |
 | `asset_find` | Read | 폴더, 클래스, 이름으로 에셋 찾기(에셋을 로드하지 않음) |
 | `asset_inspect` | Read | 에셋의 클래스, 태그, 파일 크기, 로드·변경 상태, 참조 수 |
 | `asset_referencers`, `asset_dependencies` | Read | 에셋을 참조하는 패키지, 에셋이 의존하는 패키지 |
 | `asset_save` | Control | 로드된 프로젝트 에셋을 대화상자 없이 저장 |
-| `asset_create` | Control | 데이터 에셋, DataTable, 스트링 테이블 생성 |
+| `asset_create` | Control | 데이터 에셋, DataTable, 스트링 테이블, 부모 클래스를 지정한 블루프린트 클래스 생성 |
 | `asset_import_textures` | Control | PNG, JPEG, TGA, BMP 파일을 UMG용 설정의 텍스처로 가져오기. `bMipmaps`를 주면 제 크기보다 작게 또는 여러 크기로 그리는 이미지를 위해 밉맵을 유지 |
 | `asset_import_meshes` | Control | FBX, glTF, GLB, OBJ 파일을 스태틱 메시로 임포트. 크기와 콜리전을 함께 보고 |
 | `class_find_derived` | Read | 클래스를 상속하는 C++·블루프린트 클래스와 헤더, 에셋 |
@@ -45,6 +45,12 @@
 | `stringtable_set_entries` | Write | 프로젝트 스트링 테이블 항목 추가나 원문 변경, 네임스페이스 설정 |
 | `blueprint_inspect` | Read | 부모 클래스 체인, 인터페이스, 컴포넌트, 변수, 함수, 그래프 |
 | `blueprint_compile` | Control | 블루프린트나 위젯 블루프린트를 컴파일하고 오류와 경고 반환 |
+| `blueprint_get_graph` | Read | 그래프의 노드와 핀, 값, 연결. 진입점만 또는 한 노드에 이어진 체인만 볼 수도 있음 |
+| `blueprint_read_graph` | Read | 실행 연결을 따라가는 짧은 의사코드로 그래프 읽기. 이벤트, 함수, 분기, 루프, 식 |
+| `blueprint_find_usages` | Read | Find in Blueprints 인덱스로 함수 호출, 변수 읽기·쓰기, 캐스트, 이벤트 바인딩 위치 찾기. 로드하지 않은 블루프린트도 포함 |
+| `blueprint_find_node_types` | Read | 그래프에 넣을 수 있는 노드 타입을 에디터 노드 메뉴처럼 `Development\|PrintString` 같은 타입 ID로 반환. 특정 핀에 연결되는 것만 고를 수도 있음 |
+| `blueprint_edit_graph` | Write | 노드 추가·삭제·이동, 핀 연결·끊기, 입력값 설정, 핀 추가를 순서대로, undo 한 단계로 수행 |
+| `blueprint_add_members` | Write | 블루프린트에 변수, 입출력이 있는 함수, 이벤트 디스패처를 undo 한 단계로 추가 |
 | `anim_build_blend_space` | Control | 한 축에 애니메이션을 배치한 1D 블렌드 스페이스를 만들거나 다시 구성, 축 입력 스무딩 선택 |
 | `anim_build_montage` | Control | 세그먼트마다 이름 붙은 섹션을 두고 섹션 반복과 이동을 지정한 몽타주를 만들거나 다시 구성 |
 | `anim_build_anim_blueprint` | Control | 관성 블렌드(Inertialization), 슬롯, 블렌드 스페이스, 시퀀스 노드 트리로 애니메이션 블루프린트를 만들거나 애님 그래프를 다시 구성하고 컴파일 |
@@ -69,6 +75,8 @@
 UI를 만드는 흐름: `umg_create_widget_blueprint`(`BindWidget` 프로퍼티를 선언한 C++ 부모 클래스 지정) → `umg_add_widgets` → `blueprint_compile` → 플레이 세션에서 `viewport_capture`로 확인 → `umg_set_widget_properties`로 조정. 값은 JSON입니다. 프로퍼티 이름은 C++ 이름(`Text`, `Font`, `Padding`, `LayoutData`)을 쓰고, 구조체 값에는 바꿀 필드만 적어도 되며, enum 값은 이름(`HAlign_Center`, `RoundedBox`)으로 씁니다. 엔트리 클래스로 위젯 블루프린트를 쓸 수 있고, 그 인스턴스 속성도 같은 방식으로 설정합니다. 편집 도구는 요청한 필드만 되읽어 돌려주고, 전체 값은 `umg_inspect`의 `bIncludeProperties`로 확인합니다.
 
 UI의 모양을 데이터로 두려면 `asset_create`로 테마 데이터 에셋이나 아이템 DataTable을 만들고, `object_set_properties`와 datatable 도구로 채우고, `asset_import_textures`로 아이콘과 프레임을 UMG용 텍스처 설정으로 가져옵니다. 화면에 보이는 글은 스트링 테이블에 둡니다(`asset_create`의 `StringTable`, 이어서 `stringtable_set_entries`). 글 속성을 `LOCTABLE("/Game/Text/ST_Ui.ST_Ui", "Key")`로 설정하면 그 항목을 참조하므로, 스크립트가 몇 번을 다시 써도 로컬라이제이션 키가 하나로 유지됩니다.
+
+블루프린트 로직 수정 흐름: 새 클래스는 `asset_create`(`assetClass` `Blueprint`) → `blueprint_add_members`로 변수와 함수 추가 → `blueprint_get_graph`로 그래프 읽기 → 노드 타입마다 `blueprint_find_node_types` → `blueprint_edit_graph`로 노드를 추가하고 반환된 핀 이름으로 연결 → `blueprint_compile` → `pie_start`와 `log_get_recent`로 실행 확인 → `asset_save`
 
 캐릭터 애니메이션 흐름: 이동은 `anim_build_blend_space` → 공격마다 `anim_build_montage`(게임이 다음 단계를 정할 때까지 반복하는 섹션 포함) → `anim_build_anim_blueprint`로 블렌드 스페이스 위에 Slot 노드를 두고 속도는 C++ 부모 클래스 변수에서 읽음 → `asset_save`
 

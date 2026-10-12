@@ -17,6 +17,7 @@ Included skills:
 - `umg-authoring`: production-oriented UMG authoring with reusable Widget Blueprint components, C++ `BindWidget` contracts, data-driven lists, Theme Data Assets and capture-based review
 - `ui-style-system`: design tokens, a UI kit/gallery, style extraction and viewport-capture comparison
 - `ui-art-requests`: an art request → review → import → connection workflow between UMG and an image model, another agent or an artist
+- `blueprint-graphs`: Blueprint classes and logic: create a class, add variables, functions and event dispatchers, look node types up, add and wire nodes, compile once and check the behavior in a play session
 
 ### UMG-focused tools
 
@@ -27,6 +28,16 @@ The UMG toolset goes beyond creating Widget Blueprints.
 - create Widget Blueprints, add whole subtrees, and change widget and slot properties
 - dry-run destructive edits and report the affected bindings and graph references before removal
 - iterate through Blueprint compile → PIE → viewport capture → review
+
+### Blueprint logic tools
+
+Agents can build Blueprint logic without the graph editor. Node types are named as in the experimental Blueprint toolset of UE 5.8 (`Development|PrintString`), reimplemented on UE 5.5 editor APIs.
+
+- create Blueprint classes and add variables, functions with inputs and outputs, and event dispatchers
+- find node types as the editor's node menu offers them, optionally only those that connect to a given pin
+- add, wire and remove nodes and set pin values in one call that is checked first, recorded as one undo step and rolled back when an operation fails
+- read a large graph one event chain at a time, with each node's compile message
+- verify through Blueprint compile → PIE → log
 
 ### Build → Run → Review
 
@@ -44,7 +55,7 @@ Tools are plain `static UFUNCTION`s. Names, descriptions, arguments and result J
 
 A chat panel lets planners and artists ask about the project and have it changed, signed in with their own Claude, ChatGPT or Google account. Permission modes decide what the model may change, and every change waits for an approval card. See [AI chat](Docs/AiChat.md).
 
-> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 216 checks against the testbed project. The plugin also builds on Unreal Engine 5.7.4 and is used there in one project, where the smoke test has not been run yet. Other platforms have not been tried.
+> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 251 checks against the testbed project. The plugin also builds on Unreal Engine 5.7.4 and is used there in one project, where the smoke test has not been run yet. Other platforms have not been tried.
 
 ## Dungeon UI — workflow case study
 
@@ -123,7 +134,7 @@ The editor writes `.mcp.json` for Claude Code and `.codex/config.toml` for Codex
 - Meshes are imported with the materials and textures their file carries, and there is no tool to author materials. Fab content is added through the Fab plugin, which needs the user's Epic account.
 - The level tools create and open levels and place actors. World Partition data layers, streaming sources and level instances are not covered, and a partitioned level saves its actors in their own packages.
 - Source control handling of `level_save` has not been tested.
-- Blueprint graphs and class defaults, widget animations and designer property bindings can be inspected but not edited, and widgets cannot yet be moved to a different parent or changed to another class; the UI sample rebuilt subtrees instead.
+- Blueprint variables, functions and event dispatchers can be added but not yet removed or renamed; local variables, function overrides and interfaces are not covered, and graphs are not laid out automatically. In a localized editor the node type ids of variables and event dispatchers carry localized categories. Widget animations and designer property bindings can be inspected but not edited, and widgets cannot yet be moved to a different parent or changed to another class; the UI sample rebuilt subtrees instead.
 - `ToolSearch` exposure mode and source-control handling on save have not yet been tested.
 
 ## Background
