@@ -1083,6 +1083,18 @@ namespace UE::AgentMcp::Chat
 				{
 					(*ResultError)->TryGetStringField(TEXT("message"), ErrorText);
 				}
+				// The result only says "ERROR"; the reason came before it on an "AGY_ERROR: {json}" line.
+				FString ErrorJson;
+				if (ErrorText == Status && CliOtherOutput.Split(TEXT("AGY_ERROR:"), nullptr, &ErrorJson, ESearchCase::CaseSensitive, ESearchDir::FromEnd))
+				{
+					ErrorJson.Split(TEXT("\n"), &ErrorJson, nullptr);
+					TSharedPtr<FJsonObject> AgyError;
+					const TSharedRef<TJsonReader<>> ErrorReader = TJsonReaderFactory<>::Create(ErrorJson.TrimStartAndEnd());
+					if (FJsonSerializer::Deserialize(ErrorReader, AgyError) && AgyError.IsValid())
+					{
+						AgyError->TryGetStringField(TEXT("short_error"), ErrorText);
+					}
+				}
 				Fail(TEXT("Gemini 오류: ") + ErrorText);
 				return;
 			}
