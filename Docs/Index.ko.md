@@ -26,7 +26,7 @@ Agent MCP는 Unreal Editor 안에서 MCP 서버를 실행해 에이전트가 프
 | 에디터 내 채팅 | [AI 채팅](AiChat.ko.md) | 모델 공급자, 로그인, 권한 모드, 변경 승인 |
 | MCP 내부 구조 | [MCP 아키텍처](Architecture.ko.md) | 프로토콜·Reflection 등록·호출·승인·AI 채팅 연결 |
 | Toolset 확장 | [도구 만들기](WritingTools.ko.md) | `UFUNCTION`과 Reflection 기반 MCP 도구 추가 |
-| 성능 조사 | [성능 워크플로](Workflows.ko.md#6-성능-측정과-비교) | CSV 프로파일링, Insights, GPU 덤프, 전후 비교 |
+| 성능 조사 | [성능 분석 구조와 사례](PerformanceInvestigation.ko.md) | 독립 실행 반복 측정, CSV·Insights·GPU 분석, 편차 비교 및 Sonheim 실측 |
 | 검증 환경 | [테스트베드](Testing.ko.md) | Smoke 테스트와 샘플 프로젝트 실행 |
 
 ## 동작 구조
