@@ -8,7 +8,7 @@ Agent MCP runs an MCP server inside the Unreal Editor so agents can inspect and 
 
 | Goal | Read |
 |---|---|
-| Install the plugin and connect for the first time | [README Quick start](../README.md#quick-start) |
+| Install the plugin and connect for the first time | [README installation and connection](../README.md#installation-and-connection) |
 | Configure Claude Code, Codex, authentication, or multiple editors | [Connecting clients](Clients.md) |
 | Follow task-oriented tool call sequences | [Workflows](Workflows.md) |
 | Look up tool names and access levels | [Tool reference](Tools.md) |
@@ -24,30 +24,16 @@ Agent MCP runs an MCP server inside the Unreal Editor so agents can inspect and 
 | Blueprints, levels, and assets | [Tools](Tools.md) | Graph inspection/editing, usage search, data and actors |
 | Task guidance | [Skills](Skills.md) | Plugin and project `SKILL.md` files, overrides |
 | In-editor AI chat | [AI chat](AiChat.md) | Providers, sign-in, permission modes, approvals |
+| MCP internals | [MCP architecture](Architecture.md) | Transport, Reflection discovery, invocation, approvals and chat integration |
 | Extending the toolset | [Writing tools](WritingTools.md) | Adding Reflection-based MCP tools with `UFUNCTION` |
 | Performance investigation | [Performance workflow](Workflows.md#6-measure-and-compare-performance) | CSV profiling, Insights, GPU dumps, before/after comparisons |
 | Testing | [Testbed and smoke tests](Testing.md) | Running the included test project |
 
 ## How the pieces fit
 
-```text
-Claude Code / Codex             In-editor AI chat
-         \                         /
-          \                       /
-           MCP calls (127.0.0.1)
-                    |
-             AgentMcpProtocol
-                    |
-          Reflection-based tools
-                    |
-          AgentMcpTools / Toolset
-                    |
-           Unreal Editor APIs
-                    |
-     Assets / UMG / Blueprint / PIE
-```
+AgentMcp connects external Claude Code/Codex clients and the in-editor AI chat to **the same Reflection-based tool layer** through a local MCP server. Tool execution, access levels, approval gates and Agent Skill loading are separate responsibilities.
 
-Tool argument and result schemas are generated from C++ `UFUNCTION` declarations and Unreal Reflection. Task guidance is served separately as Markdown `SKILL.md` files. This separates **what a tool can do** from **how an agent should approach a production task**.
+See [MCP architecture](Architecture.md) for the request-to-editor call path, or [Writing tools](WritingTools.md) to extend the toolset with a `UFUNCTION`.
 
 ## Before making changes
 
