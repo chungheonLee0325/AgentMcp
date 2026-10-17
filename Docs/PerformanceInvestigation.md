@@ -44,6 +44,9 @@ The [scene runner contract](../Plugins/AgentMcp/Skills/perf-investigation/refere
 
 ```cpp
 // Example markers around the actual operation in project code
+CSV_DEFINE_CATEGORY(PerfUI, true); // Define once in a suitable source file
+
+// In the function that performs the interaction:
 CSV_EVENT(PerfUI, TEXT("Open Inventory"));
 TRACE_CPUPROFILER_EVENT_SCOPE_TEXT(TEXT("PerfUI Open Inventory"));
 OpenInventory();
