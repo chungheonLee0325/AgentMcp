@@ -10,7 +10,7 @@
 
 스킬은 다음 폴더에서 이 순서로 읽습니다. 뒤 폴더의 스킬이 앞 폴더의 같은 이름 스킬을 대신하므로, 프로젝트가 플러그인 스킬을 고쳐 쓸 수 있습니다.
 
-1. `Plugins/AgentMcp/Skills`: 플러그인 스킬. 지금은 `umg-authoring`, `ui-art-requests`, `ui-style-system`, `blueprint-graphs`
+1. `Plugins/AgentMcp/Skills`: 플러그인 스킬. 지금은 `umg-authoring`, `ui-art-requests`, `ui-style-system`, `blueprint-graphs`, `perf-investigation`
 2. 프로젝트 폴더의 `AgentMcp/Skills`
 3. `SkillDirectories` 설정의 폴더
 

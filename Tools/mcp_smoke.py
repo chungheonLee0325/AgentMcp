@@ -25,7 +25,7 @@ and needs no testbed content.
 Usage:
   python mcp_smoke.py [--url http://127.0.0.1:18766/mcp] [--expect-project AgentMcpTestbed] [--token TOKEN] [--out evidence.json]
                       [--skip-slice1] [--skip-pie] [--pie-cycles 3] [--skip-p1] [--skip-p2] [--skip-p3] [--skip-p4] [--skip-p5]
-                      [--skip-p6] [--skip-p7] [--skip-p8] [--skip-p9] [--skip-p10]
+                      [--skip-p6] [--skip-p7] [--skip-p8] [--skip-p9] [--skip-p10] [--skip-p11]
 
 Before any check, the script asks the editor at --url for its project and stops unless it is --expect-project: the checks
 start and stop Play In Editor, change the level and save assets.
@@ -2129,6 +2129,80 @@ def run_p10_approval(client, report):
         tagged.send(method="DELETE")
 
 
+
+P11_TOOLS = {"perf_summarize_csv", "perf_compare_csv", "perf_read_gpu_profile", "perf_trace_hotspots"}
+
+
+def perf_capture(frame_times, gpu_from, event_at=None, spike=0.0):
+    """A CSV profiler capture as the engine writes it: a stat that first appears mid-capture adds a column to the rows after it, and
+    the full header is repeated at the end ahead of the metadata row."""
+    lines = ["EVENTS,FrameTime,GameThreadTime"]
+    for index, frame in enumerate(frame_times):
+        event = "PerfUI/Open Menu" if index == event_at else ""
+        frame = spike if event_at is not None and index == event_at + 1 else frame
+        row = [event, f"{frame}", "2.0"] + ([f"{frame - 1}"] if index >= gpu_from else [])
+        lines.append(",".join(row))
+    lines += ["EVENTS,FrameTime,GameThreadTime,GPUTime", "[HasHeaderRowAtEnd],1,[platform],Windows"]
+    return "\n".join(lines) + "\n"
+
+
+def run_p11(client, report, evidence):
+    def near(actual, expected):
+        return isinstance(actual, (int, float)) and abs(actual - expected) <= 0.001
+
+    p11 = evidence.setdefault("p11", {})
+    project = project_folder(client)
+    if not report.check("perf checks find the project folder", bool(project), str(project)):
+        return
+    root = os.path.join(project, "Saved", "MCP", "PerfSmoke")
+    shutil.rmtree(root, ignore_errors=True)
+    write_text(os.path.join(root, "before", "Menu_r1.csv"), perf_capture([10.0] * 8, 4, event_at=2, spike=30.0))
+    write_text(os.path.join(root, "before", "Menu_r2.csv"), perf_capture([12.0] * 8, 4))
+    write_text(os.path.join(root, "before", "Menu_r3.csv"), perf_capture([100.0] * 8, 4))
+    write_text(os.path.join(root, "before", "runs.json"), '{"invalid": [3]}')
+    write_text(os.path.join(root, "after", "Menu_r1.csv"), perf_capture([20.0] * 8, 4, event_at=2, spike=40.0))
+    write_text(os.path.join(root, "after", "Menu_r2.csv"), perf_capture([21.0] * 8, 4))
+
+    _, _, is_error, data, _ = client.call_tool("perf_summarize_csv", {"folder": "Saved/MCP/PerfSmoke/before"})
+    p11["summary"] = data
+    group = ((data or {}).get("groups") or [{}])[0]
+    stats = {stat.get("column"): stat for stat in group.get("stats") or []}
+    events = {event.get("name"): event for event in group.get("events") or []}
+    frame, gpu = stats.get("FrameTime") or {}, stats.get("GPUTime") or {}
+    report.check("perf_summarize_csv reads rows against the header at the end, leaves out runs.json's invalid runs and costs events",
+                 not is_error and group.get("files") == ["Menu_r1.csv", "Menu_r2.csv"] and (data or {}).get("skippedFiles") == ["Menu_r3.csv"]
+                 and gpu.get("runs") == 2 and near(frame.get("median"), 12.25) and near(frame.get("spread"), 0.5)
+                 and near((events.get("Open Menu") or {}).get("frameMax"), 30.0),
+                 json.dumps({"frame": frame, "gpu": gpu, "events": events})[:300])
+
+    _, _, is_error, data, _ = client.call_tool("perf_compare_csv", {"baselineFolder": "Saved/MCP/PerfSmoke/before",
+                                                                    "candidateFolder": "Saved/MCP/PerfSmoke/after"})
+    changes = {change.get("column"): change for change in (data or {}).get("stats") or []}
+    frame, game = changes.get("FrameTime") or {}, changes.get("GameThreadTime") or {}
+    report.check("perf_compare_csv flags a change beyond both spreads and not a change within them",
+                 not is_error and frame.get("bBeyondNoise") is True and near(frame.get("change"), 9.5)
+                 and game.get("bBeyondNoise") is False, json.dumps({"frame": frame, "game": game})[:300])
+
+    write_text(os.path.join(root, "gpu.log"), "\n".join([
+        "[2026.01.01-00.00.00:000][100]LogRHI: Perf marker hierarchy, total GPU time 20.50ms",
+        "[2026.01.01-00.00.00:000][100]LogRHI: ",
+        "[2026.01.01-00.00.00:000][100]LogRHI: 80.0% 16.40ms   Frame 100 900 draws",
+        "[2026.01.01-00.00.00:000][100]LogRHI:    40.0% 8.20ms   Scene 800 draws",
+        "[2026.01.01-00.00.00:000][100]LogRHI:       10.0% 2.05ms   Lights 10 draws",
+        "[2026.01.01-00.00.00:000][100]LogRHI:       0.1% 0.02ms   Tiny 1 draw",
+        "[2026.01.01-00.00.00:000][101]LogTemp: Display: after the dump",
+    ]) + "\n")
+    _, _, is_error, data, _ = client.call_tool("perf_read_gpu_profile", {"logFile": "Saved/MCP/PerfSmoke/gpu.log", "minMs": 0.1})
+    passes = [(item.get("depth"), item.get("ms"), (item.get("name") or "").split(" ")[0]) for item in (data or {}).get("passes") or []]
+    report.check("perf_read_gpu_profile reads the pass tree with depths and leaves out passes under minMs",
+                 not is_error and near((data or {}).get("totalMs"), 20.5) and passes == [(0, 16.4, "Frame"), (1, 8.2, "Scene"), (2, 2.05, "Lights")],
+                 json.dumps(passes))
+
+    _, _, is_error, data, _ = client.call_tool("perf_summarize_csv", {"folder": "C:/Windows"})
+    report.check("perf tools refuse a path outside the project folder", is_error and error_code(data) == "INVALID_ARGUMENT", error_message(data)[:200])
+    shutil.rmtree(root, ignore_errors=True)
+
+
 def run_protocol_errors(client, report):
     status, _, payload, _ = client.request("tools/call", {"name": "no_such_tool", "arguments": {}})
     report.check("unknown tool returns JSON-RPC -32602", ((payload or {}).get("error") or {}).get("code") == -32602, str((payload or {}).get("error")))
@@ -2198,6 +2272,7 @@ def main():
     parser.add_argument("--skip-p8", action="store_true", help="skip animation authoring (needs the testbed animation fixtures)")
     parser.add_argument("--skip-p9", action="store_true", help="skip Blueprint graph editing (needs the testbed toolset, creates a fixture level)")
     parser.add_argument("--skip-p10", action="store_true", help="skip the source tools, navigation tools and the approval gate (writes and removes text files in a readable folder)")
+    parser.add_argument("--skip-p11", action="store_true", help="skip the perf tools (write CSV and log files under Saved/MCP)")
     args = parser.parse_args()
 
     # Every editor with the plugin serves the same default port, so make sure the smoke test talks to the intended project.
@@ -2238,6 +2313,8 @@ def main():
         expected_tools |= P9_TOOLS
     if not args.skip_p10:
         expected_tools |= P10_TOOLS
+    if not args.skip_p11:
+        expected_tools |= P11_TOOLS
     try:
         run_p0(client, report, evidence, expected_tools)
         if not args.skip_slice1:
@@ -2262,6 +2339,8 @@ def main():
             run_p9(client, report, evidence)
         if not args.skip_p10:
             run_p10(client, report, evidence)
+        if not args.skip_p11:
+            run_p11(client, report, evidence)
         run_protocol_errors(client, report)
     except Exception as error:  # Keep the evidence of the checks that did run.
         report.check("smoke test ran to completion", False, f"{type(error).__name__}: {error}")

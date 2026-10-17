@@ -18,6 +18,7 @@ Included skills:
 - `ui-style-system`: design tokens, a UI kit/gallery, style extraction and viewport-capture comparison
 - `ui-art-requests`: an art request → review → import → connection workflow between UMG and an image model, another agent or an artist
 - `blueprint-graphs`: Blueprint classes and logic: create a class, add variables, functions and event dispatchers, look node types up, add and wire nodes, compile once and check the behavior in a play session
+- `perf-investigation`: performance work that ends in proof: fixed scenes played in a standalone game, marked moments for stalls, Insights hotspots, before/after comparison against run-to-run noise
 
 ### UMG-focused tools
 
@@ -46,6 +47,27 @@ Blueprint and C++ compilation, Play In Editor, editor logs and viewport capture 
 ```text
 Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
 ```
+
+### Performance investigation
+
+Profiling tools read what a profiled run of the game leaves behind, and the `perf-investigation` skill runs the game for them.
+
+- summarize CSV profiler captures per scene: median of the run averages, spread between runs, 95th percentile, and the cost of each marked moment (`CSV_EVENT`) such as opening a screen or a drag and drop
+- compare two sets of runs and flag only changes larger than the noise of both
+- export an Unreal Insights trace without opening Insights and add up self and inclusive time per timer over each marked moment
+- read a `ProfileGPU` dump from a game log as a tree of passes
+- play the runs with a quiet-machine check, a warm-up launch, background-load sampling that replays disturbed runs, and the user settings file restored after each launch
+
+```text
+Scenes → Baseline runs → Mark moments → Trace → Cause → Fix → Candidate runs → Compare
+```
+
+In the Sonheim project the tools located and confirmed these UI fixes (1920×1080, median of the events):
+
+| Moment | Before | After | Cause the trace named |
+|---|---|---|---|
+| Swapping two inventory items | 32.6 ms frame (19.4 ms game thread) | 16.5 ms (2.9 ms) | every slot cleared, refilled and its tooltip reattached on each change |
+| Opening the inventory | 57.5 ms (44.6 ms) | 21.7 ms (8.1 ms) | the screen, 42 slots and a tooltip per item created on every opening |
 
 ### Reflection-based toolsets
 

@@ -34,6 +34,8 @@ python Tools/mcp_smoke.py --url http://127.0.0.1:<port>/mcp --expect-project <Pr
 
 P9 writes two text files at the top of the first readable folder (`Config` by default) and removes them again.
 
+P11 checks the perf tools against CSV captures and a log it writes under `Saved/MCP` and removes again.
+
 To call a single tool:
 
 ```bash

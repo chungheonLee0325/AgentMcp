@@ -62,6 +62,10 @@
 | `viewport_capture` | Read | 레벨 뷰포트나 플레이 세션의 PNG 캡처(게임 UI 포함) |
 | `viewport_set_camera` | Control | 레벨 뷰포트 카메라를 특정 위치로 옮기거나 액터를 비춰, 다음 캡처에 나오게 함 |
 | `livecoding_compile` | Control | 바뀐 C++를 Live Coding으로 컴파일하고 결과까지 대기 |
+| `perf_summarize_csv` | Read | 실행 묶음별 CSV 프로파일러 캡처: 열마다 중앙값·편차·95번째 백분위, 표시한 이벤트마다 비용 |
+| `perf_compare_csv` | Read | 두 캡처 폴더 비교: 열과 이벤트마다 변화, 양쪽 편차보다 크면 표시 |
+| `perf_read_gpu_profile` | Read | 로그 파일의 `ProfileGPU` 덤프를 패스 트리로 |
+| `perf_trace_hotspots` | Control | UnrealInsights.exe로 Unreal Insights 트레이스를 내보내고, 표시한 순간의 프레임마다 타이머별 자체·포함 시간을 합산 |
 | `skills_list` | Read | 플러그인과 프로젝트의 스킬과 설명, 건너뛴 스킬 파일 |
 | `skills_get` | Read | 스킬의 지침이나 스킬에 딸린 파일 하나 |
 | `source_find` | Read | 읽을 수 있는 소스 폴더의 텍스트 파일을 이름이나 상대 경로로 찾음 |
@@ -77,6 +81,8 @@ UI를 만드는 흐름: `umg_create_widget_blueprint`(`BindWidget` 프로퍼티�
 UI의 모양을 데이터로 두려면 `asset_create`로 테마 데이터 에셋이나 아이템 DataTable을 만들고, `object_set_properties`와 datatable 도구로 채우고, `asset_import_textures`로 아이콘과 프레임을 UMG용 텍스처 설정으로 가져옵니다. 화면에 보이는 글은 스트링 테이블에 둡니다(`asset_create`의 `StringTable`, 이어서 `stringtable_set_entries`). 글 속성을 `LOCTABLE("/Game/Text/ST_Ui.ST_Ui", "Key")`로 설정하면 그 항목을 참조하므로, 스크립트가 몇 번을 다시 써도 로컬라이제이션 키가 하나로 유지됩니다.
 
 블루프린트 로직 수정 흐름: 새 클래스는 `asset_create`(`assetClass` `Blueprint`) → `blueprint_add_members`로 변수와 함수 추가 → `blueprint_get_graph`로 그래프 읽기 → 노드 타입마다 `blueprint_find_node_types` → `blueprint_edit_graph`로 노드를 추가하고 반환된 핀 이름으로 연결 → `blueprint_compile` → `pie_start`와 `log_get_recent`로 실행 확인 → `asset_save`
+
+성능 수정을 찾고 증명하는 흐름: 에디터를 닫고 `perf-investigation` 스킬의 `run.py`로 프로젝트의 성능 장면 실행 → `Saved/Perf/<label>/csv`에 `perf_summarize_csv` → 끊김의 원인은 `run.py --trace`와 `perf_trace_hotspots` → 수정 → 새 라벨로 같은 실행 → `perf_compare_csv`
 
 캐릭터 애니메이션 흐름: 이동은 `anim_build_blend_space` → 공격마다 `anim_build_montage`(게임이 다음 단계를 정할 때까지 반복하는 섹션 포함) → `anim_build_anim_blueprint`로 블렌드 스페이스 위에 Slot 노드를 두고 속도는 C++ 부모 클래스 변수에서 읽음 → `asset_save`
 

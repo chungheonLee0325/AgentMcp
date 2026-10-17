@@ -13,4 +13,5 @@
 - **Files.** `skills_get` can read only inside a skill folder and refuses outside paths and hidden files.
 - **Source files.** The source tools read and write text files only inside `SourceFolders` and refuse other paths, `..` that climbs out, build folders and files that are no text. Their edits are not undoable from the editor.
 - **Approval for tagged clients.** A session that sends the `X-AgentMcp-Client` header keeps that tag for its lifetime. Every tool call of a tagged session other than a Read tool waits for the approval gate registered for the tag; with no gate registered it fails with `APPROVAL_UNAVAILABLE`, and a refusal returns `DENIED`. The [AI chat](AiChat.md) registers the gate `agent-mcp-chat` and shows an approval card for each change. Sessions without the header are not affected, so Claude Code and Codex connected directly work as before.
+- **Perf files.** The perf tools read files only inside the project folder. `perf_trace_hotspots` starts the engine's own `UnrealInsights.exe` to export a trace next to it.
 - There is no tool that runs console commands or arbitrary scripts.

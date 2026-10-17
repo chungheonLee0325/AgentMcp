@@ -34,6 +34,8 @@ python Tools/mcp_smoke.py --url http://127.0.0.1:<port>/mcp --expect-project <Pr
 
 P9는 읽을 수 있는 첫 폴더(기본값 `Config`) 맨 위에 텍스트 파일 두 개를 썼다가 지웁니다.
 
+P11은 `Saved/MCP` 아래에 CSV 캡처와 로그를 썼다가 지우며 perf 도구를 검사합니다.
+
 도구 하나만 호출하려면:
 
 ```bash

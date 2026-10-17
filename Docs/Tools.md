@@ -62,6 +62,10 @@
 | `viewport_capture` | Read | PNG of the level viewport or the play session, including the game UI |
 | `viewport_set_camera` | Control | Point the level viewport camera at a place or frame an actor, so the next capture shows it |
 | `livecoding_compile` | Control | Compile changed C++ with Live Coding and wait for the result |
+| `perf_summarize_csv` | Read | CSV profiler captures per group of runs: median, spread and 95th percentile of each column, and the cost of each marked event |
+| `perf_compare_csv` | Read | Two folders of captures: change of each column and event, flagged when larger than both spreads |
+| `perf_read_gpu_profile` | Read | A `ProfileGPU` dump from a log file as a tree of passes |
+| `perf_trace_hotspots` | Control | Export an Unreal Insights trace with UnrealInsights.exe and add up each timer's self and inclusive time over the frames of each marked moment |
 | `skills_list` | Read | Skills of the plugin and the project with their descriptions, and skill files that were skipped |
 | `skills_get` | Read | Instructions of a skill, or one of its other files |
 | `source_find` | Read | Text files of the readable source folders by name or relative path |
@@ -79,6 +83,8 @@ To keep presentation in data, `asset_create` can make a theme data asset or item
 To block out a level: `level_new` → `actor_spawn` with meshes or Blueprints → `actor_duplicate` for rows and grids → `actor_attach` and `actor_set_folder` to keep the outliner readable → `viewport_set_camera` and `viewport_capture` to look at it → `level_save`. `actor_set_transform` and `object_set_properties` adjust what is already placed, and `editor_undo` reverts the last call.
 
 To change Blueprint logic: `asset_create` with `assetClass` `Blueprint` for a new class → `blueprint_add_members` for its variables and functions → `blueprint_get_graph` to read a graph → `blueprint_find_node_types` for each node type → `blueprint_edit_graph` to add nodes and wire them by the pin names it returns → `blueprint_compile` → `pie_start` and `log_get_recent` to see it run → `asset_save`.
+
+To find and prove a performance fix: the `perf-investigation` skill's `run.py` plays the project's perf scenes with the editor closed → `perf_summarize_csv` on `Saved/Perf/<label>/csv` → `run.py --trace` and `perf_trace_hotspots` for the cause of a stall → fix → the same runs with a new label → `perf_compare_csv`.
 
 To animate a character: `anim_build_blend_space` for locomotion → `anim_build_montage` for each attack, with a looping section where the game decides when to go on → `anim_build_anim_blueprint` with a Slot node over the blend space that reads the speed from a variable of the C++ parent class → `asset_save`.
 
