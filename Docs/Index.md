@@ -26,7 +26,7 @@ Agent MCP runs an MCP server inside the Unreal Editor so agents can inspect and 
 | In-editor AI chat | [AI chat](AiChat.md) | Providers, sign-in, permission modes, approvals |
 | MCP internals | [MCP architecture](Architecture.md) | Transport, Reflection discovery, invocation, approvals and chat integration |
 | Extending the toolset | [Writing tools](WritingTools.md) | Adding Reflection-based MCP tools with `UFUNCTION` |
-| Performance investigation | [Performance workflow](Workflows.md#6-measure-and-compare-performance) | CSV profiling, Insights, GPU dumps, before/after comparisons |
+| Performance investigation | [Investigation tooling and example](PerformanceInvestigation.md) | Standalone repeated runs, CSV/Insights/GPU diagnosis, variation and Sonheim measurements |
 | Testing | [Testbed and smoke tests](Testing.md) | Running the included test project |
 
 ## How the pieces fit
