@@ -16,7 +16,7 @@ The UMG tools therefore handle *inspecting and changing Widget Trees*, while the
 | Agent Skill | Guide the order of investigation, authoring and review | Find existing components first; use reusable entry widgets for repeated lists |
 | Project configuration | Replace built-in guidance with team conventions | Provide a project-level Skill named `umg-authoring` |
 
-[How the Dungeon UI work separated Tools and Skills](Samples/DungeonUi.md#3-separating-tools-from-skills)
+[How the Dungeon UI work separated Tools and Skills](Samples/DungeonUi.md#3-separating-tool-capability-from-skill-guidance)
 
 ## How an agent uses a Skill
 
