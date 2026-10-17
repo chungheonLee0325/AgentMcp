@@ -97,7 +97,7 @@ Sonheim의 인벤토리 UI 개선 사례(1920×1080, 표시한 이벤트의 중�
 
 포함된 Skill: `umg-authoring` · `ui-style-system` · `ui-art-requests` · `blueprint-graphs` · `perf-investigation`
 
-[Skill 문서](Docs/Skills.ko.md) · [C++ Toolset 추가 방법](Docs/WritingTools.ko.md)
+[MCP 아키텍처](Docs/Architecture.ko.md) · [Skill 문서](Docs/Skills.ko.md) · [C++ Toolset 추가 방법](Docs/WritingTools.ko.md)
 
 ## 설치 및 연결
 
@@ -111,7 +111,7 @@ Sonheim의 인벤토리 UI 개선 사례(1920×1080, 표시한 이벤트의 중�
 
 ## 문서와 제약
 
-[문서 목차](Docs/Index.ko.md) · [도구 목록](Docs/Tools.ko.md) · [작업 예제](Docs/Workflows.ko.md) · [설정](Docs/Settings.ko.md) · [안전장치](Docs/Safety.ko.md) · [테스트베드](Docs/Testing.ko.md)
+[문서 목차](Docs/Index.ko.md) · [MCP 아키텍처](Docs/Architecture.ko.md) · [도구 목록](Docs/Tools.ko.md) · [작업 예제](Docs/Workflows.ko.md) · [설정](Docs/Settings.ko.md) · [안전장치](Docs/Safety.ko.md) · [테스트베드](Docs/Testing.ko.md)
 
 - 소스 파일 변경(`source_replace` / `source_write`)은 Unreal Editor Undo로 복구되지 않으므로 소스 컨트롤을 사용해야 합니다.
 - Live Coding은 리플렉션 선언(`UCLASS`, `UPROPERTY` 등) 변경을 적용할 수 없습니다.
