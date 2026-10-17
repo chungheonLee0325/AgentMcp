@@ -2084,12 +2084,16 @@ def run_p10_navigation(client, report, p10):
         report.info("editor_open_assets leaves a level to level_open", f"skipped: the open level '{level}' is not saved as an asset")
 
     # --- actor_select ---------------------------------------------------------------------------------
-    actors = find_actors(client, limit=1)
-    if not report.check("the open level has an actor to select", bool(actors), json.dumps(actors)[:200]):
-        return
-    actor = actors[0]
+    # The editor does not select every actor (the builder brush, hidden volumes), so the first one it takes is used.
     undoable = get_undo_state(client).get("undoableCount")
-    _, _, is_error, data, _ = client.call_tool("actor_select", {"actors": [actor.get("path")], "bFocus": False})
+    actor, is_error, data = None, True, None
+    for candidate in find_actors(client, limit=50)[:15]:
+        _, _, is_error, data, _ = client.call_tool("actor_select", {"actors": [candidate.get("path")], "bFocus": False})
+        if not is_error:
+            actor = candidate
+            break
+    if not report.check("the open level has an actor to select", bool(actor), json.dumps(actor)[:200]):
+        return
     _, _, _, state, _ = client.call_tool("editor_get_state", {})
     selected = (state or {}).get("selectedActors") or []
     report.check("actor_select selects the actor without an editor transaction",
@@ -2100,7 +2104,15 @@ def run_p10_navigation(client, report, p10):
     _, _, is_error, data, _ = client.call_tool("actor_select", {"actors": [actor.get("path"), "AgentMcpSmokeNoSuchActor"]})
     _, _, _, state, _ = client.call_tool("editor_get_state", {})
     report.check("actor_select with an unknown actor selects nothing and keeps the selection",
-                 is_error and (state or {}).get("selectedActors") == selected, error_message(data)[:200])
+                 is_error and ((state or {}).get("selectedActors") or []) == selected, error_message(data)[:200])
+
+    brush = next((a for a in find_actors(client, limit=50) if a.get("className") == "Brush" and a.get("name") == "Brush_0"), None)
+    if brush:
+        _, _, is_error, data, _ = client.call_tool("actor_select", {"actors": [brush.get("path")], "bFocus": False})
+        _, _, _, state, _ = client.call_tool("editor_get_state", {})
+        report.check("actor_select refuses the builder brush and keeps the selection",
+                     is_error and error_code(data) == "NOT_SUPPORTED" and ((state or {}).get("selectedActors") or []) == selected,
+                     error_message(data)[:200])
 
 
 def run_p10_approval(client, report):
