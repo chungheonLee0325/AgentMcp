@@ -77,7 +77,7 @@ Tools are plain `static UFUNCTION`s. Names, descriptions, arguments and result J
 
 A chat panel lets planners and artists ask about the project and have it changed, signed in with their own Claude, ChatGPT or Google account. Permission modes decide what the model may change, and every change waits for an approval card. See [AI chat](Docs/AiChat.md).
 
-> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 251 checks against the testbed project. The plugin also builds on Unreal Engine 5.7.4 and is used there in one project, where the smoke test has not been run yet. Other platforms have not been tried.
+> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 290 checks against the testbed project. The plugin also builds on Unreal Engine 5.7.4 and is used there in one project, where the smoke test has not been run yet. Other platforms have not been tried.
 
 ## Dungeon UI — workflow case study
 

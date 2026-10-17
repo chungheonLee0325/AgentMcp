@@ -716,12 +716,20 @@ FAgentMcpActorBatchResult UAgentMcpActorTools::Select(const TArray<FString>& Act
 	{
 		if (AActor* Actor = FindEditorActor(World, Actors[Index], FString::Printf(TEXT("actors[%d]"), Index), Problems))
 		{
+			// The editor refuses some actors (the builder brush, hidden actors, actors of a locked level); SelectActor would skip
+			// them without a word, so they are reported before the selection changes.
+			if (!GEditor->CanSelectActor(Actor, /*bInSelected=*/true))
+			{
+				Problems.Add(FString::Printf(TEXT("actors[%d]: %s cannot be selected in the editor (the builder brush, a hidden actor or an actor of a locked level)"),
+				                             Index, *Actor->GetActorLabel()), TEXT("NOT_SUPPORTED"));
+				continue;
+			}
 			Targets.AddUnique(Actor);
 		}
 	}
 	if (!Problems.IsEmpty())
 	{
-		Tools::RaiseProblems(TEXT("Nothing was selected"), Problems.Messages, Problems.Codes, TEXT("Pass object paths from actor_find, or actor labels."));
+		Tools::RaiseProblems(TEXT("Nothing was selected"), Problems.Messages, Problems.Codes, TEXT("Pass object paths from actor_find, or actor labels, of actors the editor can select."));
 		return Result;
 	}
 
