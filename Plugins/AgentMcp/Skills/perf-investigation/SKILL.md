@@ -39,6 +39,7 @@ per scene and quits. `skills_get` with `file: references/scene-runner.md` gives 
    python scripts/run.py --uproject <path> --label before --map /Game/Maps/Main --runs 3 ^
        --game-args "-PerfScenes=HUD,OpenClose -PerfSeconds=10 -PerfWarmup=3 -PerfLabel={label} -PerfRun={run}"
    ```
+   From Git Bash, prefix the command with `MSYS_NO_PATHCONV=1`, or it rewrites `/Game/...` into a Windows path.
    `perf_summarize_csv` with `folder: Saved/Perf/before/csv`. Averages tell steady cost; event medians and maxima tell stalls.
 3. **Is it worth it?** Compare the cost with the frame budget and with the noise. A cost below the spread between runs is not
    worth optimizing, and saying so with the numbers is a result.

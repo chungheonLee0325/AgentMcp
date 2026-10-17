@@ -148,6 +148,9 @@ def main():
     parser.add_argument("--timeout", type=float, default=900, help="seconds one launch may take")
     args = parser.parse_args()
 
+    # Git Bash rewrites an argument like /Game/Maps/Main into a Windows path before Python sees it.
+    if args.map and not args.map.startswith("/"):
+        sys.exit(f"--map {args.map} is not a package path such as /Game/Maps/Main; from Git Bash run with MSYS_NO_PATHCONV=1")
     uproject = pathlib.Path(args.uproject).resolve()
     editor = find_editor(uproject, args.engine)
     folder = uproject.parent / "Saved" / "Perf" / args.label
