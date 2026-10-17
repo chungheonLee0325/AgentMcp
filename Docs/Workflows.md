@@ -99,6 +99,7 @@ Close the editor
 - `perf_summarize_csv` summarizes run sets and marked events; `perf_compare_csv` compares changes against run-to-run variation.
 - Mark significant moments using `CSV_EVENT` and inspect per-timer costs in an Insights trace when investigating causes.
 - Record the scene, resolution, build, and run conditions alongside measurements. A single differing run is not sufficient evidence of improvement.
+- See [Performance investigation tooling and the Sonheim example](PerformanceInvestigation.md) for the scripts, MCP tools and interpretation of their results.
 
 ## Direct clients versus in-editor AI chat
 
