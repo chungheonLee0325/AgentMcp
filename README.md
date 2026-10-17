@@ -97,7 +97,7 @@ Tools are `static UFUNCTION` methods backed by Unreal Reflection. Skills are sep
 
 Included Skills: `umg-authoring` · `ui-style-system` · `ui-art-requests` · `blueprint-graphs` · `perf-investigation`
 
-[Skills](Docs/Skills.md) · [Writing C++ tools](Docs/WritingTools.md)
+[MCP architecture](Docs/Architecture.md) · [Skills](Docs/Skills.md) · [Writing C++ tools](Docs/WritingTools.md)
 
 ## Installation and connection
 
@@ -111,7 +111,7 @@ Start by calling `editor_get_state` to confirm the target project and current le
 
 ## Documentation and boundaries
 
-[Documentation index](Docs/Index.md) · [Tools](Docs/Tools.md) · [Workflows](Docs/Workflows.md) · [Settings](Docs/Settings.md) · [Safety](Docs/Safety.md) · [Testbed](Docs/Testing.md)
+[Documentation index](Docs/Index.md) · [MCP architecture](Docs/Architecture.md) · [Tools](Docs/Tools.md) · [Workflows](Docs/Workflows.md) · [Settings](Docs/Settings.md) · [Safety](Docs/Safety.md) · [Testbed](Docs/Testing.md)
 
 - Source edits (`source_replace` / `source_write`) cannot be reverted through Unreal Editor Undo; use source control.
 - Live Coding cannot apply reflected declaration changes such as `UCLASS` or `UPROPERTY`.
