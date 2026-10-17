@@ -79,6 +79,26 @@ def classify(uproject):
     return found
 
 
+def top_processes(count=8):
+    """The processes using the most CPU over two seconds, as a share of the whole machine."""
+    procs = list(psutil.process_iter(["pid", "name"]))
+    for process in procs:
+        try:
+            process.cpu_percent(None)
+        except psutil.Error:
+            pass
+    time.sleep(2.0)
+    loads = []
+    for process in procs:
+        try:
+            share = process.cpu_percent(None) / psutil.cpu_count()
+        except psutil.Error:
+            continue
+        if process.info["name"] != "System Idle Process":
+            loads.append({"pid": process.info["pid"], "name": process.info["name"], "machine_cpu": round(share, 1)})
+    return sorted(loads, key=lambda e: e["machine_cpu"], reverse=True)[:count]
+
+
 def close(entries):
     for entry in entries:
         try:
@@ -146,6 +166,8 @@ def main():
         if time.monotonic() > deadline:
             report["status"] = "busy"
             report["busy"] = busy
+            # The processes behind a busy machine, so the report names the cause even when no class caught it.
+            report["top"] = top_processes()
             finish(report, args.json, 3)
         time.sleep(5)
 

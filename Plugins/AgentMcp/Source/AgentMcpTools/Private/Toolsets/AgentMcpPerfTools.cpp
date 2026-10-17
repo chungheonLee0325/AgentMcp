@@ -426,6 +426,12 @@ namespace UE::AgentMcp::PerfToolsPrivate
 		});
 	}
 
+	/** Timers left out of every marker: the thread waiting for others, and the CSV profiler ending a capture (the harness, not the game). */
+	bool IsExcludedTimer(const FString& Name)
+	{
+		return Name == TEXT("Game thread idle time") || Name.StartsWith(TEXT("STAT_FCsvProfiler"));
+	}
+
 	TArray<FAgentMcpPerfMarker> AnalyzeTimingEvents(const FString& File, const FString& MarkerPrefix, const FString& FrameTimer, int32 WindowFrames, int32 Top, bool bSkipFirst)
 	{
 		TArray<TPair<double, double>> Ticks;
@@ -445,11 +451,19 @@ namespace UE::AgentMcp::PerfToolsPrivate
 		{
 			return {};
 		}
+		struct FTimerTotals
+		{
+			double Self = 0.0;
+			double Inclusive = 0.0;
+			/** Self time by the timer that called it. */
+			TMap<FString, double> Callers;
+		};
 		struct FWindow
 		{
 			double Start;
 			double End;
 			FString Marker;
+			TMap<FString, FTimerTotals> Timers;
 		};
 		TArray<FWindow> Windows;
 		TMap<FString, int32> Seen;
@@ -459,74 +473,118 @@ namespace UE::AgentMcp::PerfToolsPrivate
 			{
 				continue;
 			}
-			int32 Tick = Algo::UpperBoundBy(Ticks, Mark.Key, [](const TPair<double, double>& T) { return T.Key; }) - 1;
-			Tick = FMath::Max(0, Tick);
-			Windows.Add({Ticks[Tick].Key, Ticks[FMath::Min(Tick + WindowFrames - 1, Ticks.Num() - 1)].Value, Mark.Value});
+			const int32 Tick = FMath::Max(0, static_cast<int32>(Algo::UpperBoundBy(Ticks, Mark.Key, [](const TPair<double, double>& T) { return T.Key; })) - 1);
+			Windows.Add({Ticks[Tick].Key, Ticks[FMath::Min(Tick + WindowFrames - 1, Ticks.Num() - 1)].Value, Mark.Value, {}});
 		}
 		Windows.Sort([](const FWindow& A, const FWindow& B) { return A.Start < B.Start; });
-		TMap<FString, int32> Counts;
-		for (const FWindow& Window : Windows)
-		{
-			++Counts.FindOrAdd(Window.Marker);
-		}
-		TMap<TPair<FString, FString>, double> Inclusive, Exclusive;
 		struct FOpen
 		{
 			int32 Depth;
 			FString Name;
 			double Ms;
 			double ChildrenMs;
-			const FWindow* Window;
+			FWindow* Window;
 		};
 		TArray<FOpen> Stack;
-		auto Close = [&Exclusive](const FOpen& Open)
+		// How many scopes of each name are open: a recursive timer's inclusive time counts once, at its outermost scope.
+		TMap<FString, int32> Open;
+		auto Close = [&](const FOpen& Scope)
 		{
-			if (Open.Window)
+			if (int32* Count = Open.Find(Scope.Name); Count && --*Count == 0)
 			{
-				Exclusive.FindOrAdd({Open.Window->Marker, Open.Name}) += Open.Ms - Open.ChildrenMs;
+				Open.Remove(Scope.Name);
+			}
+			if (Scope.Window)
+			{
+				FTimerTotals& Totals = Scope.Window->Timers.FindOrAdd(Scope.Name);
+				const double Self = Scope.Ms - Scope.ChildrenMs;
+				Totals.Self += Self;
+				Totals.Callers.FindOrAdd(Stack.Num() ? Stack.Last().Name : FString()) += Self;
 			}
 		};
 		VisitTimingEvents(File, [&](const FTimingEvent& Event)
 		{
 			while (Stack.Num() && Stack.Last().Depth >= Event.Depth)
 			{
-				Close(Stack.Pop(EAllowShrinking::No));
+				const FOpen Scope = Stack.Pop(EAllowShrinking::No);
+				Close(Scope);
 			}
-			const int32 Index = Algo::UpperBoundBy(Windows, Event.Start, [](const FWindow& W) { return W.Start; }) - 1;
-			const FWindow* Window = Index >= 0 && Event.Start <= Windows[Index].End ? &Windows[Index] : nullptr;
+			const int32 Index = static_cast<int32>(Algo::UpperBoundBy(Windows, Event.Start, [](const FWindow& W) { return W.Start; })) - 1;
+			FWindow* Window = Index >= 0 && Event.Start <= Windows[Index].End ? &Windows[Index] : nullptr;
 			const double Ms = (Event.End - Event.Start) * 1000.0;
 			if (Stack.Num())
 			{
 				Stack.Last().ChildrenMs += Ms;
 			}
-			if (Window)
+			int32& OpenCount = Open.FindOrAdd(Event.Name);
+			if (Window && OpenCount == 0)
 			{
-				Inclusive.FindOrAdd({Window->Marker, Event.Name}) += Ms;
+				Window->Timers.FindOrAdd(Event.Name).Inclusive += Ms;
 			}
+			++OpenCount;
 			Stack.Add({Event.Depth, Event.Name, Ms, 0.0, Window});
 		});
 		while (Stack.Num())
 		{
-			Close(Stack.Pop(EAllowShrinking::No));
+			const FOpen Scope = Stack.Pop(EAllowShrinking::No);
+			Close(Scope);
 		}
+
+		TMap<FString, TArray<const FWindow*>> ByMarker;
+		for (const FWindow& Window : Windows)
+		{
+			ByMarker.FindOrAdd(Window.Marker).Add(&Window);
+		}
+		ByMarker.KeySort(TLess<FString>());
 		TArray<FAgentMcpPerfMarker> Markers;
-		Counts.KeySort(TLess<FString>());
-		for (const TPair<FString, int32>& Count : Counts)
+		for (const TPair<FString, TArray<const FWindow*>>& Group : ByMarker)
 		{
 			FAgentMcpPerfMarker& Marker = Markers.AddDefaulted_GetRef();
-			Marker.Name = Count.Key;
-			Marker.Count = Count.Value;
-			for (const TPair<TPair<FString, FString>, double>& Self : Exclusive)
+			Marker.Name = Group.Key;
+			Marker.Count = Group.Value.Num();
+			struct FSum
 			{
-				// Idle waits are time the thread did nothing, not a cause.
-				if (Self.Key.Key != Count.Key || Self.Key.Value == TEXT("Game thread idle time"))
+				double Self = 0.0;
+				double MaxSelf = 0.0;
+				double Inclusive = 0.0;
+				TMap<FString, double> Callers;
+			};
+			TMap<FString, FSum> Sums;
+			for (const FWindow* Window : Group.Value)
+			{
+				Marker.OccurrenceMs.Add((Window->End - Window->Start) * 1000.0);
+				for (const TPair<FString, FTimerTotals>& Timer : Window->Timers)
 				{
-					continue;
+					if (IsExcludedTimer(Timer.Key))
+					{
+						continue;
+					}
+					FSum& Sum = Sums.FindOrAdd(Timer.Key);
+					Sum.Self += Timer.Value.Self;
+					Sum.MaxSelf = FMath::Max(Sum.MaxSelf, Timer.Value.Self);
+					Sum.Inclusive += Timer.Value.Inclusive;
+					for (const TPair<FString, double>& Caller : Timer.Value.Callers)
+					{
+						Sum.Callers.FindOrAdd(Caller.Key) += Caller.Value;
+					}
 				}
+			}
+			for (const TPair<FString, FSum>& Sum : Sums)
+			{
 				FAgentMcpPerfTimer& Timer = Marker.Timers.AddDefaulted_GetRef();
-				Timer.Name = Self.Key.Value.IsEmpty() ? TEXT("(unnamed)") : Self.Key.Value;
-				Timer.SelfMs = Self.Value / Count.Value;
-				Timer.InclusiveMs = Inclusive.FindRef(Self.Key) / Count.Value;
+				Timer.Name = Sum.Key.IsEmpty() ? TEXT("(unnamed)") : Sum.Key;
+				Timer.SelfMs = Sum.Value.Self / Marker.Count;
+				Timer.MaxSelfMs = Sum.Value.MaxSelf;
+				Timer.InclusiveMs = Sum.Value.Inclusive / Marker.Count;
+				double Best = -1.0;
+				for (const TPair<FString, double>& Caller : Sum.Value.Callers)
+				{
+					if (Caller.Value > Best)
+					{
+						Best = Caller.Value;
+						Timer.Caller = Caller.Key;
+					}
+				}
 			}
 			Marker.Timers.Sort([](const FAgentMcpPerfTimer& A, const FAgentMcpPerfTimer& B) { return A.SelfMs > B.SelfMs; });
 			if (Marker.Timers.Num() > Top)

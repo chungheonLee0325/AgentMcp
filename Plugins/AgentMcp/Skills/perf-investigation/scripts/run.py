@@ -181,7 +181,14 @@ def main():
         run = 0
         while sum(not r["invalid"] for r in runs.values()) < args.runs and run < args.runs * 2:
             run += 1
+            started = time.time()
             info = watch(launch(editor, uproject, args, args.label, run, folder / f"game_r{run}.log"), settings, args.timeout)
+            # A run that wrote no capture measured nothing: a wrong map, scene arguments the game ignores, a crash.
+            captures = [p.name for p in (folder / "csv").glob(f"*_r{run}.csv") if p.stat().st_mtime >= started] if (folder / "csv").exists() else []
+            if not captures:
+                sys.exit(f"run {run} wrote no Saved/Perf/{args.label}/csv/*_r{run}.csv; read {folder / f'game_r{run}.log'} "
+                         "(map loaded? scene runner arguments right? did the game crash?)")
+            info["captures"] = captures
             info["invalid"] = info["background_avg"] > args.background
             runs[run] = info
             print(f"run {run}: {info}", flush=True)

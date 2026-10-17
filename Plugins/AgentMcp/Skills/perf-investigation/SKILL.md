@@ -45,8 +45,8 @@ per scene and quits. `skills_get` with `file: references/scene-runner.md` gives 
 3. **Is it worth it?** Compare the cost with the frame budget and with the noise. A cost below the spread between runs is not
    worth optimizing, and saying so with the numbers is a result.
 4. **Cause.** `run.py --trace --label trace ...`, then `perf_trace_hotspots` with `traceFile: Saved/Perf/trace/run.utrace`.
-   Read self time first. `bSkipFirst` separates warm moments from the first one, which pays for loading and creation. A dynamic
-   delegate handler shows as "Blueprint Time" with the C++ function as its parent scope.
+   Read self time first, then each timer's `caller`: a dynamic delegate handler shows as "Blueprint Time" whose caller is the
+   C++ function. `occurrenceMs` and `maxSelfMs` show a cold first occurrence that the averages hide; `bSkipFirst` leaves it out.
 5. **Fix** the cause the trace names, at the narrowest place that removes it.
 6. **Candidate.** The same `run.py` command with `--label after`, then `perf_compare_csv` with both `csv` folders. Report only
    changes flagged beyond noise; for changes under 0.5 ms use 6 runs.

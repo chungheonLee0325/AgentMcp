@@ -46,7 +46,8 @@ struct FAgentMcpPerfEvent
 	UPROPERTY()
 	int32 Count = 0;
 
-	/** The worst FrameTime of the event's frame and the frames after it (eventWindowFrames), median and maximum over the events. */
+	/** For each time the event happened, the largest FrameTime among its own frame and the next frames (eventWindowFrames in all);
+	 * FrameMedian is the median of those values over every time, FrameMax the largest. */
 	UPROPERTY()
 	double FrameMedian = 0.0;
 
@@ -234,9 +235,17 @@ struct FAgentMcpPerfTimer
 	UPROPERTY()
 	double SelfMs = 0.0;
 
-	/** Milliseconds per occurrence, everything it called included. */
+	/** The largest self time in one occurrence: a first, cold occurrence stands out here when the average hides it. */
+	UPROPERTY()
+	double MaxSelfMs = 0.0;
+
+	/** Milliseconds per occurrence, everything it called included; a recursive timer counts once, at its outermost scope. */
 	UPROPERTY()
 	double InclusiveMs = 0.0;
+
+	/** The timer that called it for most of its self time, such as the C++ handler under "Blueprint Time" for a dynamic delegate. */
+	UPROPERTY()
+	FString Caller;
 };
 
 USTRUCT(BlueprintType)
@@ -251,7 +260,11 @@ struct FAgentMcpPerfMarker
 	UPROPERTY()
 	int32 Count = 0;
 
-	/** Largest self time first. */
+	/** Length of each occurrence's frames (the marker's frame and the ones after it), in the order they happened. */
+	UPROPERTY()
+	TArray<double> OccurrenceMs;
+
+	/** Largest self time first. The thread's idle time and the CSV profiler ending a capture are left out. */
 	UPROPERTY()
 	TArray<FAgentMcpPerfTimer> Timers;
 };
