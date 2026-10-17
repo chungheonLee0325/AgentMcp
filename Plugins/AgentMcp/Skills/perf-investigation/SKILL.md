@@ -45,10 +45,11 @@ per scene and quits. `skills_get` with `file: references/scene-runner.md` gives 
 3. **Is it worth it?** Compare the cost with the frame budget and with the noise. A cost below the spread between runs is not
    worth optimizing, and saying so with the numbers is a result.
 4. **Cause.** `run.py --trace --label trace ...`, then `perf_trace_hotspots` with `traceFile: Saved/Perf/trace/run.utrace`.
-   Read self time first, then each timer's `caller`: a dynamic delegate handler shows as "Blueprint Time" whose caller is the
-   C++ function. `occurrenceMs` and `maxSelfMs` show a cold first occurrence that the averages hide; `bSkipFirst` leaves it out.
+   Read self time first, then each timer's `caller`. A UFUNCTION run through a dynamic delegate is its own row,
+   `<function> (Blueprint Time)`, whose self time is that function's body. `occurrenceMs` and `maxSelfMs` show a cold first occurrence that the averages hide; `bSkipFirst` leaves it out.
 5. **Fix** the cause the trace names, at the narrowest place that removes it.
-6. **Candidate.** The same `run.py` command with `--label after`, then `perf_compare_csv` with both `csv` folders. Report only
+6. **Candidate.** The same `run.py` command with `--label after`, then `perf_compare_csv` with
+   `baselineFolder: Saved/Perf/before/csv` and `candidateFolder: Saved/Perf/after/csv`. Report only
    changes flagged beyond noise; for changes under 0.5 ms use 6 runs.
 7. **Look and behavior.** A faster frame that looks or behaves differently is not done: compare screenshots (`-PerfShots`), and
    check the changed flow in game, including reopening a screen and a client of a listen server when the code has a client path.
@@ -63,9 +64,14 @@ per scene and quits. `skills_get` with `file: references/scene-runner.md` gives 
 - **One variable at a time**, each against the same baseline, then the chosen combination measured together.
 - **Warm and cold differ.** The first opening of a screen loads assets and creates widgets; later ones may not. Measure and report
   both.
+- **Mark where the work happens.** A moment that goes through the server (opening a chest on a client) does its UI work when
+  the reply arrives, 20-35 frames after the request; mark it in the client RPC handler, not where the input was sent, or no
+  event window catches it.
 - **Two processes share one GPU.** In a listen server plus client test on one machine, frame time is meaningless; compare game
   thread time.
 - **Pooling has a memory side.** When widgets are kept for reuse, compare `obj list` after `obj gc` with and without keeping;
   a kept screen must release what each opening creates (brushes on render targets, dynamic materials), including pooled entries.
+- **Ensures stall development builds.** Each ensure records a callstack (hundreds of milliseconds); `run.py` counts them per run
+  and `perf_summarize_csv` warns. Fix the ensure, or judge by medians, before blaming the moment.
 - **Traces rank, CSV runs measure.** Named events (`-statnamedevents`) and `ProfileGPU` add overhead: use their numbers to find
   causes, and CSV runs to state results.

@@ -100,7 +100,7 @@ struct FAgentMcpPerfSummaryResult
 	UPROPERTY()
 	TArray<FString> SkippedFiles;
 
-	/** Columns asked for that no file had, and files that could not be read. */
+	/** Columns asked for that no file had, files that could not be read, and runs whose game log held ensures. */
 	UPROPERTY()
 	TArray<FString> Warnings;
 };
@@ -243,7 +243,8 @@ struct FAgentMcpPerfTimer
 	UPROPERTY()
 	double InclusiveMs = 0.0;
 
-	/** The timer that called it for most of its self time, such as the C++ handler under "Blueprint Time" for a dynamic delegate. */
+	/** The timer that called it for most of its self time. A UFUNCTION run through a dynamic delegate or ProcessEvent is its own
+	 * row, "<function> (Blueprint Time)", whose self time is that function's body. */
 	UPROPERTY()
 	FString Caller;
 };

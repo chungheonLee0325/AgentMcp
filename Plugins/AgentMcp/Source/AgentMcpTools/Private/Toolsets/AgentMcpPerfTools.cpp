@@ -190,8 +190,12 @@ namespace UE::AgentMcp::PerfToolsPrivate
 		return true;
 	}
 
-	/** Run numbers runs.json marks invalid, as the perf-investigation scripts write it: {"invalid": [2, 5]}. */
-	TSet<int32> ReadInvalidRuns(const FString& Folder)
+	/**
+	 * Run numbers runs.json marks invalid, as the perf-investigation scripts write it: {"invalid": [2, 5], "ensures": {"1": 3}}.
+	 * Runs whose game log held ensures add a warning: a development build records each ensure's callstack, which can take
+	 * hundreds of milliseconds and then dominates an event's maximum.
+	 */
+	TSet<int32> ReadInvalidRuns(const FString& Folder, TArray<FString>& OutWarnings)
 	{
 		TSet<int32> Invalid;
 		FString Text;
@@ -200,12 +204,28 @@ namespace UE::AgentMcp::PerfToolsPrivate
 			return Invalid;
 		}
 		TSharedPtr<FJsonObject> Json;
+		if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) || !Json.IsValid())
+		{
+			return Invalid;
+		}
 		const TArray<TSharedPtr<FJsonValue>>* Runs = nullptr;
-		if (FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Json) && Json.IsValid() && Json->TryGetArrayField(TEXT("invalid"), Runs))
+		if (Json->TryGetArrayField(TEXT("invalid"), Runs))
 		{
 			for (const TSharedPtr<FJsonValue>& Run : *Runs)
 			{
 				Invalid.Add(static_cast<int32>(Run->AsNumber()));
+			}
+		}
+		const TSharedPtr<FJsonObject>* Ensures = nullptr;
+		if (Json->TryGetObjectField(TEXT("ensures"), Ensures))
+		{
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Run : (*Ensures)->Values)
+			{
+				if (const int32 Count = static_cast<int32>(Run.Value->AsNumber()); Count > 0)
+				{
+					OutWarnings.Add(FString::Printf(TEXT("run %s logged %d ensure(s): a development build records their callstacks, which can dominate event maxima; "
+					                                     "fix the ensure or read medians"), *Run.Key, Count));
+				}
 			}
 		}
 		return Invalid;
@@ -233,7 +253,7 @@ namespace UE::AgentMcp::PerfToolsPrivate
 		TArray<FString> Files;
 		IFileManager::Get().FindFiles(Files, *(Folder / (Pattern.IsEmpty() ? FString(TEXT("*.csv")) : Pattern)), true, false);
 		Files.Sort();
-		const TSet<int32> Invalid = ReadInvalidRuns(Folder);
+		const TSet<int32> Invalid = ReadInvalidRuns(Folder, Result.Warnings);
 		TMap<FString, TArray<TPair<FString, FCsvRun>>> Groups;
 		TArray<FString> GroupOrder;
 		for (const FString& File : Files)
@@ -480,6 +500,7 @@ namespace UE::AgentMcp::PerfToolsPrivate
 		struct FOpen
 		{
 			int32 Depth;
+			/** The timer, or for "Blueprint Time" the function it runs: "<caller> (Blueprint Time)". */
 			FString Name;
 			double Ms;
 			double ChildrenMs;
@@ -516,13 +537,16 @@ namespace UE::AgentMcp::PerfToolsPrivate
 			{
 				Stack.Last().ChildrenMs += Ms;
 			}
-			int32& OpenCount = Open.FindOrAdd(Event.Name);
+			// A UFUNCTION called through a dynamic delegate or ProcessEvent runs its body inside a "Blueprint Time" scope; naming
+			// the row after the function keeps each handler's cost apart instead of one "Blueprint Time" for all of them.
+			const FString Name = Event.Name == TEXT("Blueprint Time") && Stack.Num() ? Stack.Last().Name + TEXT(" (Blueprint Time)") : Event.Name;
+			int32& OpenCount = Open.FindOrAdd(Name);
 			if (Window && OpenCount == 0)
 			{
-				Window->Timers.FindOrAdd(Event.Name).Inclusive += Ms;
+				Window->Timers.FindOrAdd(Name).Inclusive += Ms;
 			}
 			++OpenCount;
-			Stack.Add({Event.Depth, Event.Name, Ms, 0.0, Window});
+			Stack.Add({Event.Depth, Name, Ms, 0.0, Window});
 		});
 		while (Stack.Num())
 		{

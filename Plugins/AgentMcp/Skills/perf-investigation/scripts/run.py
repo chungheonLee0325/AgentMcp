@@ -193,12 +193,19 @@ def main():
             runs[run] = info
             print(f"run {run}: {info}", flush=True)
         invalid = sorted(r for r, i in runs.items() if i["invalid"])
+        # A development build records each ensure's callstack, which can stall a frame for hundreds of milliseconds.
+        ensures = {}
+        for r in runs:
+            log = folder / f"game_r{r}.log"
+            text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
+            if text.count("Ensure condition failed"):
+                ensures[r] = text.count("Ensure condition failed")
         # Next to the captures, where perf_summarize_csv and perf_compare_csv look for it.
         (folder / "csv").mkdir(exist_ok=True)
-        (folder / "csv" / "runs.json").write_text(json.dumps({"invalid": invalid, "runs": runs}, indent=1), encoding="utf-8")
+        (folder / "csv" / "runs.json").write_text(json.dumps({"invalid": invalid, "ensures": ensures, "runs": runs}, indent=1), encoding="utf-8")
         (folder / "env.json").write_text(json.dumps(environment(uproject, args, preflight), ensure_ascii=False, indent=1), encoding="utf-8")
         valid = len(runs) - len(invalid)
-        print(json.dumps({"folder": str(folder), "csv": str(folder / "csv"), "valid_runs": valid, "invalid_runs": invalid}))
+        print(json.dumps({"folder": str(folder), "csv": str(folder / "csv"), "valid_runs": valid, "invalid_runs": invalid, "ensures": ensures}))
         if valid < 2:
             sys.exit("fewer than two runs were free of background load; nothing to compare")
     finally:
