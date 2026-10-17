@@ -8,7 +8,7 @@ Each running process that loads the CPU or the GPU falls in one class:
   note      remote desktops, antivirus, and approval-class apps that sit idle: never closed, written into the report
 Then the whole machine's CPU is sampled; measuring starts only once it stays under --cpu.
 
-Usage: preflight.py --uproject <path> [--close name,name] [--wait-seconds 300] [--cpu 10] [--json out.json]
+Usage: preflight.py --uproject <path> [--close name,name] [--accept-busy] [--wait-seconds 300] [--cpu 10] [--json out.json]
 Exit codes: 0 quiet, 2 processes need approval or the project's editor is open (listed), 3 still busy after waiting.
 Needs psutil.
 """
@@ -105,6 +105,8 @@ def main():
     parser.add_argument("--close", default="", help="approval-class names to close, comma separated")
     parser.add_argument("--wait-seconds", type=int, default=300)
     parser.add_argument("--cpu", type=float, default=10.0)
+    parser.add_argument("--accept-busy", action="store_true",
+                        help="the user chose to measure with these apps open: list them in the report instead of stopping")
     parser.add_argument("--json")
     args = parser.parse_args()
     uproject = str(pathlib.Path(args.uproject).resolve())
@@ -122,6 +124,9 @@ def main():
     close(to_close)
     report["closed"] = to_close
     pending = [e for e in found["approval"] if e["name"] not in approved]
+    if pending and args.accept_busy:
+        report["accepted_busy"] = pending
+        pending = []
     if pending:
         report["status"] = "needs-approval"
         report["pending"] = pending

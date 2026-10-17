@@ -18,7 +18,7 @@ The game saves the scalability groups (sg.*) it ran with into GameUserSettings.i
 into every later launch and into the editor. The file is put back after each launch.
 
 Usage: run.py --uproject <path> --label NAME --game-args "-PerfScenes=HUD -PerfLabel={label} -PerfRun={run}" [--map /Game/Maps/X]
-              [--runs 3] [--res 1920x1080] [--exec "r.X 1, sg.Y 2"] [--close name,name] [--cpu 10] [--background 10] [--trace]
+              [--runs 3] [--res 1920x1080] [--exec "r.X 1, sg.Y 2"] [--close name,name] [--accept-busy] [--cpu 10] [--background 10] [--trace]
               [--engine <engine folder>] [--timeout 900]
 Needs psutil.
 """
@@ -141,6 +141,7 @@ def main():
     parser.add_argument("--res", default="1920x1080")
     parser.add_argument("--exec", default="", help="console variables for every launch, comma separated: 'r.X 1, sg.Y 2'")
     parser.add_argument("--close", default="")
+    parser.add_argument("--accept-busy", action="store_true", help="measure with the apps the preflight lists left open (the user's choice)")
     parser.add_argument("--cpu", type=float, default=10.0, help="machine CPU %% the preflight waits to fall under before starting")
     parser.add_argument("--background", type=float, default=10.0, help="average %% of other processes' CPU load that voids a run")
     parser.add_argument("--trace", action="store_true", help="record one launch as an Insights trace instead of measuring")
@@ -158,7 +159,8 @@ def main():
     settings = uproject.parent / "Saved" / "Config" / "WindowsEditor" / "GameUserSettings.ini"
 
     check = subprocess.run([sys.executable, str(pathlib.Path(__file__).with_name("preflight.py")), "--uproject", str(uproject),
-                            "--close", args.close, "--cpu", str(args.cpu), "--json", str(folder / "preflight.json")], capture_output=True, text=True)
+                            "--close", args.close, "--cpu", str(args.cpu), "--json", str(folder / "preflight.json"),
+                            *(["--accept-busy"] if args.accept_busy else [])], capture_output=True, text=True)
     preflight = json.loads((folder / "preflight.json").read_text(encoding="utf-8"))
     if check.returncode != 0:
         print(check.stdout)

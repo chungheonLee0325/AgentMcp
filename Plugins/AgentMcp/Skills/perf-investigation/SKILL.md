@@ -34,7 +34,8 @@ per scene and quits. `skills_get` with `file: references/scene-runner.md` gives 
 1. **Scenes.** Write or extend the project's scene runner. Measure the moments players feel, not only idle screens: opening and
    closing a screen, a list refreshing after a data change, a drag and drop, a burst of notifications, with data at its late-game
    size. Mark each moment with `CSV_EVENT` and a `TRACE_CPUPROFILER_EVENT_SCOPE_TEXT` named `"PerfUI <moment>"`.
-2. **Baseline.** Ask the user before `--close` names anything of theirs. Then:
+2. **Baseline.** Ask the user before `--close` names anything of theirs; if they would rather keep an app open, `--accept-busy`
+   measures anyway and lists it in `preflight.json`, and background-load sampling still voids the runs it disturbs. Then:
    ```text
    python scripts/run.py --uproject <path> --label before --map /Game/Maps/Main --runs 3 ^
        --game-args "-PerfScenes=HUD,OpenClose -PerfSeconds=10 -PerfWarmup=3 -PerfLabel={label} -PerfRun={run}"
