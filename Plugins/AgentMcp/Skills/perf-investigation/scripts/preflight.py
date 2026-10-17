@@ -3,8 +3,9 @@
 Each running process that loads the CPU or the GPU falls in one class:
   project   an editor or game of the project being measured: it takes GPU and CPU time from the run, so it must be closed first
   wait      builds, shader compiles and git (another agent's or a tool's): never killed, waited for
-  approval  other editors, games, browsers, sync and chat clients while they are busy: closed only when named in --close
-  note      remote desktops, and approval-class apps that sit idle: never closed, written into the report
+  approval  other editors, games, browsers, sync and chat clients while they are busy, and any unknown process using more than a
+            quarter of a core: closed only when named in --close
+  note      remote desktops, antivirus, and approval-class apps that sit idle: never closed, written into the report
 Then the whole machine's CPU is sampled; measuring starts only once it stays under --cpu.
 
 Usage: preflight.py --uproject <path> [--close name,name] [--wait-seconds 300] [--cpu 10] [--json out.json]
@@ -24,7 +25,11 @@ WAIT = {"unrealbuildtool", "shadercompileworker", "dotnet", "msbuild", "cl", "li
 APPROVAL = {"unrealeditor", "chrome", "msedge", "firefox", "onedrive", "dropbox", "steam", "steamwebhelper", "discord", "slack",
             "obs64", "epicgameslauncher"}
 # Never closed, only written into the report: a remote desktop may be how the user is at this machine (and it encodes on the GPU).
-NOTE = {"parsecd", "mstsc", "anydesk", "teamviewer"}
+NOTE = {"parsecd", "mstsc", "anydesk", "teamviewer", "msmpeng"}
+# Part of Windows: never a candidate to close, even when busy.
+SYSTEM = {"system", "system idle process", "registry", "dwm", "csrss", "audiodg", "svchost", "wmiprvse", "searchindexer", "python"}
+# Any other process above this share of one core (a game whose name is unknown, a scan, a render) needs approval too.
+BUSY_FLOOR = 25.0
 GAME_SUFFIXES = ("-win64-shipping", "-win64-development", "-win64-test")
 # An approval-class app under this share of one core is idle and only noted; editors and games always count.
 LOAD_FLOOR = 2.0
@@ -35,14 +40,15 @@ def name_of(process):
 
 
 def classify(uproject):
-    """Running processes worth a look, by class, with their CPU share over one second."""
+    """Running processes worth a look, by class, with their CPU share over three seconds."""
     procs = list(psutil.process_iter(["pid", "name", "cmdline"]))
     for process in procs:
         try:
             process.cpu_percent(None)
         except psutil.Error:
             pass
-    time.sleep(1.0)
+    # Three seconds, so an idle app's momentary blip (a chat client syncing) does not count as load.
+    time.sleep(3.0)
     found = {"project": [], "wait": [], "approval": [], "note": []}
     for process in procs:
         try:
@@ -68,6 +74,8 @@ def classify(uproject):
                 found["note"].append(entry)
             else:
                 found["approval"].append(entry)
+        elif load >= BUSY_FLOOR and name not in SYSTEM:
+            found["approval"].append(entry)
     return found
 
 
