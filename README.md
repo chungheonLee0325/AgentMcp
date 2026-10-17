@@ -71,10 +71,10 @@ Sonheim inventory UI example (1920×1080, medians of marked events):
 
 | Action | Before: frame (game thread) | After: frame (game thread) |
 |---|---:|---:|
-| Swap two inventory items | 32.6ms (19.4ms) | 16.5ms (2.9ms) |
-| Open the inventory | 57.5ms (44.6ms) | 21.7ms (8.1ms) |
+| Swap two inventory items | 32.6ms (19.4ms) | 17.1ms (3.0ms) |
+| Open the inventory | 57.5ms (44.6ms) | 22.1ms (8.2ms) |
 
-Investigation identified full slot and tooltip rebuilds, and widgets being recreated on every screen open. [Performance workflow](Docs/Workflows.md#6-measure-and-compare-performance)
+Investigation identified full slot and tooltip rebuilds, and widgets being recreated on every screen open. [Performance investigation and Sonheim example](Docs/PerformanceInvestigation.md) · [Task workflow](Docs/Workflows.md#6-measure-and-compare-performance)
 
 ## AI chat in the editor
 
