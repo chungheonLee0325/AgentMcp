@@ -44,6 +44,9 @@ AgentMcp가 임의의 게임에서 인벤토리를 여는 방법을 자동으로
 
 ```cpp
 // 실제 프로젝트의 측정 대상 작업에 추가하는 마커 예시
+CSV_DEFINE_CATEGORY(PerfUI, true); // Define once in a suitable source file
+
+// In the function that performs the interaction:
 CSV_EVENT(PerfUI, TEXT("Open Inventory"));
 TRACE_CPUPROFILER_EVENT_SCOPE_TEXT(TEXT("PerfUI Open Inventory"));
 OpenInventory();
