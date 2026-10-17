@@ -8,7 +8,7 @@ Agent MCP는 Unreal Editor 안에서 MCP 서버를 실행해 에이전트가 프
 
 | 목적 | 문서 |
 |---|---|
-| 플러그인 설치와 첫 연결 | [README 빠른 시작](../README.ko.md#빠른-시작) |
+| 플러그인 설치와 첫 연결 | [README 설치 및 연결](../README.ko.md#설치-및-연결) |
 | Claude Code / Codex 연결, 인증과 다중 에디터 | [클라이언트 연결](Clients.ko.md) |
 | 실제 작업별 도구 호출 순서 | [작업 예제](Workflows.ko.md) |
 | 도구 이름과 접근 수준 확인 | [전체 도구 목록](Tools.ko.md) |
@@ -24,30 +24,16 @@ Agent MCP는 Unreal Editor 안에서 MCP 서버를 실행해 에이전트가 프
 | Blueprint / 레벨 / 에셋 | [도구](Tools.ko.md) | 그래프 조회·편집, 참조 검색, 데이터와 액터 작업 |
 | 에이전트 작업 규칙 | [Skills](Skills.ko.md) | 플러그인·프로젝트별 `SKILL.md`, 오버라이드 |
 | 에디터 내 채팅 | [AI 채팅](AiChat.ko.md) | 모델 공급자, 로그인, 권한 모드, 변경 승인 |
+| MCP 내부 구조 | [MCP 아키텍처](Architecture.ko.md) | 프로토콜·Reflection 등록·호출·승인·AI 채팅 연결 |
 | Toolset 확장 | [도구 만들기](WritingTools.ko.md) | `UFUNCTION`과 Reflection 기반 MCP 도구 추가 |
 | 성능 조사 | [성능 워크플로](Workflows.ko.md#6-성능-측정과-비교) | CSV 프로파일링, Insights, GPU 덤프, 전후 비교 |
 | 검증 환경 | [테스트베드](Testing.ko.md) | Smoke 테스트와 샘플 프로젝트 실행 |
 
 ## 동작 구조
 
-```text
-Claude Code / Codex             에디터 내 AI 채팅
-         \                         /
-          \                       /
-           MCP 요청 (127.0.0.1)
-                    |
-             AgentMcpProtocol
-                    |
-      Reflection 기반 Toolset 등록
-                    |
-          AgentMcpTools / Toolset
-                    |
-           Unreal Editor API
-                    |
-     Assets / UMG / Blueprint / PIE
-```
+AgentMcp는 Unreal Editor 내부의 MCP 서버를 통해 외부 Claude Code·Codex와 에디터 내 AI 채팅을 **같은 Reflection 기반 Toolset**에 연결합니다. Tool 실행, 접근 수준, 승인 게이트와 Agent Skills 로딩의 책임은 분리되어 있습니다.
 
-도구의 입력·반환 스키마는 C++ `UFUNCTION` 선언과 Unreal Reflection을 기반으로 생성됩니다. 작업 방법에 관한 지침은 별도 `SKILL.md`로 제공하므로 **도구의 기능**과 **에이전트가 따라야 할 제작 규칙**을 구분합니다.
+요청이 에디터 API까지 도달하는 과정은 [MCP 아키텍처](Architecture.ko.md)에, 새 `UFUNCTION`을 MCP Tool로 추가하는 방법은 [도구 만들기](WritingTools.ko.md)에 정리했습니다.
 
 ## 작업 전에 알아둘 점
 
