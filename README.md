@@ -62,12 +62,14 @@ Profiling tools read what a profiled run of the game leaves behind, and the `per
 Scenes → Baseline runs → Mark moments → Trace → Cause → Fix → Candidate runs → Compare
 ```
 
-In the Sonheim project the tools located and confirmed these UI fixes (1920×1080, median of the events):
+**Applied case study:** [Sonheim UI performance investigation](Docs/Samples/SonheimUiPerf.md) — an agent designed scenes for previously unprofiled UI, traced chest recreation costs, accumulated delegate bindings and a notice-feed ensure, and fixed the problems. The investigation also led to improvements in the MCP analysis tools.
+
+Before/after measurements of Sonheim's inventory and menu optimizations (1920×1080, interaction-event medians):
 
 | Moment | Before | After | Cause the trace named |
 |---|---|---|---|
-| Swapping two inventory items | 32.6 ms frame (19.4 ms game thread) | 16.5 ms (2.9 ms) | every slot cleared, refilled and its tooltip reattached on each change |
-| Opening the inventory | 57.5 ms (44.6 ms) | 21.7 ms (8.1 ms) | the screen, 42 slots and a tooltip per item created on every opening |
+| Swapping two inventory items | 32.6 ms frame (19.4 ms game thread) | 17.1 ms (3.0 ms) | every slot cleared, refilled and its tooltip reattached on each change |
+| Opening the inventory | 57.5 ms (44.6 ms) | 22.1 ms (8.2 ms) | the screen, 42 slots and a tooltip per item created on every opening |
 
 ### Reflection-based toolsets
 
