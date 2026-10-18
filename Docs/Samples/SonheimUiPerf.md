@@ -79,6 +79,10 @@ It recorded one trace and called `perf_trace_hotspots` with `bSkipFirst: true`. 
    AddToViewport               self 0.56  max 0.57  incl  0.60  <- ExecuteUbergraph_WB_PlayerStatusWidget
 ```
 
+The same trace called again with the current version of the tool. This version shows a dynamic delegate handler as its own row, such as `HandleInventory (Blueprint Time)` (section 6).
+
+![perf_trace_hotspots result](../Images/perf_trace_hotspots.png)
+
 - **Open Chest:** the cost sits in widget creation (`ConstructObject`, `InstanceSubobjects`) under `Client_OpenContainerUI`. Every opening creates the screen and its slot widgets again.
 - **Kill:** a stall the averages did not show appears in `occurrenceMs` (one occurrence of 832.5 ms) and `maxSelfMs` (the notice feed, 806.56 ms). The agent found `Ensure condition failed: CurrentNum == InitialNum` at the same time in the game log and traced it to the notice feed removing rows from its entry list while iterating over that same list (`NoticeWidget.cpp`).
 - **Loot:** for every item, `UQuestComponent::HandleInventory` redraws the quest tracker, and an item popup widget is created for each one.
@@ -105,6 +109,8 @@ E Chest   Close Chest     frame  18.7 ->  17.9   GT   5.2 ->   4.9
   Kills   GameThreadTime  4.20 -> 2.54   change -1.66  noise 0.19  bBeyondNoise
   HUD     GPUTime        15.40 -> 14.75  change -0.65  noise 0.06  bBeyondNoise
 ```
+
+![perf_compare_csv result](../Images/perf_compare_csv.png)
 
 The agent left the last line out of its results. The GPU time of every scene, including the HUD scene whose code was not touched, dropped by about 0.7 ms, so it did not count differences in scene-average frame time as an effect of the fixes and judged by game thread time and moment cost only. After the fix the bound object count stayed at 2 through repeated opening and closing, and the ensure count was 0.
 

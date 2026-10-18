@@ -79,6 +79,10 @@ python run.py --uproject <Sonheim.uproject> --label ui2_before --map /Game/_Maps
    AddToViewport               self 0.56  max 0.57  incl  0.60  <- ExecuteUbergraph_WB_PlayerStatusWidget
 ```
 
+같은 트레이스를 현재 도구 버전으로 다시 호출한 화면입니다. 이 버전은 동적 델리게이트 핸들러를 `HandleInventory (Blueprint Time)`처럼 자기 행으로 보여 줍니다(6절).
+
+![perf_trace_hotspots 결과](../Images/perf_trace_hotspots.png)
+
 - **Open Chest:** 비용이 `Client_OpenContainerUI` 아래의 위젯 생성(`ConstructObject`, `InstanceSubobjects`)에 모여 있습니다. 보관함을 열 때마다 화면과 슬롯 위젯을 새로 만듭니다.
 - **Kill:** 평균으로는 보이지 않던 멈춤이 `occurrenceMs`(832.5ms 한 회)와 `maxSelfMs`(알림 피드 806.56ms)에서 드러났습니다. 에이전트는 같은 시각의 게임 로그에서 `Ensure condition failed: CurrentNum == InitialNum`을 찾아, 알림 피드가 엔트리 목록을 순회하면서 같은 목록에서 행을 지우는 코드(`NoticeWidget.cpp`)로 연결했습니다.
 - **Loot:** 아이템 하나마다 `UQuestComponent::HandleInventory`가 퀘스트 추적기를 다시 그리고 아이템 팝업을 하나씩 만듭니다.
@@ -105,6 +109,8 @@ E Chest   Close Chest     frame  18.7 ->  17.9   GT   5.2 ->   4.9
   Kills   GameThreadTime  4.20 -> 2.54   change -1.66  noise 0.19  bBeyondNoise
   HUD     GPUTime        15.40 -> 14.75  change -0.65  noise 0.06  bBeyondNoise
 ```
+
+![perf_compare_csv 결과](../Images/perf_compare_csv.png)
 
 에이전트는 마지막 줄을 결과에서 뺐습니다. 코드를 건드리지 않은 HUD 장면까지 모든 장면의 GPU 시간이 약 0.7ms 함께 내려갔기 때문에, 장면 평균 프레임의 차이는 수정 효과가 아니라고 보고 게임 스레드와 순간 비용으로만 판단했습니다. 바인딩 수는 수정 후 열고 닫기를 반복해도 2로 유지됐고, ensure는 0회가 됐습니다.
 
