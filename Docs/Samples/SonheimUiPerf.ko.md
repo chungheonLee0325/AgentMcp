@@ -60,6 +60,8 @@ python run.py --uproject <Sonheim.uproject> --label ui2_before --map /Game/_Maps
 
 ## 3. 원인 추적 — `run.py --trace`, `perf_trace_hotspots`
 
+개선 효과는 앞 절의 **CSV 반복 측정**으로 판단하고, **CPU Trace는 비용이 집중된 타이머와 호출 경로**를 찾는 데 사용했습니다. Trace는 `-statnamedevents` 등의 계측 옵션을 사용하므로 아래 `occurrenceMs`와 CSV 이벤트 중앙값을 같은 수치로 비교하지 않았습니다.
+
 트레이스를 한 번 기록하고 `perf_trace_hotspots`를 `bSkipFirst: true`로 호출했습니다. 결과 발췌입니다(순간 1회당 ms, `caller`는 그 시간을 가장 많이 부른 타이머).
 
 ```text
@@ -93,9 +95,9 @@ python run.py --uproject <Sonheim.uproject> --label ui2_before --map /Game/_Maps
 
 | 발견 | 판단 | 수정 |
 |---|---|---|
-| 보관함 열기 (GT 16.9ms) | 매번 한 프레임 이상 → 고침 | 보관함 화면에 `bKeepWhenClosed`를 켜고, 슬롯 그리드는 크기가 바뀔 때만 다시 만듦 |
-| 보관함 바인딩 누수 | 열고 닫을수록 쌓임 → 고침 | 가방 바인딩을 보관함 위젯이 열 때 묶고 `NativeDestruct`에서 풀도록 옮김 |
-| 알림 피드 ensure (806ms) | 개발 빌드 멈춤, 출시 빌드에선 지워진 칸 읽기 → 고침 | 엔트리 목록의 사본을 순회하며 제거 |
+| 보관함 열기 (GT 16.9ms) | 매번 한 프레임 이상 → 고침 | 보관함 화면에 `bKeepWhenClosed`를 켜고, 슬롯 그리드는 크기가 바뀔 때만 다시 만듦 ([코드](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Sonheim/Source/Sonheim/UI/Widget/GameObject/ContainerWidget.cpp), [커밋](https://github.com/chungheonLee0325/Sonheim/commit/0b5916fd41a7d0e6a3904bd1cddea30fed189e40)) |
+| 보관함 바인딩 누수 | 열고 닫을수록 쌓임 → 고침 | 가방 바인딩을 보관함 위젯이 열 때 묶고 `NativeDestruct`에서 풀도록 옮김 ([코드](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Sonheim/Source/Sonheim/UI/Widget/GameObject/ContainerInteractionWidget.cpp), [커밋](https://github.com/chungheonLee0325/Sonheim/commit/0b5916fd41a7d0e6a3904bd1cddea30fed189e40)) |
+| 알림 피드 ensure (806ms) | 개발 빌드에서 ensure 발생, 순회 중 엔트리 목록 변경 → 수정 | 엔트리 목록의 사본을 순회하며 제거 ([코드](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Sonheim/Source/Sonheim/UI/Notice/NoticeWidget.cpp), [커밋](https://github.com/chungheonLee0325/Sonheim/commit/4c91e138d5801e7ea26b7dd3e07ccdffd6b1afb4)) |
 | 전리품 줍기 (+2.2ms) | 줍는 순간 한 프레임 → 그대로 둠 | — |
 | 제작대 열기 (+3ms), 퀘스트 선택 (+1.1ms), 데미지 숫자 (+0.6ms) | 예산 안 → 그대로 둠 | — |
 
