@@ -60,6 +60,8 @@ The agent pointed out two things: opening a chest takes nearly two frames every 
 
 ## 3. Finding the cause — `run.py --trace`, `perf_trace_hotspots`
 
+**CSV runs measure the before/after improvement**; **CPU traces identify the costly timers and call paths**. The trace was collected with instrumentation such as `-statnamedevents`, so its `occurrenceMs` values are not compared directly with the CSV event medians.
+
 It recorded one trace and called `perf_trace_hotspots` with `bSkipFirst: true`. An excerpt of the result (ms per occurrence of the moment; `caller` is the timer that called it for most of that time):
 
 ```text
@@ -93,9 +95,9 @@ One problem was found outside the trace. The scene runner's log of how many obje
 
 | Finding | Decision | Fix |
 |---|---|---|
-| Opening a chest (GT 16.9 ms) | Over a frame every time → fixed | `bKeepWhenClosed` on the chest screen; the slot grid is rebuilt only when its size changes |
-| Chest binding leak | Grows with every open and close → fixed | The chest widget binds the bag when it opens and unbinds it in `NativeDestruct` |
-| Notice feed ensure (806 ms) | Stalls development builds, reads a removed entry in shipping builds → fixed | Remove rows while iterating over a copy of the entry list |
+| Opening a chest (GT 16.9 ms) | Over a frame every time → fixed | `bKeepWhenClosed` on the chest screen; the slot grid is rebuilt only when its size changes ([code](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Sonheim/Source/Sonheim/UI/Widget/GameObject/ContainerWidget.cpp), [commit](https://github.com/chungheonLee0325/Sonheim/commit/0b5916fd41a7d0e6a3904bd1cddea30fed189e40)) |
+| Chest binding leak | Grows with every open and close → fixed | The chest widget binds the bag when it opens and unbinds it in `NativeDestruct` ([code](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Sonheim/Source/Sonheim/UI/Widget/GameObject/ContainerInteractionWidget.cpp), [commit](https://github.com/chungheonLee0325/Sonheim/commit/0b5916fd41a7d0e6a3904bd1cddea30fed189e40)) |
+| Notice feed ensure (806 ms) | Ensure in a development build caused by modifying an entry list while iterating → fixed | Remove rows while iterating over a copy of the entry list ([code](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Sonheim/Source/Sonheim/UI/Notice/NoticeWidget.cpp), [commit](https://github.com/chungheonLee0325/Sonheim/commit/4c91e138d5801e7ea26b7dd3e07ccdffd6b1afb4)) |
 | Picking up loot (+2.2 ms) | One frame at the moment of pickup → left as is | — |
 | Crafting bench open (+3 ms), quest selection (+1.1 ms), damage numbers (+0.6 ms) | Within budget → left as is | — |
 
