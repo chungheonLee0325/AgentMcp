@@ -121,6 +121,7 @@ Its look is a small design system: color and radius tokens and named box, text, 
 | [Writing tools](Docs/WritingTools.md) | Adding a toolset in C++ |
 | [Testbed and smoke test](Docs/Testing.md) | The testbed project, `mcp_smoke.py` and `mcp_call.py` |
 | [Dungeon UI sample](Docs/Samples/DungeonUi.md), [UI style system](Docs/UiStyleSystem.md) | The case study above in detail |
+| [Sonheim UI performance log](Docs/Samples/SonheimUiPerf.md) | An agent finding and fixing UI stalls nobody had profiled, with the real tool results |
 
 ## Installation
 

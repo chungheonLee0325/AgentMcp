@@ -121,6 +121,7 @@ Theme Data Asset
 | [도구 만들기](Docs/WritingTools.ko.md) | C++로 Toolset 추가하기 |
 | [테스트베드와 smoke 테스트](Docs/Testing.ko.md) | 테스트베드 프로젝트, `mcp_smoke.py`, `mcp_call.py` |
 | [Dungeon UI 샘플](Docs/Samples/DungeonUi.ko.md), [UI 스타일 시스템](Docs/UiStyleSystem.ko.md) | 위 검증 사례의 자세한 내용 |
+| [Sonheim UI 성능 조사 기록](Docs/Samples/SonheimUiPerf.ko.md) | 에이전트가 아무도 측정하지 않았던 UI의 끊김을 찾고 고친 기록과 실제 도구 결과 |
 
 ## 설치
 
