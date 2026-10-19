@@ -2,9 +2,9 @@
 
 [한국어](SonheimUiPerf.ko.md)
 
-This page records **real work in which an agent used the `perf-investigation` skill and the perf tools to find and fix performance problems in UI nobody had measured**. The project is [Sonheim](https://github.com/chungheonLee0325/Sonheim), an Unreal Engine 5.5 listen-server game.
+This page records an agent-led performance investigation using the **`perf-investigation` skill and analysis tools** to measure, diagnose and fix UI outside the earlier profiling scope. The project is [Sonheim](https://github.com/chungheonLee0325/Sonheim), an Unreal Engine 5.5 listen-server game.
 
-The stalls of the inventory, monster book and map had been fixed in earlier work. This time the agent was given areas where nobody knew the answer: quests, crafting, chests, loot and damage numbers. The tool results below are excerpts of the real session on 2026-10-17. Those changes were merged into Sonheim's `main` through [PR #6](https://github.com/chungheonLee0325/Sonheim/pull/6).
+The stalls of the inventory, monster book and map had been fixed in earlier work. The follow-up investigation covered previously unprofiled quests, crafting, chests, loot and damage numbers. The tool results below are excerpts of the real session on 2026-10-17. Those changes were merged into Sonheim's `main` through [PR #6](https://github.com/chungheonLee0325/Sonheim/pull/6).
 
 ```text
 Request → Scenes → run.py baseline → perf_summarize_csv

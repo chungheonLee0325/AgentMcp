@@ -2,7 +2,7 @@
 
 [English](Architecture.md) · [문서 목차](Index.ko.md) · [도구 작성](WritingTools.ko.md)
 
-AgentMcp는 **Unreal Editor 프로세스 안에 MCP 서버를 실행**하고, C++ `UFUNCTION`을 MCP Tool로 노출합니다. 외부의 Claude Code·Codex뿐 아니라 에디터 내 AI 채팅도 같은 Tool을 호출합니다. 이 프로젝트의 핵심은 단순한 채팅 UI보다 **에디터 기능을 탐색·호출할 수 있게 만든 실행 계층**입니다.
+AgentMcp는 **Unreal Editor 프로세스에서 MCP 서버를 실행**하고, C++ `UFUNCTION`을 MCP Tool로 등록합니다. 외부 Claude Code·Codex와 에디터 내 AI 채팅이 동일한 Toolset을 호출하며, 도구 검색·실행·권한 검사 경로는 에디터 서버가 담당합니다.
 
 UE 5.8의 실험적 MCP Toolset과 Agent Skill 개념을 참고해 **UE 5.5/5.7 환경에서 별도로 구현**했습니다. Epic 플러그인 코드를 그대로 이식하거나 UE 5.8과 동일한 API를 제공하는 것은 아닙니다.
 

@@ -41,7 +41,7 @@ These testbed UIs were created by an agent using MCP tools and Skills, **without
 
 ## UMG authoring workflow
 
-Rather than just creating Widget Blueprints, the authoring workflow brings together **reusable components, data and style ownership, and review in the running game**.
+The authoring workflow covers Widget Blueprint creation, reusable component design, data and style ownership, and verification through PIE captures.
 
 ```text
 Inspect existing UI and classes
@@ -118,6 +118,5 @@ Start by calling `editor_get_state` to confirm the target project and current le
 - Source edits (`source_replace` / `source_write`) cannot be reverted through Unreal Editor Undo; use source control.
 - Live Coding cannot apply reflected declaration changes such as `UCLASS` or `UPROPERTY`.
 - Some Blueprint and UMG operations, including Widget Animation authoring and automatic graph layout, are not supported.
-- The design takes inspiration from UE 5.8's experimental MCP Toolset and Agent Skill concepts but is **independently implemented for earlier engine versions**. It does not copy Epic plugin source or port `UAgentSkill`.
 
 [MIT License](LICENSE) · Unreal Engine is a trademark of Epic Games, Inc.

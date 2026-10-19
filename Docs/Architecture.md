@@ -2,7 +2,7 @@
 
 [한국어](Architecture.ko.md) · [Documentation index](Index.md) · [Writing tools](WritingTools.md)
 
-AgentMcp **runs an MCP server inside the Unreal Editor process** and exposes C++ `UFUNCTION` methods as MCP tools. External agents such as Claude Code and Codex, as well as the in-editor AI chat, call the same tools. The core of the project is the **execution layer that makes editor operations discoverable and callable**, rather than a chat UI alone.
+AgentMcp **runs an MCP server inside the Unreal Editor process** and exposes C++ `UFUNCTION` methods as MCP tools. External agents such as Claude Code and Codex, as well as the in-editor AI chat, call the same tools. The editor-side server handles tool discovery, invocation and access checks for both external agents and the in-editor chat.
 
 It takes inspiration from Unreal Engine 5.8's experimental MCP Toolset and Agent Skill concepts, but is **independently implemented for UE 5.5/5.7 environments**. It does not copy Epic's plugin source or expose an identical UE 5.8 API.
 

@@ -2,9 +2,9 @@
 
 [English](SonheimUiPerf.md)
 
-이 문서는 **에이전트가 `perf-investigation` 스킬과 perf 도구로, 아무도 측정하지 않았던 UI에서 성능 문제를 찾고 고친 실제 작업**을 기록합니다. 대상은 Unreal Engine 5.5 리슨 서버 게임 [Sonheim](https://github.com/chungheonLee0325/Sonheim)입니다.
+이 문서는 에이전트가 **`perf-investigation` 스킬과 분석 도구로 이전 조사 범위에 없던 UI를 측정하고, 원인 분석과 수정을 수행한 기록**입니다. 대상은 Unreal Engine 5.5 리슨 서버 게임 [Sonheim](https://github.com/chungheonLee0325/Sonheim)입니다.
 
-인벤토리·도감·지도의 끊김은 이전 작업에서 이미 고쳐진 상태였습니다. 이번에는 정답을 아는 사람이 없는 영역(퀘스트, 제작, 보관함, 전리품, 데미지 숫자)을 맡겼습니다. 아래 도구 결과는 2026-10-17 실제 작업 세션에서 발췌했습니다. 해당 수정은 [Sonheim PR #6](https://github.com/chungheonLee0325/Sonheim/pull/6)을 통해 `main`에 반영됐습니다.
+인벤토리·도감·지도의 끊김은 이전 작업에서 이미 고쳐진 상태였습니다. 이번에는 퀘스트·제작·보관함·전리품·데미지 숫자 등 이전에 측정하지 않았던 화면을 대상으로 삼았습니다. 아래 도구 결과는 2026-10-17 실제 작업 세션에서 발췌했습니다. 해당 수정은 [Sonheim PR #6](https://github.com/chungheonLee0325/Sonheim/pull/6)을 통해 `main`에 반영됐습니다.
 
 ```text
 요청 → 장면 설계 → run.py 기준 측정 → perf_summarize_csv
