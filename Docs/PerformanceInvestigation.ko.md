@@ -133,16 +133,24 @@ Skill은 변화가 0.5ms 미만이면 전후 6회씩 측정하도록 안내합�
 
 ## 실제 적용 — Sonheim UI
 
-[Sonheim의 측정 장면 구현](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Sonheim/Source/Sonheim/Utilities/PerfScenarioSubsystem.cpp)은 메뉴 재오픈, 인벤토리 교환, 드래그·드롭 등 실제 게임의 조작 경로를 재현합니다. 다음은 [PR #6](https://github.com/chungheonLee0325/Sonheim/pull/6)과 [Wiki 20장](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Doc/Wiki/20_UI_Performance_Profiling.md)에 기록된 **1920×1080, RTX 2070 SUPER, 조작 이벤트별 3회 실행 중앙값**입니다.
+[Sonheim의 측정 장면 구현](https://github.com/chungheonLee0325/Sonheim/blob/main/Sonheim/Source/Sonheim/Utilities/PerfScenarioSubsystem.cpp)은 메뉴 재오픈, 인벤토리 교환, 드래그·드롭 등 실제 게임의 조작 경로를 재현합니다. 다음은 [PR #6](https://github.com/chungheonLee0325/Sonheim/pull/6)과 [Wiki 20장](https://github.com/chungheonLee0325/Sonheim/blob/main/Doc/Wiki/20_UI_Performance_Profiling.md)에 기록된 **1920×1080, RTX 2070 SUPER, 조작 이벤트별 3회 실행 중앙값**입니다.
 
 | 조작 | 개선 전 Frame (Game Thread) | 개선 후 Frame (Game Thread) |
 |---|---:|---:|
 | 아이템 교환 | 32.6ms (19.4ms) | **17.1ms (3.0ms)** |
 | 인벤토리 열기 | 57.5ms (44.6ms) | **22.1ms (8.2ms)** |
 
-![Sonheim UI 조작 프레임 비교 그래프](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Doc/Media/Wiki/20_UI_Performance_Profiling/20_interaction_frame_comparison.svg?raw=true)
+![Sonheim UI 조작 프레임 비교 그래프](https://github.com/chungheonLee0325/Sonheim/blob/main/Doc/Media/Wiki/20_UI_Performance_Profiling/20_interaction_frame_comparison.svg?raw=true)
 
 실측한 지연을 Insights로 추적해 인벤토리 갱신 때 슬롯·툴팁을 반복 구성하는 비용, 화면을 열 때마다 다시 발생하는 위젯 생성 비용 등을 찾았습니다. Sonheim 쪽에서 실제 슬롯 갱신·UIStack·Delegate/Render Target 수명을 수정했습니다. **이 수치는 Sonheim의 특정 장면에서 확인한 최적화 결과**이며 AgentMcp 플러그인만 설치하면 게임 성능이 자동으로 개선된다는 뜻이 아닙니다.
+
+### 실제 에이전트 조사 기록과 분석 출력
+
+기존 인벤토리 측정 이후 에이전트는 별도의 장면에서 **보관함 화면 재생성, Delegate 중복 바인딩, 알림 Feed 오류**를 조사했습니다. 요청·측정 장면·트레이스 분석·수정 과정은 [실제 조사 기록](Samples/SonheimUiPerf.ko.md)에 남겼습니다. 앞의 인벤토리 개선 수치와 별도 조사 세션입니다.
+
+| CSV 실행 비교 | Unreal Insights Trace 분석 |
+|---|---|
+| ![perf_compare_csv 결과 화면](Images/perf_compare_csv.png) | ![perf_trace_hotspots 결과 화면](Images/perf_trace_hotspots.png) |
 
 ## 자료와 제약
 
@@ -151,6 +159,6 @@ Skill은 변화가 0.5ms 미만이면 전후 6회씩 측정하도록 안내합�
 - 인게임 첫 생성 비용과 재사용 UI 비용은 구분하고, 듣고 보이는 결과가 바뀌지 않았는지도 확인합니다.
 - 에디터가 실행 중일 때는 `run.py` 측정을 시작할 수 없습니다. 분석 Tool은 에디터를 다시 연 뒤 프로젝트 내부 결과 파일을 읽습니다.
 - `perf_trace_hotspots`는 Unreal Insights 실행 파일과 CPU Trace가 필요하며, `perf_read_gpu_profile`에는 `ProfileGPU`를 기록한 로그가 필요합니다.
-- **원본 MCP 도구 결과 스크린샷은 아직 별도 확보하지 않았습니다.** 위 그래프는 Sonheim에서 측정값으로 만든 비교 차트이며 Unreal Insights 화면 캡처가 아닙니다.
+- 위의 두 이미지는 MCP 분석 출력 기록입니다. Sonheim의 프레임 비교 SVG는 실측값으로 만든 차트이며 Unreal Insights UI 스크린샷은 아닙니다.
 
-[Tool별 입력·출력 선언](../Plugins/AgentMcp/Source/AgentMcpTools/Private/Toolsets/AgentMcpPerfTools.h) · [작업별 MCP 워크플로](Workflows.ko.md#6-성능-측정과-비교) · [Sonheim 원인 분석과 UI 구현](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Doc/Wiki/20_UI_Performance_Profiling.md)
+[Tool별 입력·출력 선언](../Plugins/AgentMcp/Source/AgentMcpTools/Private/Toolsets/AgentMcpPerfTools.h) · [작업별 MCP 워크플로](Workflows.ko.md#6-성능-측정과-비교) · [Sonheim 원인 분석과 UI 구현](https://github.com/chungheonLee0325/Sonheim/blob/main/Doc/Wiki/20_UI_Performance_Profiling.md)

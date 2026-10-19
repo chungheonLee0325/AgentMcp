@@ -133,16 +133,24 @@ The Skill recommends six runs on each side for changes under 0.5 ms. A change in
 
 ## Applied example — Sonheim UI
 
-The [Sonheim scene runner](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Sonheim/Source/Sonheim/Utilities/PerfScenarioSubsystem.cpp) reproduces menu reopen, inventory swap, drag-and-drop and other real interaction paths. The following values are taken from [PR #6](https://github.com/chungheonLee0325/Sonheim/pull/6) and [Wiki chapter 20](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Doc/Wiki/20_UI_Performance_Profiling.md): **1920×1080, RTX 2070 SUPER, medians of marked interaction events from three runs**.
+The [Sonheim scene runner](https://github.com/chungheonLee0325/Sonheim/blob/main/Sonheim/Source/Sonheim/Utilities/PerfScenarioSubsystem.cpp) reproduces menu reopen, inventory swap, drag-and-drop and other real interaction paths. The following values are taken from [PR #6](https://github.com/chungheonLee0325/Sonheim/pull/6) and [Wiki chapter 20](https://github.com/chungheonLee0325/Sonheim/blob/main/Doc/Wiki/20_UI_Performance_Profiling.md): **1920×1080, RTX 2070 SUPER, medians of marked interaction events from three runs**.
 
 | Interaction | Before: Frame (Game Thread) | After: Frame (Game Thread) |
 |---|---:|---:|
 | Inventory item swap | 32.6ms (19.4ms) | **17.1ms (3.0ms)** |
 | Open inventory | 57.5ms (44.6ms) | **22.1ms (8.2ms)** |
 
-![Sonheim interaction frame comparison](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Doc/Media/Wiki/20_UI_Performance_Profiling/20_interaction_frame_comparison.svg?raw=true)
+![Sonheim interaction frame comparison](https://github.com/chungheonLee0325/Sonheim/blob/main/Doc/Media/Wiki/20_UI_Performance_Profiling/20_interaction_frame_comparison.svg?raw=true)
 
 Insights analysis identified unnecessary repeated slot/tooltip reconstruction and widget creation on reopening screens. The **actual optimization code lives in Sonheim**: slot presentation updates, UIStack reuse, delegate lifetime and Render Target cleanup. These numbers are **project-specific measurements**, not a claim that merely installing AgentMcp automatically improves game performance.
+
+### Recorded agent investigation and analysis outputs
+
+After the earlier inventory measurements, an agent investigated **previously unprofiled chest, quest and notice UI**, identifying repeated screen construction, accumulated delegate bindings and a notice-feed error. The request, scenarios, traces and fixes are in the [actual investigation log](Samples/SonheimUiPerf.md). This investigation is separate from the inventory measurements above.
+
+| CSV run comparison | Unreal Insights trace analysis |
+|---|---|
+| ![perf_compare_csv tool output](Images/perf_compare_csv.png) | ![perf_trace_hotspots tool output](Images/perf_trace_hotspots.png) |
 
 ## Evidence and limitations
 
@@ -151,6 +159,6 @@ Insights analysis identified unnecessary repeated slot/tooltip reconstruction an
 - Evaluate cold creation separately from reopening reused UI, and review behavior and visual output after changes.
 - `run.py` must run without the project editor; MCP analysis reads project-local output **after reopening the editor**.
 - `perf_trace_hotspots` requires Unreal Insights and a CPU trace; `perf_read_gpu_profile` requires a log containing a `ProfileGPU` dump.
-- **Screenshots of the raw MCP tool outputs have not yet been collected.** The comparison image above is a chart constructed from Sonheim measurements, not an Unreal Insights screenshot.
+- The two images above show MCP analysis outputs. The Sonheim frame comparison SVG is a chart built from measured values, not a screenshot of the Unreal Insights UI.
 
-[Tool input/output declarations](../Plugins/AgentMcp/Source/AgentMcpTools/Private/Toolsets/AgentMcpPerfTools.h) · [Performance workflow](Workflows.md#6-measure-and-compare-performance) · [Sonheim investigation and UI implementation](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Doc/Wiki/20_UI_Performance_Profiling.md)
+[Tool input/output declarations](../Plugins/AgentMcp/Source/AgentMcpTools/Private/Toolsets/AgentMcpPerfTools.h) · [Performance workflow](Workflows.md#6-measure-and-compare-performance) · [Sonheim investigation and UI implementation](https://github.com/chungheonLee0325/Sonheim/blob/main/Doc/Wiki/20_UI_Performance_Profiling.md)

@@ -74,7 +74,9 @@ Sonheim의 인벤토리 UI 개선 사례(1920×1080, 표시한 이벤트의 중�
 | 아이템 두 개 교환 | 32.6ms (19.4ms) | 17.1ms (3.0ms) |
 | 인벤토리 열기 | 57.5ms (44.6ms) | 22.1ms (8.2ms) |
 
-원인 분석에서는 슬롯과 툴팁의 반복 재구성, 화면을 열 때마다 발생하는 위젯 생성을 확인했습니다. [성능 분석 구현과 Sonheim 사례](Docs/PerformanceInvestigation.ko.md) · [작업별 측정 순서](Docs/Workflows.ko.md#6-성능-측정과-비교)
+이 수치는 Sonheim에서 진행한 인벤토리·메뉴 최적화 결과입니다. Agent가 이후 **기존에 측정하지 않았던 보관함·퀘스트·알림 UI**에서 문제를 찾아 수정한 과정은 별도 조사 기록으로 공개했습니다.
+
+[에이전트 실제 조사 기록](Docs/Samples/SonheimUiPerf.ko.md) · [성능 분석 도구와 측정](Docs/PerformanceInvestigation.ko.md) · [작업별 측정 순서](Docs/Workflows.ko.md#6-성능-측정과-비교)
 
 ## 에디터 안에서 AI 채팅
 
