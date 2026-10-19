@@ -4,7 +4,7 @@
 
 This page records **real work in which an agent used the `perf-investigation` skill and the perf tools to find and fix performance problems in UI nobody had measured**. The project is [Sonheim](https://github.com/chungheonLee0325/Sonheim), an Unreal Engine 5.5 listen-server game.
 
-The stalls of the inventory, monster book and map had been fixed in earlier work. This time the agent was given areas where nobody knew the answer: quests, crafting, chests, loot and damage numbers. The tool results below are excerpts of the real calls of that session (2026-10-17), and the commits are on Sonheim's `feat-ui-perf` branch ([PR #6](https://github.com/chungheonLee0325/Sonheim/pull/6)).
+The stalls of the inventory, monster book and map had been fixed in earlier work. This time the agent was given areas where nobody knew the answer: quests, crafting, chests, loot and damage numbers. The tool results below are excerpts of the real session on 2026-10-17. Those changes were merged into Sonheim's `main` through [PR #6](https://github.com/chungheonLee0325/Sonheim/pull/6).
 
 ```text
 Request → Scenes → run.py baseline → perf_summarize_csv
@@ -95,9 +95,9 @@ One problem was found outside the trace. The scene runner's log of how many obje
 
 | Finding | Decision | Fix |
 |---|---|---|
-| Opening a chest (GT 16.9 ms) | Over a frame every time → fixed | `bKeepWhenClosed` on the chest screen; the slot grid is rebuilt only when its size changes ([code](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Sonheim/Source/Sonheim/UI/Widget/GameObject/ContainerWidget.cpp), [commit](https://github.com/chungheonLee0325/Sonheim/commit/0b5916fd41a7d0e6a3904bd1cddea30fed189e40)) |
-| Chest binding leak | Grows with every open and close → fixed | The chest widget binds the bag when it opens and unbinds it in `NativeDestruct` ([code](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Sonheim/Source/Sonheim/UI/Widget/GameObject/ContainerInteractionWidget.cpp), [commit](https://github.com/chungheonLee0325/Sonheim/commit/0b5916fd41a7d0e6a3904bd1cddea30fed189e40)) |
-| Notice feed ensure (806 ms) | Ensure in a development build caused by modifying an entry list while iterating → fixed | Remove rows while iterating over a copy of the entry list ([code](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Sonheim/Source/Sonheim/UI/Notice/NoticeWidget.cpp), [commit](https://github.com/chungheonLee0325/Sonheim/commit/4c91e138d5801e7ea26b7dd3e07ccdffd6b1afb4)) |
+| Opening a chest (GT 16.9 ms) | Over a frame every time → fixed | `bKeepWhenClosed` on the chest screen; the slot grid is rebuilt only when its size changes ([code](https://github.com/chungheonLee0325/Sonheim/blob/main/Sonheim/Source/Sonheim/UI/Widget/GameObject/ContainerWidget.cpp), [commit](https://github.com/chungheonLee0325/Sonheim/commit/0b5916fd41a7d0e6a3904bd1cddea30fed189e40)) |
+| Chest binding leak | Grows with every open and close → fixed | The chest widget binds the bag when it opens and unbinds it in `NativeDestruct` ([code](https://github.com/chungheonLee0325/Sonheim/blob/main/Sonheim/Source/Sonheim/UI/Widget/GameObject/ContainerInteractionWidget.cpp), [commit](https://github.com/chungheonLee0325/Sonheim/commit/0b5916fd41a7d0e6a3904bd1cddea30fed189e40)) |
+| Notice feed ensure (806 ms) | Ensure in a development build caused by modifying an entry list while iterating → fixed | Remove rows while iterating over a copy of the entry list ([code](https://github.com/chungheonLee0325/Sonheim/blob/main/Sonheim/Source/Sonheim/UI/Notice/NoticeWidget.cpp), [commit](https://github.com/chungheonLee0325/Sonheim/commit/4c91e138d5801e7ea26b7dd3e07ccdffd6b1afb4)) |
 | Picking up loot (+2.2 ms) | One frame at the moment of pickup → left as is | — |
 | Crafting bench open (+3 ms), quest selection (+1.1 ms), damage numbers (+0.6 ms) | Within budget → left as is | — |
 

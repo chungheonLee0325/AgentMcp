@@ -4,7 +4,7 @@
 
 이 문서는 **에이전트가 `perf-investigation` 스킬과 perf 도구로, 아무도 측정하지 않았던 UI에서 성능 문제를 찾고 고친 실제 작업**을 기록합니다. 대상은 Unreal Engine 5.5 리슨 서버 게임 [Sonheim](https://github.com/chungheonLee0325/Sonheim)입니다.
 
-인벤토리·도감·지도의 끊김은 이전 작업에서 이미 고쳐진 상태였습니다. 이번에는 정답을 아는 사람이 없는 영역(퀘스트, 제작, 보관함, 전리품, 데미지 숫자)을 맡겼습니다. 아래의 도구 결과는 그 세션(2026-10-17)의 실제 호출 결과에서 발췌했고, 커밋은 Sonheim의 `feat-ui-perf` 브랜치([PR #6](https://github.com/chungheonLee0325/Sonheim/pull/6))에 있습니다.
+인벤토리·도감·지도의 끊김은 이전 작업에서 이미 고쳐진 상태였습니다. 이번에는 정답을 아는 사람이 없는 영역(퀘스트, 제작, 보관함, 전리품, 데미지 숫자)을 맡겼습니다. 아래 도구 결과는 2026-10-17 실제 작업 세션에서 발췌했습니다. 해당 수정은 [Sonheim PR #6](https://github.com/chungheonLee0325/Sonheim/pull/6)을 통해 `main`에 반영됐습니다.
 
 ```text
 요청 → 장면 설계 → run.py 기준 측정 → perf_summarize_csv
@@ -95,9 +95,9 @@ python run.py --uproject <Sonheim.uproject> --label ui2_before --map /Game/_Maps
 
 | 발견 | 판단 | 수정 |
 |---|---|---|
-| 보관함 열기 (GT 16.9ms) | 매번 한 프레임 이상 → 고침 | 보관함 화면에 `bKeepWhenClosed`를 켜고, 슬롯 그리드는 크기가 바뀔 때만 다시 만듦 ([코드](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Sonheim/Source/Sonheim/UI/Widget/GameObject/ContainerWidget.cpp), [커밋](https://github.com/chungheonLee0325/Sonheim/commit/0b5916fd41a7d0e6a3904bd1cddea30fed189e40)) |
-| 보관함 바인딩 누수 | 열고 닫을수록 쌓임 → 고침 | 가방 바인딩을 보관함 위젯이 열 때 묶고 `NativeDestruct`에서 풀도록 옮김 ([코드](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Sonheim/Source/Sonheim/UI/Widget/GameObject/ContainerInteractionWidget.cpp), [커밋](https://github.com/chungheonLee0325/Sonheim/commit/0b5916fd41a7d0e6a3904bd1cddea30fed189e40)) |
-| 알림 피드 ensure (806ms) | 개발 빌드에서 ensure 발생, 순회 중 엔트리 목록 변경 → 수정 | 엔트리 목록의 사본을 순회하며 제거 ([코드](https://github.com/chungheonLee0325/Sonheim/blob/feat-ui-perf/Sonheim/Source/Sonheim/UI/Notice/NoticeWidget.cpp), [커밋](https://github.com/chungheonLee0325/Sonheim/commit/4c91e138d5801e7ea26b7dd3e07ccdffd6b1afb4)) |
+| 보관함 열기 (GT 16.9ms) | 매번 한 프레임 이상 → 고침 | 보관함 화면에 `bKeepWhenClosed`를 켜고, 슬롯 그리드는 크기가 바뀔 때만 다시 만듦 ([코드](https://github.com/chungheonLee0325/Sonheim/blob/main/Sonheim/Source/Sonheim/UI/Widget/GameObject/ContainerWidget.cpp), [커밋](https://github.com/chungheonLee0325/Sonheim/commit/0b5916fd41a7d0e6a3904bd1cddea30fed189e40)) |
+| 보관함 바인딩 누수 | 열고 닫을수록 쌓임 → 고침 | 가방 바인딩을 보관함 위젯이 열 때 묶고 `NativeDestruct`에서 풀도록 옮김 ([코드](https://github.com/chungheonLee0325/Sonheim/blob/main/Sonheim/Source/Sonheim/UI/Widget/GameObject/ContainerInteractionWidget.cpp), [커밋](https://github.com/chungheonLee0325/Sonheim/commit/0b5916fd41a7d0e6a3904bd1cddea30fed189e40)) |
+| 알림 피드 ensure (806ms) | 개발 빌드에서 ensure 발생, 순회 중 엔트리 목록 변경 → 수정 | 엔트리 목록의 사본을 순회하며 제거 ([코드](https://github.com/chungheonLee0325/Sonheim/blob/main/Sonheim/Source/Sonheim/UI/Notice/NoticeWidget.cpp), [커밋](https://github.com/chungheonLee0325/Sonheim/commit/4c91e138d5801e7ea26b7dd3e07ccdffd6b1afb4)) |
 | 전리품 줍기 (+2.2ms) | 줍는 순간 한 프레임 → 그대로 둠 | — |
 | 제작대 열기 (+3ms), 퀘스트 선택 (+1.1ms), 데미지 숫자 (+0.6ms) | 예산 안 → 그대로 둠 | — |
 

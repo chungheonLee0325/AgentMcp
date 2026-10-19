@@ -1,173 +1,123 @@
-# Agent MCP for Unreal Engine 5.5
+# Agent MCP
 
-[한국어](README.ko.md)
+**Unreal Editor MCP + Agent Skills for Unreal Engine versions before 5.8**
 
-Agent MCP runs a [Model Context Protocol](https://modelcontextprotocol.io) server inside Unreal Engine 5.5, allowing coding agents such as Claude Code and Codex to **inspect a project, modify it, run it, and verify the result**.
+[한국어](README.ko.md) · [Documentation](Docs/Index.md) · [Workflows](Docs/Workflows.md)
 
-Rather than being only a remote-control layer for Unreal, the plugin focuses on **agent workflows for real game-development tasks**. Its design takes inspiration from the experimental MCP/toolset and Agent Skill concepts in Unreal Engine 5.8, but is reimplemented for UE 5.5. Skills are served as Markdown `SKILL.md` files compatible with Claude Code and Codex.
+Agent MCP **reimplements editor-control capabilities inspired by Unreal Engine 5.8's experimental MCP Toolset for earlier engine versions**, and extends them with **dynamically loaded Agent Skills, UMG authoring and performance workflows, and AI chat inside the editor**.
 
-## Core features
+**For:** Developers using pre-5.8 Unreal projects who want Claude Code, Codex or other agents to work in the editor, especially teams authoring UMG and investigating UI performance.  
+**Used with:** Unreal Engine 5.5 / 5.7
 
-### Agent Skills
+## What makes it different?
 
-The plugin serves task guidance to connected agents. A skill consists of `SKILL.md` plus optional references and scripts, and project-specific skills can override the defaults that ship with the plugin.
+- **MCP for pre-5.8 Unreal:** Editor tools based on the feature set of UE 5.8's experimental MCP Toolset, including actors, assets, Blueprints, UMG, compilation and PIE. This is an independent implementation, not a copy of Epic's plugin source.
+- **Dynamically loaded Agent Skills:** The editor serves `SKILL.md` instructions to agents, reads their latest content on request, and lets projects override the defaults.
+- **UI authoring and performance investigation:** Tools and Skills connect UMG creation, compilation, visual review, CSV profiling, Unreal Insights hotspot analysis and before/after comparisons.
+- **AI chat inside Unreal Editor:** Use Claude Code, Codex or Gemini (through Antigravity) to inspect and edit projects conversationally, with permission modes and change approval cards.
 
-Included skills:
+## Built with Agent MCP
 
-- `umg-authoring`: production-oriented UMG authoring with reusable Widget Blueprint components, C++ `BindWidget` contracts, data-driven lists, Theme Data Assets and capture-based review
-- `ui-style-system`: design tokens, a UI kit/gallery, style extraction and viewport-capture comparison
-- `ui-art-requests`: an art request → review → import → connection workflow between UMG and an image model, another agent or an artist
-- `blueprint-graphs`: Blueprint classes and logic: create a class, add variables, functions and event dispatchers, look node types up, add and wire nodes, compile once and check the behavior in a play session
-- `perf-investigation`: performance work that ends in proof: fixed scenes played in a standalone game, marked moments for stalls, Insights hotspots, before/after comparison against run-to-run noise
+These testbed UIs were created by an agent using MCP tools and Skills, **without manually arranging the widgets in the UMG Designer**. The workflow iterated through Widget Blueprint authoring, compilation, PIE and captures.
 
-### UMG-focused tools
+| Dungeon result popup | UI style kit |
+|:---:|:---:|
+| ![Dungeon result popup authored with Agent MCP](Docs/Images/dungeon_result.jpg) | ![UI kit gallery using theme styles and reusable widgets](Docs/Images/ui_kit_gallery.jpg) |
 
-The UMG toolset goes beyond creating Widget Blueprints.
+[View the dungeon HUD](Docs/Images/dungeon_hud.jpg) · [Dungeon UI case study](Docs/Samples/DungeonUi.md) · [UI style system](Docs/UiStyleSystem.md)
 
-- inspect Widget Trees and Named Slots
-- inspect C++ parent classes and verify `BindWidget` / `BindWidgetOptional` contracts against the actual widget names and types
-- create Widget Blueprints, add whole subtrees, and change widget and slot properties
-- dry-run destructive edits and report the affected bindings and graph references before removal
-- iterate through Blueprint compile → PIE → viewport capture → review
+## Main capabilities
 
-### Blueprint logic tools
-
-Agents can build Blueprint logic without the graph editor. Node types are named as in the experimental Blueprint toolset of UE 5.8 (`Development|PrintString`), reimplemented on UE 5.5 editor APIs.
-
-- create Blueprint classes and add variables, functions with inputs and outputs, and event dispatchers
-- find node types as the editor's node menu offers them, optionally only those that connect to a given pin
-- add, wire and remove nodes and set pin values in one call that is checked first, recorded as one undo step and rolled back when an operation fails
-- read a large graph one event chain at a time, with each node's compile message
-- verify through Blueprint compile → PIE → log
-
-### Build → Run → Review
-
-Blueprint and C++ compilation, Play In Editor, editor logs and viewport capture are available through the same MCP server so an agent can verify what it changed in the running editor.
-
-```text
-Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
-```
-
-### Performance investigation
-
-Profiling tools read what a profiled run of the game leaves behind, and the `perf-investigation` skill runs the game for them.
-
-- summarize CSV profiler captures per scene: median of the run averages, spread between runs, 95th percentile, and the cost of each marked moment (`CSV_EVENT`) such as opening a screen or a drag and drop
-- compare two sets of runs and flag only changes larger than the noise of both
-- export an Unreal Insights trace without opening Insights and add up self and inclusive time per timer over each marked moment
-- read a `ProfileGPU` dump from a game log as a tree of passes
-- play the runs with a quiet-machine check, a warm-up launch, background-load sampling that replays disturbed runs, and the user settings file restored after each launch
-
-```text
-Scenes → Baseline runs → Mark moments → Trace → Cause → Fix → Candidate runs → Compare
-```
-
-**Applied case study:** [Sonheim UI performance investigation](Docs/Samples/SonheimUiPerf.md) — an agent designed scenes for previously unprofiled UI, traced chest recreation costs, accumulated delegate bindings and a notice-feed ensure, and fixed the problems. The investigation also led to improvements in the MCP analysis tools.
-
-Before/after measurements of Sonheim's inventory and menu optimizations (1920×1080, interaction-event medians):
-
-| Moment | Before | After | Cause the trace named |
-|---|---|---|---|
-| Swapping two inventory items | 32.6 ms frame (19.4 ms game thread) | 17.1 ms (3.0 ms) | every slot cleared, refilled and its tooltip reattached on each change |
-| Opening the inventory | 57.5 ms (44.6 ms) | 22.1 ms (8.2 ms) | the screen, 42 slots and a tooltip per item created on every opening |
-
-### Reflection-based toolsets
-
-Tools are plain `static UFUNCTION`s. Names, descriptions, arguments and result JSON schemas are generated from Unreal Reflection, so adding a function to a toolset creates an MCP tool.
-
-### AI chat in the editor
-
-A chat panel lets planners and artists ask about the project and have it changed, signed in with their own Claude, ChatGPT or Google account. Permission modes decide what the model may change, and every change waits for an approval card. See [AI chat](Docs/AiChat.md).
-
-> **Status: beta.** Built and tested with Unreal Engine 5.5.4 (installed build) on Windows 64-bit. The smoke test in this repository passes 290 checks against the testbed project. The plugin also builds on Unreal Engine 5.7.4 and is used there in one project, where the smoke test has not been run yet. Other platforms have not been tried.
-
-## Dungeon UI — workflow case study
-
-`Content/Samples/DungeonUi` contains a dungeon progress HUD and result popup built by Claude Code **without opening the UMG Designer**, using Agent MCP tools and skills.
-
-The first version was a flat tree of 48 and 78 widgets per screen. It worked, but repeated elements were copied, style values were scattered inline, and the reward list could not grow from data.
-
-After review, the production rules were moved into the `umg-authoring` skill and the UI was rebuilt around reusable components and data:
-
-```text
-Flat Widget Tree
-      ↓ review
-Reusable Widget Blueprint Components
-+ C++ BindWidget Contracts
-+ DynamicEntryBox
-      ↓ review
-Theme Data Asset
-+ DataTable
-+ Art Request Pipeline
-+ Capture-based Review
-```
-
-![Dungeon result popup](Docs/Images/dungeon_result.jpg)
-
-![Dungeon progress HUD](Docs/Images/dungeon_hud.jpg)
-
-The [Dungeon UI case study](Docs/Samples/DungeonUi.md) records the rejected versions, the problems they revealed, and how those findings changed both the sample and the plugin workflow.
-
-Its look is a small design system: color and radius tokens and named box, text, bar and button styles in a theme data asset, styled widgets that store only a style name, and a kit gallery that shows every token and component. [UI style system](Docs/UiStyleSystem.md) describes how an agent extracts, applies and checks a style with the scripts of the `ui-style-system` skill.
-
-## Documentation
-
-| Page | Contents |
+| Area | Capabilities |
 |---|---|
-| [Connecting a client](Docs/Clients.md) | Claude Code and Codex configuration, ports for several editors |
-| [Tools](Docs/Tools.md) | Every tool with its access level, and typical workflows |
-| [AI chat](Docs/AiChat.md) | The editor's chat panel: providers, sign-in, permission modes, approvals, conversations |
-| [Skills](Docs/Skills.md) | Served `SKILL.md` guides and where they are read from |
-| [Safety](Docs/Safety.md) | What the server refuses, and the approval gate for tagged clients |
-| [Settings](Docs/Settings.md) | Project settings of the server and the tools |
-| [Writing tools](Docs/WritingTools.md) | Adding a toolset in C++ |
-| [Testbed and smoke test](Docs/Testing.md) | The testbed project, `mcp_smoke.py` and `mcp_call.py` |
-| [Dungeon UI sample](Docs/Samples/DungeonUi.md), [UI style system](Docs/UiStyleSystem.md) | The case study above in detail |
-| [Sonheim UI performance log](Docs/Samples/SonheimUiPerf.md) | An agent finding and fixing UI stalls nobody had profiled, with the real tool results |
+| **Editor operations** | Inspect and edit actors, levels and assets; Data Assets, DataTables, string tables, imports and saves |
+| **Blueprint / UMG** | Graph and usage inspection, node edits, Widget Trees and `BindWidget` contract checks, Widget Blueprint creation and edits |
+| **Source and execution** | Source search/read/edit, Blueprint and Live Coding compilation, PIE, logs and viewport captures |
+| **Agent Skills** | `skills_list` / `skills_get`, project overrides, loading task guidance and reference files |
+| **Performance investigation** | Repeated CSV capture comparisons, `CSV_EVENT` moment analysis, Unreal Insights timers and `ProfileGPU` dumps |
+| **AI chat** | Claude Code, Codex, Gemini (Antigravity) CLI, OpenAI/Gemini APIs and OpenAI-compatible endpoints, permissions and approvals |
 
-## Installation
+[All tools and access levels](Docs/Tools.md) · [Task-oriented workflows](Docs/Workflows.md)
 
-1. Copy `Plugins/AgentMcp` into the `Plugins` folder of your project.
-2. Enable the plugin in **Edit > Plugins**, or in the `.uproject` file:
-   ```json
-   "Plugins": [ { "Name": "AgentMcp", "Enabled": true } ]
-   ```
-3. Build the editor target of your project (the plugin ships as source code) and open the editor.
+## UMG authoring workflow
 
-When the editor has loaded, the output log shows:
+Rather than just creating Widget Blueprints, the authoring workflow brings together **reusable components, data and style ownership, and review in the running game**.
 
-```
-LogAgentMcpProtocol: Agent MCP server listening on http://127.0.0.1:18765/mcp (39 tools).
+```text
+Inspect existing UI and classes
+  → Plan reusable components and C++ BindWidget contracts
+  → Create Widget Blueprints and Widget Trees
+  → Connect DataTables, Theme Data Assets and images
+  → Compile Blueprints
+  → Run PIE, capture the screen and inspect logs
+  → Iterate
 ```
 
-The editor then writes `.mcp.json` and `.codex/config.toml` into the project folder with that endpoint, so Claude Code finds the
-editor with no further setup. Codex reads a project file only in a folder it trusts; to reach every folder instead, turn on
-**Write User Codex Config** in Project Settings or call `editor_write_client_config` with `bUserCodexConfig`, which points the entry of the user's
-`~/.codex/config.toml` at this editor and keeps a copy of the file before its first change. While `AuthToken` is set the editor
-leaves the project files alone, because they are often committed and would carry the token; add the header by hand as below.
+The `umg-authoring`, `ui-style-system` and `ui-art-requests` Skills guide structure, style and asset handoff. The Dungeon UI sample evolved from duplicated subtrees into reusable components, with styles centralized in a Theme Data Asset.
 
-The editor writes `.mcp.json` for Claude Code and `.codex/config.toml` for Codex into the project folder on startup. To write them by hand, use a token, or run several editors at once, see [Connecting a client](Docs/Clients.md). Agents should start with `editor_get_state`.
+[Read the UI case study](Docs/Samples/DungeonUi.md)
 
-## Limitations
+## UI performance workflow
 
-- Tested with Unreal Engine 5.5.4 on Windows 64-bit, and used with Unreal Engine 5.7.4 on Windows 64-bit.
-- Major inspection, UMG, compilation, PIE, save, skill, DataTable and asset tools were used from Claude Code 2.1.270 while building the UI sample.
-- Codex has been used through the AI chat panel; a direct connection through `.codex/config.toml` has not been tested.
-- Responses are plain JSON. There is no SSE or progress streaming.
-- Requests execute on the editor game thread. **Use Less CPU when in Background** can make calls noticeably slower when the editor is unfocused.
-- `livecoding_compile` blocks until compilation completes, and Live Coding cannot apply reflected declaration changes to `UCLASS`, `USTRUCT`, `UPROPERTY` or `UFUNCTION`.
-- Meshes are imported with the materials and textures their file carries, and there is no tool to author materials. Fab content is added through the Fab plugin, which needs the user's Epic account.
-- The level tools create and open levels and place actors. World Partition data layers, streaming sources and level instances are not covered, and a partitioned level saves its actors in their own packages.
-- Source control handling of `level_save` has not been tested.
-- Blueprint variables, functions and event dispatchers can be added but not yet removed or renamed; local variables, function overrides and interfaces are not covered, and graphs are not laid out automatically. In a localized editor the node type ids of variables and event dispatchers carry localized categories. Widget animations and designer property bindings can be inspected but not edited, and widgets cannot yet be moved to a different parent or changed to another class; the UI sample rebuilt subtrees instead.
-- `ToolSearch` exposure mode and source-control handling on save have not yet been tested.
+The `perf-investigation` Skill guides **repeatable measurements in fixed standalone-game scenes**, then checks whether an improvement exceeds run-to-run variation. The `perf_summarize_csv`, `perf_compare_csv`, `perf_trace_hotspots` and `perf_read_gpu_profile` tools analyze the generated files. Automated runs require a project-specific performance scene runner.
 
-## Background
+```text
+Repeat baseline scenes → Mark stalls with CSV_EVENT
+  → Inspect Unreal Insights / GPU data → Fix the cause
+  → Repeat identical conditions → Compare before and after
+```
 
-The toolset layout and reflection-based design take inspiration from the experimental Model Context Protocol/toolset plugins shipped by Epic Games with Unreal Engine 5.8 and were reimplemented for Unreal Engine 5.5. The Agent Skill concept was also an influence, but this project does not port `UAgentSkill`; it implements a separate Markdown `SKILL.md` system that can be shared with Claude Code and Codex.
+Sonheim inventory UI example (1920×1080, medians of marked events):
 
-This repository contains no source files from Epic's plugins. Unreal and Unreal Engine are trademarks or registered trademarks of Epic Games, Inc.
+| Action | Before: frame (game thread) | After: frame (game thread) |
+|---|---:|---:|
+| Swap two inventory items | 32.6ms (19.4ms) | 17.1ms (3.0ms) |
+| Open the inventory | 57.5ms (44.6ms) | 22.1ms (8.2ms) |
 
-## License
+These measurements are from an earlier Sonheim inventory/menu optimization. A separate recorded agent investigation covers **previously unprofiled chest, quest and notice UI**, including the problems it identified and fixed.
 
-[MIT License](LICENSE).
+[Real agent investigation log](Docs/Samples/SonheimUiPerf.md) · [Performance tools and measurements](Docs/PerformanceInvestigation.md) · [Task workflow](Docs/Workflows.md#6-measure-and-compare-performance)
+
+## AI chat in the editor
+
+Open **Window > Agent MCP > AI Chat** or use the editor toolbar to ask about the project and request changes.
+
+- **Claude Code:** Sign in through the Claude CLI
+- **Codex:** Sign in through the Codex CLI with a ChatGPT account
+- **Gemini:** Connect a Google account through the Antigravity CLI
+- **Other providers:** OpenAI/Gemini APIs and OpenAI-compatible servers
+
+The panel offers **read-only / asset editing / code editing / asset + code editing** modes and approval cards for changes. These cards are **not automatically applied** to external clients connected directly over MCP.
+
+[AI chat setup and permissions](Docs/AiChat.md)
+
+## Agent Skills and extension model
+
+Tools are `static UFUNCTION` methods backed by Unreal Reflection. Skills are separate Markdown `SKILL.md` guides. In other words, **tools expose operations**; **Skills describe how to use those operations in a production workflow**.
+
+`skills_get` reads the Skill file on request, so edits take effect without restarting the editor. Projects can override built-in Skills from `AgentMcp/Skills` or directories in `SkillDirectories`. The Skill list in the initial MCP server instructions is generated on server startup.
+
+Included Skills: `umg-authoring` · `ui-style-system` · `ui-art-requests` · `blueprint-graphs` · `perf-investigation`
+
+[MCP architecture](Docs/Architecture.md) · [Skills](Docs/Skills.md) · [Writing C++ tools](Docs/WritingTools.md)
+
+## Installation and connection
+
+1. Copy this repository's `Plugins/AgentMcp` to `Plugins/AgentMcp` in your Unreal project.
+2. Enable **Agent MCP** under **Edit > Plugins**, or add `{"Name": "AgentMcp", "Enabled": true}` to your existing `.uproject` `Plugins` array.
+3. **Build your project's Editor target** and launch the editor.
+
+The default MCP endpoint is `http://127.0.0.1:18765/mcp`. On startup the editor writes a `.mcp.json` for Claude Code and a `.codex/config.toml` for Codex into the project directory. See [Connecting clients](Docs/Clients.md) for tokens, multiple editors and manual configuration.
+
+Start by calling `editor_get_state` to confirm the target project and current level.
+
+## Documentation and boundaries
+
+[Documentation index](Docs/Index.md) · [MCP architecture](Docs/Architecture.md) · [Tools](Docs/Tools.md) · [Workflows](Docs/Workflows.md) · [Settings](Docs/Settings.md) · [Safety](Docs/Safety.md) · [Testbed](Docs/Testing.md)
+
+- Source edits (`source_replace` / `source_write`) cannot be reverted through Unreal Editor Undo; use source control.
+- Live Coding cannot apply reflected declaration changes such as `UCLASS` or `UPROPERTY`.
+- Some Blueprint and UMG operations, including Widget Animation authoring and automatic graph layout, are not supported.
+- The design takes inspiration from UE 5.8's experimental MCP Toolset and Agent Skill concepts but is **independently implemented for earlier engine versions**. It does not copy Epic plugin source or port `UAgentSkill`.
+
+[MIT License](LICENSE) · Unreal Engine is a trademark of Epic Games, Inc.

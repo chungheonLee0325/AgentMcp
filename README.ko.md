@@ -1,172 +1,123 @@
-# Unreal Engine 5.5용 Agent MCP
+# Agent MCP
 
-[English](README.md)
+**Unreal Engine 5.8 이전 버전을 위한 에디터 MCP + Agent Skills**
 
-Agent MCP는 Unreal Engine 5.5 에디터 안에서 [Model Context Protocol](https://modelcontextprotocol.io) 서버를 실행하여 Claude Code, Codex 같은 코딩 에이전트가 프로젝트를 **조사하고, 수정하고, 실행한 뒤 결과를 검증**할 수 있게 하는 에디터 플러그인입니다.
+[English](README.md) · [문서](Docs/Index.ko.md) · [작업 예제](Docs/Workflows.ko.md)
 
-단순한 Unreal 원격 제어보다 **에이전트가 실제 게임 개발 작업을 수행하는 워크플로**에 초점을 맞췄습니다. Unreal Engine 5.8의 실험적 MCP/toolset 및 Agent Skill 개념을 참고하되, UE 5.5에서 동작하도록 새로 구현했고 Skill은 Claude Code·Codex와 호환되는 Markdown `SKILL.md` 형식으로 제공합니다.
+Agent MCP는 **UE 5.8의 실험적 MCP Toolset을 참고해 에디터 조작 기능을 이전 버전에 구현**하고, **동적 Agent Skill 로딩, UMG 제작·성능 분석 워크플로, 에디터 내 AI 채팅**을 더한 플러그인입니다.
 
-## 핵심 특징
+**대상:** UE 5.8 이전 프로젝트에서 Claude Code·Codex 등으로 에디터 작업을 자동화하려는 개발자, UMG 제작과 UI 성능 개선을 반복하는 개발자 및 팀  
+**사용 버전:** Unreal Engine 5.5 / 5.7
 
-### Agent Skills
+## 무엇이 다른가?
 
-플러그인 자체가 작업 지침을 에이전트에게 제공합니다. Skill은 `SKILL.md`와 참고 파일·스크립트로 구성되며, 플러그인 기본 Skill 위에 프로젝트별 Skill을 덮어쓸 수 있습니다.
+- **UE 5.8 이전 버전 지원:** 5.8 실험적 MCP Toolset의 기능 구성을 바탕으로 액터·에셋·Blueprint·UMG 편집, 컴파일, PIE 등 에디터 작업 도구를 구현했습니다. Epic 플러그인의 소스 코드를 그대로 이식한 것은 아닙니다.
+- **동적 Agent Skills:** 에디터가 `SKILL.md`를 에이전트에 제공하며, 호출할 때 최신 내용을 읽습니다. 기본 Skill을 프로젝트별 규칙으로 재정의할 수도 있습니다.
+- **UI 제작과 성능 분석:** UMG 생성 → 컴파일 → 실행 화면 검토와, CSV·Unreal Insights 기반 성능 병목 조사·전후 비교를 위한 도구 및 Skill을 제공합니다.
+- **에디터 내 AI 채팅:** Unreal Editor에서 Claude Code, Codex, Gemini(Antigravity)를 연결해 대화로 프로젝트를 조사·수정할 수 있습니다. 권한 모드와 변경 승인 카드를 제공합니다.
 
-현재 포함된 Skill:
+## 대표 결과물
 
-- `umg-authoring`: 재사용 가능한 Widget Blueprint 컴포넌트, C++ `BindWidget` 계약, 데이터 기반 목록, Theme Data Asset, 캡처 검토를 포함한 UMG 제작 규칙
-- `ui-style-system`: 디자인 토큰, UI kit/gallery, 스타일 추출과 viewport capture 비교
-- `ui-art-requests`: 이미지 모델·다른 에이전트·아티스트와 UMG 사이의 아트 요청 → 검수 → import → 연결 워크플로
-- `blueprint-graphs`: 블루프린트 클래스와 로직. 클래스를 만들고 변수·함수·이벤트 디스패처를 추가하고, 노드 타입을 찾아 노드를 추가·연결한 뒤, 한 번 컴파일하고 플레이 세션에서 동작 확인
-- `perf-investigation`: 증거로 끝나는 성능 작업. 독립 실행 게임에서 고정 장면 측정, 끊김 순간 표시, Insights 핫스폿, 실행 간 편차를 넘는지 따지는 전후 비교
+Agent MCP 도구와 Skill로 제작한 테스트베드 UI입니다. **UMG Designer에서 위젯을 직접 배치하지 않고** Widget Blueprint 생성·수정, 컴파일, PIE 캡처를 반복했습니다.
 
-### UMG 특화 도구
+| 던전 결과 팝업 | UI 스타일 키트 |
+|:---:|:---:|
+| ![Agent MCP로 제작한 던전 결과 팝업](Docs/Images/dungeon_result.jpg) | ![Theme Data Asset과 스타일 컴포넌트를 확인하는 UI 키트 갤러리](Docs/Images/ui_kit_gallery.jpg) |
 
-Widget Blueprint를 단순히 생성하는 데서 끝나지 않습니다.
+[던전 HUD 보기](Docs/Images/dungeon_hud.jpg) · [UI 제작 사례](Docs/Samples/DungeonUi.ko.md) · [스타일 시스템](Docs/UiStyleSystem.ko.md)
 
-- Widget Tree와 Named Slot 구조 분석
-- C++ 부모 클래스의 `BindWidget` / `BindWidgetOptional` 계약과 실제 위젯 타입 검증
-- Widget Blueprint 생성, 하위 트리 단위 추가, Widget/Slot 프로퍼티 변경
-- 삭제 전 dry run과 바인딩·그래프 참조 영향 경고
-- Blueprint compile → PIE → viewport capture → 수정의 반복 검증 루프
+## 주요 기능
 
-### 블루프린트 로직 도구
-
-에이전트가 그래프 에디터를 열지 않고 블루프린트 로직을 만들 수 있습니다. 노드 타입 이름은 UE 5.8의 실험적 Blueprint toolset(`Development|PrintString`)을 따르고, UE 5.5 에디터 API로 새로 구현했습니다.
-
-- 블루프린트 클래스 생성, 변수·입출력이 있는 함수·이벤트 디스패처 추가
-- 에디터 노드 메뉴와 같은 노드 타입 검색. 특정 핀에 연결되는 타입만 고를 수도 있음
-- 노드 추가·연결·삭제와 핀 값 설정을 한 호출로 수행. 먼저 전부 검사하고, undo 한 단계로 기록하며, 중간 실패 시 롤백
-- 큰 그래프를 이벤트 체인 단위로 읽기. 노드별 컴파일 메시지 포함
-- Blueprint compile → PIE → 로그로 검증
-
-### Build → Run → Review
-
-에이전트가 변경한 결과를 실행 화면으로 검증할 수 있도록 Blueprint/C++ 컴파일, Play In Editor, 로그 조회, viewport capture를 같은 MCP 서버에서 제공합니다.
-
-```text
-Inspect → Edit → Compile → PIE → Capture / Log → Review → Iterate
-```
-
-### 성능 조사
-
-프로파일링 도구는 게임을 측정한 실행이 남긴 파일을 읽고, `perf-investigation` 스킬이 그 실행을 돌립니다.
-
-- CSV 프로파일러 캡처를 장면별로 요약: 실행 평균의 중앙값, 실행 간 편차, 95번째 백분위, 화면 열기·드래그 앤 드롭처럼 표시한 순간(`CSV_EVENT`)의 비용
-- 두 실행 묶음을 비교하고 양쪽 편차보다 큰 변화만 표시
-- Insights를 열지 않고 Unreal Insights 트레이스를 내보내 표시한 순간의 프레임마다 타이머별 자체·포함 시간을 합산
-- 게임 로그의 `ProfileGPU` 덤프를 패스 트리로 읽기
-- 측정 전 머신 점검, 워밍업 실행, 백그라운드 부하 샘플링과 방해받은 실행의 재실행, 실행마다 사용자 설정 파일 복원
-
-```text
-장면 → 기준 측정 → 순간 표시 → 트레이스 → 원인 → 수정 → 후보 측정 → 비교
-```
-
-**적용 사례:** [Sonheim UI 성능 조사 기록](Docs/Samples/SonheimUiPerf.ko.md) — 에이전트가 기존에 측정하지 않았던 UI 장면을 구성하고, 보관함 화면 재생성 비용과 Delegate 바인딩 누적, 알림 Feed ensure를 찾아 수정한 과정입니다. 조사 중 드러난 MCP 분석 도구의 한계와 개선 내용도 함께 기록했습니다.
-
-Sonheim의 인벤토리·메뉴 최적화 비교 측정(1920×1080, 조작 이벤트 중앙값):
-
-| 순간 | 수정 전 | 수정 후 | 트레이스가 가리킨 원인 |
-|---|---|---|---|
-| 인벤토리 아이템 두 개 교환 | 프레임 32.6ms (게임 스레드 19.4ms) | 17.1ms (3.0ms) | 변경마다 모든 칸을 비웠다 다시 채우고 툴팁을 다시 붙임 |
-| 인벤토리 열기 | 57.5ms (44.6ms) | 22.1ms (8.2ms) | 열 때마다 화면, 42칸, 아이템마다 툴팁을 새로 생성 |
-
-### Reflection 기반 Toolset
-
-도구는 일반 `static UFUNCTION`입니다. 이름, 설명, 인자와 반환 JSON 스키마를 Unreal Reflection에서 생성하므로 Toolset에 함수를 추가하면 MCP 도구가 됩니다.
-
-### 에디터 안의 AI 채팅
-
-기획자와 아티스트가 자기 Claude, ChatGPT, Google 계정으로 로그인해 프로젝트에 대해 묻고 변경을 맡길 수 있는 채팅 패널입니다. 권한 모드로 모델이 바꿀 수 있는 범위를 정하고, 모든 변경은 승인 카드를 기다립니다. [AI 채팅](Docs/AiChat.ko.md)을 보세요.
-
-> **상태: 베타.** Windows 64비트의 Unreal Engine 5.5.4(설치형 빌드)로 빌드하고 테스트했습니다. 이 저장소의 smoke 테스트는 테스트베드 프로젝트에서 290개 검사를 통과합니다. Unreal Engine 5.7.4에서도 빌드되고 한 프로젝트에서 쓰고 있지만, 그곳에서 smoke 테스트는 아직 돌리지 않았습니다. 다른 플랫폼은 확인하지 않았습니다.
-
-## Dungeon UI — 워크플로 검증 사례
-
-`Content/Samples/DungeonUi`에는 Claude Code가 **UMG Designer를 열지 않고 Agent MCP Tool과 Skill로 제작한** 던전 진행 HUD와 결과 팝업이 있습니다.
-
-첫 버전은 화면마다 48개/78개의 위젯을 한 번에 만든 평평한 트리였습니다. 동작은 했지만 반복 요소가 복사되어 있었고, 스타일 값이 인라인으로 흩어져 있었으며, 보상 목록도 데이터에 따라 늘어날 수 없었습니다.
-
-리뷰를 반영하면서 제작 규칙을 `umg-authoring` Skill로 분리하고 UI를 다음 구조로 다시 만들었습니다.
-
-```text
-Flat Widget Tree
-      ↓ review
-Reusable Widget Blueprint Components
-+ C++ BindWidget Contracts
-+ DynamicEntryBox
-      ↓ review
-Theme Data Asset
-+ DataTable
-+ Art Request Pipeline
-+ Capture-based Review
-```
-
-![던전 결과 팝업](Docs/Images/dungeon_result.jpg)
-
-![던전 진행 HUD](Docs/Images/dungeon_hud.jpg)
-
-상세한 제작 과정과 반려된 버전에서 무엇을 고쳤는지는 [Dungeon UI 사례 문서](Docs/Samples/DungeonUi.ko.md)에 기록했습니다.
-
-화면의 겉모습은 작은 디자인 시스템으로 관리합니다. 테마 데이터 에셋에 색·반경 토큰과 이름 붙인 박스·텍스트·바·버튼 스타일이 있고, 스타일 위젯은 스타일 이름만 저장하며, 키트 갤러리가 모든 토큰과 부품을 보여 줍니다. 에이전트가 `ui-style-system` 스킬의 스크립트로 스타일을 추출·적용·확인하는 방법은 [UI 스타일 시스템](Docs/UiStyleSystem.ko.md)에 있습니다.
-
-## 문서 바로가기
-
-| 문서 | 내용 |
+| 분야 | 제공 기능 |
 |---|---|
-| [클라이언트 연결](Docs/Clients.ko.md) | Claude Code와 Codex 설정, 여러 에디터의 포트 |
-| [도구](Docs/Tools.ko.md) | 모든 도구와 접근 수준, 대표 작업 흐름 |
-| [AI 채팅](Docs/AiChat.ko.md) | 에디터 채팅 패널: 공급자, 로그인, 권한 모드, 승인, 대화 |
-| [스킬](Docs/Skills.ko.md) | 서버가 제공하는 `SKILL.md` 가이드와 읽는 위치 |
-| [안전장치](Docs/Safety.ko.md) | 서버가 거부하는 것과 태그가 붙은 클라이언트의 승인 게이트 |
-| [설정](Docs/Settings.ko.md) | 서버와 도구의 프로젝트 설정 |
-| [도구 만들기](Docs/WritingTools.ko.md) | C++로 Toolset 추가하기 |
-| [테스트베드와 smoke 테스트](Docs/Testing.ko.md) | 테스트베드 프로젝트, `mcp_smoke.py`, `mcp_call.py` |
-| [Dungeon UI 샘플](Docs/Samples/DungeonUi.ko.md), [UI 스타일 시스템](Docs/UiStyleSystem.ko.md) | 위 검증 사례의 자세한 내용 |
-| [Sonheim UI 성능 조사 기록](Docs/Samples/SonheimUiPerf.ko.md) | 에이전트가 아무도 측정하지 않았던 UI의 끊김을 찾고 고친 기록과 실제 도구 결과 |
+| **에디터 제어** | 액터·레벨·에셋 탐색 및 편집, 데이터 에셋·DataTable·스트링 테이블, 에셋 임포트·저장 |
+| **Blueprint / UMG** | 그래프·사용처 조회, 노드 편집, Widget Tree와 `BindWidget` 계약 검사, Widget Blueprint 생성·수정 |
+| **코드와 실행** | 소스 검색·조회·수정, Blueprint/Live Coding 컴파일, PIE, 로그, 뷰포트 캡처 |
+| **Agent Skills** | `skills_list` / `skills_get`, 프로젝트별 Skill 오버라이드, 작업에 필요한 지침과 참고 파일 로딩 |
+| **성능 조사** | 반복 CSV 캡처 비교, `CSV_EVENT` 구간 분석, Unreal Insights 타이머·`ProfileGPU` 덤프 분석 |
+| **AI 채팅** | Claude Code·Codex·Gemini(Antigravity) CLI, OpenAI/Gemini API 및 OpenAI 호환 엔드포인트, 권한·승인 |
 
-## 설치
+[전체 도구 목록](Docs/Tools.ko.md) · [작업별 호출 순서](Docs/Workflows.ko.md)
 
-1. `Plugins/AgentMcp` 폴더를 프로젝트의 `Plugins` 폴더에 복사합니다.
-2. **Edit > Plugins**에서 plugin을 켜거나, `.uproject` 파일에 추가합니다.
-   ```json
-   "Plugins": [ { "Name": "AgentMcp", "Enabled": true } ]
-   ```
-3. 프로젝트의 에디터 타깃을 빌드하고(plugin은 소스 코드로 배포됩니다) 에디터를 엽니다.
+## UI 제작 파이프라인
 
-에디터 로딩이 끝나면 출력 로그에 다음 줄이 나옵니다.
+단순히 Widget Blueprint를 생성하는 데 그치지 않고, **컴포넌트 구조와 데이터·스타일 관리, 실제 화면 검토**를 작업 규칙으로 연결합니다.
 
-```
-LogAgentMcpProtocol: Agent MCP server listening on http://127.0.0.1:18765/mcp (39 tools).
+```text
+기존 UI/클래스 조사
+  → 재사용 컴포넌트와 C++ BindWidget 계약 설계
+  → Widget Blueprint / Widget Tree 생성
+  → DataTable · Theme Data Asset · 이미지 연결
+  → Blueprint 컴파일
+  → PIE 실행 · 화면 캡처 · 로그 확인
+  → 수정 반복
 ```
 
-에디터는 이어서 그 주소로 프로젝트 폴더에 `.mcp.json`과 `.codex/config.toml`을 씁니다. Claude Code는 추가 설정 없이 에디터를 찾습니다.
-Codex는 신뢰한 폴더에서만 프로젝트 파일을 읽으므로, 모든 폴더에서 쓰려면 프로젝트 설정의 **Write User Codex Config**를 켜거나
-`editor_write_client_config`를 `bUserCodexConfig`와 함께 호출합니다. 사용자 `~/.codex/config.toml`의 항목이 이 에디터를 가리키게 되며, 처음 바꾸기 전에 파일 사본을 남깁니다.
-`AuthToken`을 설정하면 프로젝트 파일은 쓰지 않습니다. 저장소에 커밋되는 경우가 많아 토큰이 함께 올라가기 때문이며, 헤더는 아래처럼 직접 넣습니다.
+`umg-authoring`, `ui-style-system`, `ui-art-requests` Skill이 UI 구조·스타일·아트 연결 방식을 안내합니다. 실제 Dungeon UI 제작 과정에서 반복된 위젯 트리를 재사용 컴포넌트로 바꾸고, 스타일을 Theme Data Asset으로 분리했습니다.
 
-에디터는 시작할 때 프로젝트 폴더에 Claude Code용 `.mcp.json`과 Codex용 `.codex/config.toml`을 씁니다. 직접 작성하거나, 토큰을 쓰거나, 에디터 여러 개를 동시에 띄우려면 [클라이언트 연결](Docs/Clients.ko.md)을 보세요. 에이전트는 `editor_get_state`부터 시작하면 됩니다.
+[UI 제작 과정 자세히 보기](Docs/Samples/DungeonUi.ko.md)
 
-## 한계
+## UI 성능 분석 파이프라인
 
-- Windows 64비트의 Unreal Engine 5.5.4에서 테스트했고, Windows 64비트의 Unreal Engine 5.7.4에서 쓰고 있습니다.
-- Claude Code 2.1.270에서는 주요 조회·UMG·컴파일·PIE·저장·Skill·DataTable·asset 도구를 실제 UI 샘플 제작에 사용했습니다.
-- Codex는 AI 채팅 패널을 통해 써 봤습니다. `.codex/config.toml`을 통한 직접 연결은 아직 테스트하지 않았습니다.
-- 응답은 일반 JSON입니다. 스트리밍(SSE, 진행 알림)은 없습니다.
-- 요청은 에디터의 게임 스레드에서 처리됩니다. **Use Less CPU when in Background**가 켜진 채 에디터가 백그라운드에 있으면 호출이 느려질 수 있습니다.
-- `livecoding_compile`은 컴파일이 끝날 때까지 에디터를 멈추고, Live Coding은 `UCLASS`, `USTRUCT`, `UPROPERTY`, `UFUNCTION` 선언 변경을 적용하지 못합니다.
-- 메시는 파일에 든 머티리얼·텍스처와 함께 임포트되며, 머티리얼을 만드는 도구는 없습니다. Fab 콘텐츠는 사용자의 Epic 계정이 필요한 Fab 플러그인으로 들여옵니다.
-- 레벨 도구는 레벨 생성·열기와 액터 배치까지입니다. World Partition의 데이터 레이어, 스트리밍 소스, 레벨 인스턴스는 다루지 않으며, 파티션 레벨은 액터를 각자의 패키지에 저장합니다.
-- `level_save`의 소스 컨트롤 동작은 확인하지 않았습니다.
-- 블루프린트 변수, 함수, 이벤트 디스패처는 추가만 할 수 있고 아직 삭제나 이름 변경은 없습니다. 로컬 변수, 함수 오버라이드, 인터페이스는 다루지 않고 그래프 자동 정렬도 없습니다. 현지화된 에디터에서는 변수와 이벤트 디스패처 노드 타입 ID의 카테고리도 현지화됩니다. 위젯 애니메이션과 디자이너 프로퍼티 바인딩은 조회만 할 수 있고, 위젯을 다른 부모로 옮기거나 다른 클래스로 바꾸는 기능은 아직 없습니다. UI 샘플은 대신 하위 트리를 다시 만들었습니다.
-- `ToolSearch` 노출 모드와 저장 시 소스 컨트롤 처리는 아직 테스트하지 않았습니다.
+`perf-investigation` Skill은 독립 실행 게임에서 **고정 장면을 반복 측정하고 수정 전후의 차이가 실행 간 편차보다 큰지** 확인하도록 안내합니다. 플러그인의 `perf_summarize_csv`, `perf_compare_csv`, `perf_trace_hotspots`, `perf_read_gpu_profile` 도구가 결과 파일을 분석합니다. 반복 실행에는 프로젝트별 성능 장면 실행기(scene runner)가 필요합니다.
 
-## 배경
+```text
+기준 장면 반복 측정 → CSV_EVENT로 지연 순간 표시
+  → Unreal Insights / GPU 분석 → 원인 수정
+  → 동일 조건 재측정 → 전후 비교
+```
 
-도구 구성과 리플렉션 기반 설계는 Epic Games가 Unreal Engine 5.8에 포함한 실험적 Model Context Protocol·toolset plugin에서 아이디어를 가져와 Unreal Engine 5.5용으로 새로 구현했습니다. Agent Skill 역시 UE 5.8의 개념을 참고했지만, 이 프로젝트는 `UAgentSkill`을 포팅하지 않고 Claude Code·Codex와 공유할 수 있는 Markdown `SKILL.md` 기반 시스템을 별도로 구현했습니다.
+Sonheim의 인벤토리 UI 개선 사례(1920×1080, 표시한 이벤트의 중앙값):
 
-이 저장소에는 Epic plugin의 소스 파일이 들어 있지 않습니다. Unreal과 Unreal Engine은 Epic Games, Inc.의 상표 또는 등록 상표입니다.
+| 작업 | 수정 전 프레임 (게임 스레드) | 수정 후 프레임 (게임 스레드) |
+|---|---:|---:|
+| 아이템 두 개 교환 | 32.6ms (19.4ms) | 17.1ms (3.0ms) |
+| 인벤토리 열기 | 57.5ms (44.6ms) | 22.1ms (8.2ms) |
 
-## 라이선스
+이 수치는 Sonheim에서 진행한 인벤토리·메뉴 최적화 결과입니다. Agent가 이후 **기존에 측정하지 않았던 보관함·퀘스트·알림 UI**에서 문제를 찾아 수정한 과정은 별도 조사 기록으로 공개했습니다.
 
-[MIT License](LICENSE).
+[에이전트 실제 조사 기록](Docs/Samples/SonheimUiPerf.ko.md) · [성능 분석 도구와 측정](Docs/PerformanceInvestigation.ko.md) · [작업별 측정 순서](Docs/Workflows.ko.md#6-성능-측정과-비교)
+
+## 에디터 안에서 AI 채팅
+
+**창 > Agent MCP > AI 채팅** 또는 에디터 툴바의 **AI 채팅**에서 프로젝트에 질문하고 변경을 요청합니다.
+
+- **Claude Code:** Claude 계정으로 CLI 로그인
+- **Codex:** ChatGPT 계정으로 CLI 로그인
+- **Gemini:** Antigravity CLI를 통해 Google 계정 연결
+- **추가 공급자:** OpenAI/Gemini API와 OpenAI 호환 서버
+
+채팅은 **읽기 전용 / 에셋 편집 / 코드 편집 / 에셋+코드 편집** 권한 모드를 제공하고, 변경할 때 승인 카드를 표시합니다. 직접 MCP에 연결한 외부 클라이언트에는 채팅 패널의 승인 카드가 자동 적용되지 않습니다.
+
+[AI 채팅 사용법과 권한](Docs/AiChat.ko.md)
+
+## Agent Skills와 확장 구조
+
+도구는 Unreal Reflection 기반 `static UFUNCTION`으로 정의하고, Skill은 별도 Markdown `SKILL.md`로 제공합니다. 즉 **Tool은 무엇을 실행하는지**, **Skill은 작업을 어떤 구조·순서로 진행하는지**를 담당합니다.
+
+`skills_get`은 Skill 파일을 요청할 때 읽으므로 내용 수정이 에디터 재시작 없이 반영됩니다. 프로젝트의 `AgentMcp/Skills`와 설정된 `SkillDirectories`에서 같은 이름의 기본 Skill을 대체할 수 있습니다. 초기 MCP 안내에 포함된 Skill 목록은 서버 시작 시 생성됩니다.
+
+포함된 Skill: `umg-authoring` · `ui-style-system` · `ui-art-requests` · `blueprint-graphs` · `perf-investigation`
+
+[MCP 아키텍처](Docs/Architecture.ko.md) · [Skill 문서](Docs/Skills.ko.md) · [C++ Toolset 추가 방법](Docs/WritingTools.ko.md)
+
+## 설치 및 연결
+
+1. 이 저장소의 `Plugins/AgentMcp` 폴더를 Unreal 프로젝트의 `Plugins/AgentMcp`에 복사합니다.
+2. **Edit > Plugins**에서 **Agent MCP**를 활성화하거나 기존 `.uproject`의 `Plugins` 배열에 `{"Name": "AgentMcp", "Enabled": true}`를 추가합니다.
+3. 프로젝트의 **Editor 타깃을 빌드**하고 에디터를 실행합니다.
+
+기본 MCP 주소는 `http://127.0.0.1:18765/mcp`입니다. 에디터는 프로젝트 폴더에 Claude Code용 `.mcp.json`과 Codex용 `.codex/config.toml`을 작성합니다. 인증 토큰, 여러 에디터 실행, 수동 연결 방법은 [클라이언트 연결](Docs/Clients.ko.md)을 참고하세요.
+
+첫 작업은 `editor_get_state`로 대상 프로젝트와 레벨을 확인한 뒤 시작하는 것이 좋습니다.
+
+## 문서와 제약
+
+[문서 목차](Docs/Index.ko.md) · [MCP 아키텍처](Docs/Architecture.ko.md) · [도구 목록](Docs/Tools.ko.md) · [작업 예제](Docs/Workflows.ko.md) · [설정](Docs/Settings.ko.md) · [안전장치](Docs/Safety.ko.md) · [테스트베드](Docs/Testing.ko.md)
+
+- 소스 파일 변경(`source_replace` / `source_write`)은 Unreal Editor Undo로 복구되지 않으므로 소스 컨트롤을 사용해야 합니다.
+- Live Coding은 리플렉션 선언(`UCLASS`, `UPROPERTY` 등) 변경을 적용할 수 없습니다.
+- 일부 Blueprint·UMG 편집 기능(예: 위젯 애니메이션 생성, 그래프 자동 배치)은 지원하지 않습니다.
+- Unreal 5.8의 실험적 MCP Toolset과 Agent Skill 개념을 바탕으로 **이전 버전에 맞게 별도 구현**한 프로젝트입니다. Epic 플러그인 소스나 `UAgentSkill`을 그대로 포팅하지 않았습니다.
+
+[MIT License](LICENSE) · Unreal Engine은 Epic Games, Inc.의 상표입니다.
