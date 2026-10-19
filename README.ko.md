@@ -2,7 +2,7 @@
 
 **Unreal Engine 5.8 이전 버전을 위한 에디터 MCP + Agent Skills**
 
-[English](README.md) · [문서](Docs/Index.ko.md) · [작업 예제](Docs/Workflows.ko.md)
+[English](README.md) · [문서](https://github.com/chungheonLee0325/AgentMcp/wiki/Home) · [작업 예제](https://github.com/chungheonLee0325/AgentMcp/wiki/Workflows.ko)
 
 Agent MCP는 **UE 5.8의 실험적 MCP Toolset을 참고해 에디터 조작 기능을 이전 버전에 구현**하고, **동적 Agent Skill 로딩, UMG 제작·성능 분석 워크플로, 에디터 내 AI 채팅**을 더한 플러그인입니다.
 
@@ -24,7 +24,7 @@ Agent MCP 도구와 Skill로 제작한 테스트베드 UI입니다. **UMG Design
 |:---:|:---:|
 | ![Agent MCP로 제작한 던전 결과 팝업](Docs/Images/dungeon_result.jpg) | ![Theme Data Asset과 스타일 컴포넌트를 확인하는 UI 키트 갤러리](Docs/Images/ui_kit_gallery.jpg) |
 
-[던전 HUD 보기](Docs/Images/dungeon_hud.jpg) · [UI 제작 사례](Docs/Samples/DungeonUi.ko.md) · [스타일 시스템](Docs/UiStyleSystem.ko.md)
+[던전 HUD 보기](Docs/Images/dungeon_hud.jpg) · [UI 제작 사례](https://github.com/chungheonLee0325/AgentMcp/wiki/Samples-DungeonUi.ko) · [스타일 시스템](https://github.com/chungheonLee0325/AgentMcp/wiki/UiStyleSystem.ko)
 
 ## 주요 기능
 
@@ -37,7 +37,7 @@ Agent MCP 도구와 Skill로 제작한 테스트베드 UI입니다. **UMG Design
 | **성능 조사** | 반복 CSV 캡처 비교, `CSV_EVENT` 구간 분석, Unreal Insights 타이머·`ProfileGPU` 덤프 분석 |
 | **AI 채팅** | Claude Code·Codex·Gemini(Antigravity) CLI, OpenAI/Gemini API 및 OpenAI 호환 엔드포인트, 권한·승인 |
 
-[전체 도구 목록](Docs/Tools.ko.md) · [작업별 호출 순서](Docs/Workflows.ko.md)
+[전체 도구 목록](https://github.com/chungheonLee0325/AgentMcp/wiki/Tools.ko) · [작업별 호출 순서](https://github.com/chungheonLee0325/AgentMcp/wiki/Workflows.ko)
 
 ## UI 제작 파이프라인
 
@@ -55,7 +55,7 @@ Widget Blueprint 생성부터 재사용 컴포넌트 설계, 데이터·스타�
 
 `umg-authoring`, `ui-style-system`, `ui-art-requests` Skill이 UI 구조·스타일·아트 연결 방식을 안내합니다. 실제 Dungeon UI 제작 과정에서 반복된 위젯 트리를 재사용 컴포넌트로 바꾸고, 스타일을 Theme Data Asset으로 분리했습니다.
 
-[UI 제작 과정 자세히 보기](Docs/Samples/DungeonUi.ko.md)
+[UI 제작 과정 자세히 보기](https://github.com/chungheonLee0325/AgentMcp/wiki/Samples-DungeonUi.ko)
 
 ## UI 성능 분석 파이프라인
 
@@ -76,7 +76,7 @@ Sonheim의 인벤토리 UI 개선 사례(1920×1080, 표시한 이벤트의 중�
 
 이 수치는 Sonheim에서 진행한 인벤토리·메뉴 최적화 결과입니다. Agent가 이후 **기존에 측정하지 않았던 보관함·퀘스트·알림 UI**에서 문제를 찾아 수정한 과정은 별도 조사 기록으로 공개했습니다.
 
-[에이전트 실제 조사 기록](Docs/Samples/SonheimUiPerf.ko.md) · [성능 분석 도구와 측정](Docs/PerformanceInvestigation.ko.md) · [작업별 측정 순서](Docs/Workflows.ko.md#6-성능-측정과-비교)
+[에이전트 실제 조사 기록](https://github.com/chungheonLee0325/AgentMcp/wiki/Samples-SonheimUiPerf.ko) · [성능 분석 도구와 측정](https://github.com/chungheonLee0325/AgentMcp/wiki/PerformanceInvestigation.ko) · [작업별 측정 순서](https://github.com/chungheonLee0325/AgentMcp/wiki/Workflows.ko#6-성능-측정과-비교)
 
 ## 에디터 안에서 AI 채팅
 
@@ -89,7 +89,7 @@ Sonheim의 인벤토리 UI 개선 사례(1920×1080, 표시한 이벤트의 중�
 
 채팅은 **읽기 전용 / 에셋 편집 / 코드 편집 / 에셋+코드 편집** 권한 모드를 제공하고, 변경할 때 승인 카드를 표시합니다. 직접 MCP에 연결한 외부 클라이언트에는 채팅 패널의 승인 카드가 자동 적용되지 않습니다.
 
-[AI 채팅 사용법과 권한](Docs/AiChat.ko.md)
+[AI 채팅 사용법과 권한](https://github.com/chungheonLee0325/AgentMcp/wiki/AiChat.ko)
 
 ## Agent Skills와 확장 구조
 
@@ -99,7 +99,7 @@ Sonheim의 인벤토리 UI 개선 사례(1920×1080, 표시한 이벤트의 중�
 
 포함된 Skill: `umg-authoring` · `ui-style-system` · `ui-art-requests` · `blueprint-graphs` · `perf-investigation`
 
-[MCP 아키텍처](Docs/Architecture.ko.md) · [Skill 문서](Docs/Skills.ko.md) · [C++ Toolset 추가 방법](Docs/WritingTools.ko.md)
+[MCP 아키텍처](https://github.com/chungheonLee0325/AgentMcp/wiki/Architecture.ko) · [Skill 문서](https://github.com/chungheonLee0325/AgentMcp/wiki/Skills.ko) · [C++ Toolset 추가 방법](https://github.com/chungheonLee0325/AgentMcp/wiki/WritingTools.ko)
 
 ## 설치 및 연결
 
@@ -107,13 +107,13 @@ Sonheim의 인벤토리 UI 개선 사례(1920×1080, 표시한 이벤트의 중�
 2. **Edit > Plugins**에서 **Agent MCP**를 활성화하거나 기존 `.uproject`의 `Plugins` 배열에 `{"Name": "AgentMcp", "Enabled": true}`를 추가합니다.
 3. 프로젝트의 **Editor 타깃을 빌드**하고 에디터를 실행합니다.
 
-기본 MCP 주소는 `http://127.0.0.1:18765/mcp`입니다. 에디터는 프로젝트 폴더에 Claude Code용 `.mcp.json`과 Codex용 `.codex/config.toml`을 작성합니다. 인증 토큰, 여러 에디터 실행, 수동 연결 방법은 [클라이언트 연결](Docs/Clients.ko.md)을 참고하세요.
+기본 MCP 주소는 `http://127.0.0.1:18765/mcp`입니다. 에디터는 프로젝트 폴더에 Claude Code용 `.mcp.json`과 Codex용 `.codex/config.toml`을 작성합니다. 인증 토큰, 여러 에디터 실행, 수동 연결 방법은 [클라이언트 연결](https://github.com/chungheonLee0325/AgentMcp/wiki/Clients.ko)을 참고하세요.
 
 첫 작업은 `editor_get_state`로 대상 프로젝트와 레벨을 확인한 뒤 시작하는 것이 좋습니다.
 
 ## 문서와 제약
 
-[문서 목차](Docs/Index.ko.md) · [MCP 아키텍처](Docs/Architecture.ko.md) · [도구 목록](Docs/Tools.ko.md) · [작업 예제](Docs/Workflows.ko.md) · [설정](Docs/Settings.ko.md) · [안전장치](Docs/Safety.ko.md) · [테스트베드](Docs/Testing.ko.md)
+[문서 목차](https://github.com/chungheonLee0325/AgentMcp/wiki/Home) · [MCP 아키텍처](https://github.com/chungheonLee0325/AgentMcp/wiki/Architecture.ko) · [도구 목록](https://github.com/chungheonLee0325/AgentMcp/wiki/Tools.ko) · [작업 예제](https://github.com/chungheonLee0325/AgentMcp/wiki/Workflows.ko) · [설정](https://github.com/chungheonLee0325/AgentMcp/wiki/Settings.ko) · [안전장치](https://github.com/chungheonLee0325/AgentMcp/wiki/Safety.ko) · [테스트베드](https://github.com/chungheonLee0325/AgentMcp/wiki/Testing.ko)
 
 - 소스 파일 변경(`source_replace` / `source_write`)은 Unreal Editor Undo로 복구되지 않으므로 소스 컨트롤을 사용해야 합니다.
 - Live Coding은 리플렉션 선언(`UCLASS`, `UPROPERTY` 등) 변경을 적용할 수 없습니다.
