@@ -41,7 +41,7 @@ Agent MCP 도구와 Skill로 제작한 테스트베드 UI입니다. **UMG Design
 
 ## UI 제작 파이프라인
 
-단순히 Widget Blueprint를 생성하는 데 그치지 않고, **컴포넌트 구조와 데이터·스타일 관리, 실제 화면 검토**를 작업 규칙으로 연결합니다.
+Widget Blueprint 생성부터 재사용 컴포넌트 설계, 데이터·스타일 분리, PIE 화면 검토까지 하나의 제작 절차로 구성했습니다.
 
 ```text
 기존 UI/클래스 조사
@@ -118,6 +118,5 @@ Sonheim의 인벤토리 UI 개선 사례(1920×1080, 표시한 이벤트의 중�
 - 소스 파일 변경(`source_replace` / `source_write`)은 Unreal Editor Undo로 복구되지 않으므로 소스 컨트롤을 사용해야 합니다.
 - Live Coding은 리플렉션 선언(`UCLASS`, `UPROPERTY` 등) 변경을 적용할 수 없습니다.
 - 일부 Blueprint·UMG 편집 기능(예: 위젯 애니메이션 생성, 그래프 자동 배치)은 지원하지 않습니다.
-- Unreal 5.8의 실험적 MCP Toolset과 Agent Skill 개념을 바탕으로 **이전 버전에 맞게 별도 구현**한 프로젝트입니다. Epic 플러그인 소스나 `UAgentSkill`을 그대로 포팅하지 않았습니다.
 
 [MIT License](LICENSE) · Unreal Engine은 Epic Games, Inc.의 상표입니다.
