@@ -2,7 +2,7 @@
 
 **Unreal Editor MCP + Agent Skills for Unreal Engine versions before 5.8**
 
-[한국어](README.ko.md) · [Documentation](Docs/Index.md) · [Workflows](Docs/Workflows.md)
+[한국어](README.ko.md) · [Documentation](https://github.com/chungheonLee0325/AgentMcp/wiki/Index) · [Workflows](https://github.com/chungheonLee0325/AgentMcp/wiki/Workflows)
 
 Agent MCP **reimplements editor-control capabilities inspired by Unreal Engine 5.8's experimental MCP Toolset for earlier engine versions**, and extends them with **dynamically loaded Agent Skills, UMG authoring and performance workflows, and AI chat inside the editor**.
 
@@ -24,7 +24,7 @@ These testbed UIs were created by an agent using MCP tools and Skills, **without
 |:---:|:---:|
 | ![Dungeon result popup authored with Agent MCP](Docs/Images/dungeon_result.jpg) | ![UI kit gallery using theme styles and reusable widgets](Docs/Images/ui_kit_gallery.jpg) |
 
-[View the dungeon HUD](Docs/Images/dungeon_hud.jpg) · [Dungeon UI case study](Docs/Samples/DungeonUi.md) · [UI style system](Docs/UiStyleSystem.md)
+[View the dungeon HUD](Docs/Images/dungeon_hud.jpg) · [Dungeon UI case study](https://github.com/chungheonLee0325/AgentMcp/wiki/Samples-DungeonUi) · [UI style system](https://github.com/chungheonLee0325/AgentMcp/wiki/UiStyleSystem)
 
 ## Main capabilities
 
@@ -37,7 +37,7 @@ These testbed UIs were created by an agent using MCP tools and Skills, **without
 | **Performance investigation** | Repeated CSV capture comparisons, `CSV_EVENT` moment analysis, Unreal Insights timers and `ProfileGPU` dumps |
 | **AI chat** | Claude Code, Codex, Gemini (Antigravity) CLI, OpenAI/Gemini APIs and OpenAI-compatible endpoints, permissions and approvals |
 
-[All tools and access levels](Docs/Tools.md) · [Task-oriented workflows](Docs/Workflows.md)
+[All tools and access levels](https://github.com/chungheonLee0325/AgentMcp/wiki/Tools) · [Task-oriented workflows](https://github.com/chungheonLee0325/AgentMcp/wiki/Workflows)
 
 ## UMG authoring workflow
 
@@ -55,7 +55,7 @@ Inspect existing UI and classes
 
 The `umg-authoring`, `ui-style-system` and `ui-art-requests` Skills guide structure, style and asset handoff. The Dungeon UI sample evolved from duplicated subtrees into reusable components, with styles centralized in a Theme Data Asset.
 
-[Read the UI case study](Docs/Samples/DungeonUi.md)
+[Read the UI case study](https://github.com/chungheonLee0325/AgentMcp/wiki/Samples-DungeonUi)
 
 ## UI performance workflow
 
@@ -76,7 +76,7 @@ Sonheim inventory UI example (1920×1080, medians of marked events):
 
 These measurements are from an earlier Sonheim inventory/menu optimization. A separate recorded agent investigation covers **previously unprofiled chest, quest and notice UI**, including the problems it identified and fixed.
 
-[Real agent investigation log](Docs/Samples/SonheimUiPerf.md) · [Performance tools and measurements](Docs/PerformanceInvestigation.md) · [Task workflow](Docs/Workflows.md#6-measure-and-compare-performance)
+[Real agent investigation log](https://github.com/chungheonLee0325/AgentMcp/wiki/Samples-SonheimUiPerf) · [Performance tools and measurements](https://github.com/chungheonLee0325/AgentMcp/wiki/PerformanceInvestigation) · [Task workflow](https://github.com/chungheonLee0325/AgentMcp/wiki/Workflows#6-measure-and-compare-performance)
 
 ## AI chat in the editor
 
@@ -89,7 +89,7 @@ Open **Window > Agent MCP > AI Chat** or use the editor toolbar to ask about the
 
 The panel offers **read-only / asset editing / code editing / asset + code editing** modes and approval cards for changes. These cards are **not automatically applied** to external clients connected directly over MCP.
 
-[AI chat setup and permissions](Docs/AiChat.md)
+[AI chat setup and permissions](https://github.com/chungheonLee0325/AgentMcp/wiki/AiChat)
 
 ## Agent Skills and extension model
 
@@ -99,7 +99,7 @@ Tools are `static UFUNCTION` methods backed by Unreal Reflection. Skills are sep
 
 Included Skills: `umg-authoring` · `ui-style-system` · `ui-art-requests` · `blueprint-graphs` · `perf-investigation`
 
-[MCP architecture](Docs/Architecture.md) · [Skills](Docs/Skills.md) · [Writing C++ tools](Docs/WritingTools.md)
+[MCP architecture](https://github.com/chungheonLee0325/AgentMcp/wiki/Architecture) · [Skills](https://github.com/chungheonLee0325/AgentMcp/wiki/Skills) · [Writing C++ tools](https://github.com/chungheonLee0325/AgentMcp/wiki/WritingTools)
 
 ## Installation and connection
 
@@ -107,13 +107,13 @@ Included Skills: `umg-authoring` · `ui-style-system` · `ui-art-requests` · `b
 2. Enable **Agent MCP** under **Edit > Plugins**, or add `{"Name": "AgentMcp", "Enabled": true}` to your existing `.uproject` `Plugins` array.
 3. **Build your project's Editor target** and launch the editor.
 
-The default MCP endpoint is `http://127.0.0.1:18765/mcp`. On startup the editor writes a `.mcp.json` for Claude Code and a `.codex/config.toml` for Codex into the project directory. See [Connecting clients](Docs/Clients.md) for tokens, multiple editors and manual configuration.
+The default MCP endpoint is `http://127.0.0.1:18765/mcp`. On startup the editor writes a `.mcp.json` for Claude Code and a `.codex/config.toml` for Codex into the project directory. See [Connecting clients](https://github.com/chungheonLee0325/AgentMcp/wiki/Clients) for tokens, multiple editors and manual configuration.
 
 Start by calling `editor_get_state` to confirm the target project and current level.
 
 ## Documentation and boundaries
 
-[Documentation index](Docs/Index.md) · [MCP architecture](Docs/Architecture.md) · [Tools](Docs/Tools.md) · [Workflows](Docs/Workflows.md) · [Settings](Docs/Settings.md) · [Safety](Docs/Safety.md) · [Testbed](Docs/Testing.md)
+[Documentation index](https://github.com/chungheonLee0325/AgentMcp/wiki/Index) · [MCP architecture](https://github.com/chungheonLee0325/AgentMcp/wiki/Architecture) · [Tools](https://github.com/chungheonLee0325/AgentMcp/wiki/Tools) · [Workflows](https://github.com/chungheonLee0325/AgentMcp/wiki/Workflows) · [Settings](https://github.com/chungheonLee0325/AgentMcp/wiki/Settings) · [Safety](https://github.com/chungheonLee0325/AgentMcp/wiki/Safety) · [Testbed](https://github.com/chungheonLee0325/AgentMcp/wiki/Testing)
 
 - Source edits (`source_replace` / `source_write`) cannot be reverted through Unreal Editor Undo; use source control.
 - Live Coding cannot apply reflected declaration changes such as `UCLASS` or `UPROPERTY`.
